@@ -1,0 +1,53 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "analyzer": {
+        "multilingual": {
+          "type": "standard",
+          "stopwords": "_none_"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "tenant_id": {"type": "keyword"},
+      "context_id": {"type": "keyword"},
+      "type": {"type": "keyword"},
+      "title": {
+        "type": "text",
+        "analyzer": "multilingual",
+        "fields": {"keyword": {"type": "keyword"}}
+      },
+      "instruction": {
+        "type": "text",
+        "analyzer": "multilingual"
+      },
+      "body": {
+        "type": "text",
+        "analyzer": "multilingual"
+      },
+      "embedding": {
+        "type": "knn_vector",
+        "dimension": 1536,
+        "method": {"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"}
+      },
+      "status": {"type": "keyword"},
+      "keywords": {"type": "keyword"},
+      "category_ids": {"type": "keyword"},
+      "category_names": {"type": "keyword"},
+      "category_slugs": {"type": "keyword"},
+      "intent_scopes": {"type": "keyword"},
+      "intent_actions": {"type": "keyword"},
+      "trust_level": {"type": "integer"},
+      "language": {"type": "keyword"},
+      "attributes": {"type": "object", "dynamic": true},
+      "created_at": {"type": "date"},
+      "updated_at": {"type": "date"}
+    }
+  }
+}
+
+
