@@ -1,0 +1,121 @@
+import { Router } from 'express';
+import { Pool } from 'pg';
+import { CategoriesRepository } from '../../repositories/categoriesRepository.js';
+import { QueryLogsRepository } from '../../repositories/queryLogsRepository';
+
+export function buildCategoriesRouter(pool: Pool) {
+  const router = Router();
+  const repo = new CategoriesRepository(pool);
+  const logsRepo = new QueryLogsRepository(pool);
+
+  // List all categories (flat or hierarchical)
+  router.get('/', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const hierarchy = req.query.hierarchy === 'true';
+      
+      const categories = hierarchy 
+        ? await repo.getHierarchy(tenantId)
+        : await repo.list(tenantId);
+        
+      res.json({ categories });
+    } catch (e) { 
+      next(e); 
+    }
+  });
+
+  // Get single category
+  router.get('/:id', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const category = await repo.get(tenantId, req.params.id);
+      
+      if (!category) {
+        return res.status(404).json({ message: 'Category not found' });
+      }
+      
+      res.json(category);
+    } catch (e) { 
+      next(e); 
+    }
+  });
+
+  // Create category
+  router.post('/', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const category = await repo.create(tenantId, req.body);
+      // Audit: category create
+      try {
+        await logsRepo.create(tenantId, {
+          userId: (req as any).userId || null,
+          action: 'CREATE',
+          resource: 'category',
+          resourceId: category.id,
+          details: `Created category ${category.name}`,
+          request: { body: req.body },
+          response: { id: category.id },
+        });
+      } catch {}
+      res.status(201).json(category);
+    } catch (e) { 
+      next(e); 
+    }
+  });
+
+  // Update category
+  router.put('/:id', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const category = await repo.update(tenantId, req.params.id, req.body);
+      
+      if (!category) {
+        return res.status(404).json({ message: 'Category not found' });
+      }
+      // Audit: category update
+      try {
+        await logsRepo.create(tenantId, {
+          userId: (req as any).userId || null,
+          action: 'UPDATE',
+          resource: 'category',
+          resourceId: category.id,
+          details: `Updated category ${category.name}`,
+          request: { body: req.body },
+          response: { id: category.id },
+        });
+      } catch {}
+      res.json(category);
+    } catch (e) { 
+      next(e); 
+    }
+  });
+
+  // Delete category
+  router.delete('/:id', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const deleted = await repo.delete(tenantId, req.params.id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: 'Category not found' });
+      }
+      // Audit: category delete
+      try {
+        await logsRepo.create(tenantId, {
+          userId: (req as any).userId || null,
+          action: 'DELETE',
+          resource: 'category',
+          resourceId: req.params.id,
+          details: `Deleted category ${req.params.id}`,
+          request: { params: req.params },
+          response: { id: req.params.id },
+        });
+      } catch {}
+      res.status(204).send();
+    } catch (e) { 
+      next(e); 
+    }
+  });
+
+  return router;
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@rag/admin-web",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "echo-name": "node -e \"console.log('@rag/admin-web')\""
+  },
+  "dependencies": {
+    "@rag/shared": "workspace:*",
+    "next": "15.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "@types/react": "^18.2.79",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "sass": "^1.77.8"
+  }
+}
