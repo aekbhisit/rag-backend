@@ -1,0 +1,38 @@
+{
+  "name": "rag-monorepo",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Multi-tenant RAG backend monorepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18",
+    "npm": ">=8"
+  },
+  "scripts": {
+    "echo-name": "node -e \"console.log(require('./package.json').name)\"",
+    "dev:admin": "pnpm --filter @rag/admin-web run dev",
+    "dev:backend": "pnpm --filter @rag/backend run dev",
+    "dev:backend:local": "SKIP_ADAPTERS_INIT=true pnpm --filter @rag/backend run dev",
+    "build:admin": "pnpm --filter @rag/admin-web run build",
+    "build:backend": "pnpm --filter @rag/backend run build",
+    "start:admin": "pnpm --filter @rag/admin-web run start",
+    "start:backend": "node apps/backend/dist/index.js",
+    "build:shared": "npm --workspace @rag/shared run build",
+    "clean": "rimraf **/dist",
+    "infra:up": "docker compose -f infra/docker/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker/docker-compose.yml down -v"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.5",
+    "typescript": "^5.5.4"
+  },
+  "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "langfuse": "^3.38.4",
+    "pdfjs-dist": "^4.10.38"
+  }
+}
