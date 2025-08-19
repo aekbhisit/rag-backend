@@ -15,7 +15,7 @@ COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
 
 # Install all dependencies (including dev dependencies for building)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source code
 COPY . .
@@ -44,7 +44,7 @@ COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
 
 # Install all dependencies (including dev dependencies for now)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy built application and all dependencies from base stage
 COPY --from=base /app/apps/backend/dist ./apps/backend/dist

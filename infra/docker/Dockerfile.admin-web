@@ -15,7 +15,7 @@ COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
 
 # Install all dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source code
 COPY . .
@@ -41,7 +41,7 @@ COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
 
 # Install all dependencies (including dev dependencies for now)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy pre-built admin web application and all dependencies from base stage
 COPY --from=base /app/apps/admin-web/.next ./apps/admin-web/.next
