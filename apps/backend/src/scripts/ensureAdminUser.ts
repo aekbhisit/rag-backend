@@ -13,18 +13,19 @@ async function main() {
   // Ensure users table and columns exist (mirror ensureTable)
   await pool.query(`
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
-    CREATE TABLE IF NOT EXISTS public.users (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      tenant_id uuid NOT NULL,
-      email varchar NOT NULL,
-      role varchar NOT NULL DEFAULT 'admin',
-      name text,
-      status varchar NOT NULL DEFAULT 'active',
-      password_hash text,
-      last_login timestamptz,
-      created_at timestamptz NOT NULL DEFAULT now(),
-      updated_at timestamptz
-    );
+          CREATE TABLE IF NOT EXISTS public.users (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL,
+        email varchar NOT NULL,
+        role varchar NOT NULL DEFAULT 'admin',
+        name text,
+        status varchar NOT NULL DEFAULT 'active',
+        timezone varchar NOT NULL DEFAULT 'UTC',
+        password_hash text,
+        last_login timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz
+      );
     CREATE UNIQUE INDEX IF NOT EXISTS uq_users_tenant_email ON public.users(tenant_id, email);
     DO $$
     BEGIN

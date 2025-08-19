@@ -17,8 +17,16 @@ export function buildUsersRouter(pool: Pool) {
       const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
       const page = Math.max(Number(req.query.page || 1), 1);
       const size = Math.min(Math.max(Number(req.query.size || 20), 1), 200);
+      const email = req.query.email as string;
       const offset = (page - 1) * size;
-      const items = await repo.list(tenantId);
+      
+      let items = await repo.list(tenantId);
+      
+      // Filter by email if provided
+      if (email) {
+        items = items.filter(user => user.email.toLowerCase().includes(email.toLowerCase()));
+      }
+      
       const total = items.length;
       const pageItems = items.slice(offset, offset + size);
       res.json({ items: pageItems, total, page, size });
@@ -42,11 +50,12 @@ export function buildUsersRouter(pool: Pool) {
         email: z.string().trim().email(),
         role: z.enum(['admin','operator','viewer']),
         status: z.enum(['active','inactive','pending']),
-        password: z.string().min(6).optional(),
+        timezone: z.string().optional(),
+        password: z.string().min(6).optional().or(z.literal('')),
       });
-      const { name, email, role, status, password } = schema.parse(req.body || {});
-      const created = await repo.create(tenantId, { name, email, role, status });
-      if (password) {
+      const { name, email, role, status, timezone, password } = schema.parse(req.body || {});
+      const created = await repo.create(tenantId, { name, email, role, status, timezone });
+      if (password && typeof password === 'string' && password.trim().length >= 6) {
         const hash = await bcrypt.hash(password, 10);
         await pool.query(`UPDATE users SET password_hash=$3 WHERE tenant_id=$1 AND id=$2`, [tenantId, created.id, hash]);
       }
@@ -78,12 +87,13 @@ export function buildUsersRouter(pool: Pool) {
         email: z.string().trim().email().optional(),
         role: z.enum(['admin','operator','viewer']).optional(),
         status: z.enum(['active','inactive','pending']).optional(),
-        password: z.string().min(6).optional(),
+        timezone: z.string().optional(),
+        password: z.string().min(6).optional().or(z.literal('')),
       });
       const parsed = schema.parse(req.body || {});
       const { password, ...rest } = parsed as any;
       const updated = await repo.update(tenantId, req.params.id, rest);
-      if (updated && password) {
+      if (updated && password && typeof password === 'string' && password.trim().length >= 6) {
         const hash = await bcrypt.hash(password, 10);
         await pool.query(`UPDATE users SET password_hash=$3 WHERE tenant_id=$1 AND id=$2`, [tenantId, req.params.id, hash]);
       }

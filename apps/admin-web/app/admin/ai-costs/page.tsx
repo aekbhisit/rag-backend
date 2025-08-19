@@ -9,6 +9,7 @@ import { Select } from "../../../components/ui/Select";
 import { Badge } from "../../../components/ui/Badge";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type CostSummary = {
   totalCost: number;
@@ -33,6 +34,7 @@ type ExpensiveCall = {
 };
 
 export default function AiCostsPage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const [timeRange, setTimeRange] = React.useState("7d");
   const [modelFilter, setModelFilter] = React.useState("");
   const [providerFilter, setProviderFilter] = React.useState("");
@@ -104,35 +106,44 @@ export default function AiCostsPage() {
   return (
     <main className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">AI Cost Summary</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('aiCostSummary') : 'AI Cost Summary'}
+        </h1>
         <div className="flex gap-3">
           <Select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
-            options={[{ value: "7d", label: "Last 7 days" }, { value: "30d", label: "Last 30 days" }, { value: "90d", label: "Last 90 days" }, { value: "1y", label: "Last year" }]}
+            options={[
+              { value: "7d", label: translationMounted ? t('last7Days') : "Last 7 days" }, 
+              { value: "30d", label: translationMounted ? t('last30Days') : "Last 30 days" }, 
+              { value: "90d", label: translationMounted ? t('last90Days') : "Last 90 days" }, 
+              { value: "1y", label: translationMounted ? t('lastYear') : "Last year" }
+            ]}
           />
-          <Button variant="outline" onClick={fetchData} disabled={loading}>Refresh</Button>
+          <Button variant="outline" onClick={fetchData} disabled={loading}>
+            {translationMounted ? t('refresh') : 'Refresh'}
+          </Button>
         </div>
       </div>
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader>Total Cost</CardHeader>
+          <CardHeader>{translationMounted ? t('totalCost') : 'Total Cost'}</CardHeader>
           <CardBody>
             <div className="text-3xl font-semibold text-[color:var(--primary)]">{formatCurrency(costSummary.totalCost)}</div>
-            <p className="text-sm text-[color:var(--text-muted)] mt-1">This period</p>
+            <p className="text-sm text-[color:var(--text-muted)] mt-1">{translationMounted ? t('thisPeriod') : 'This period'}</p>
           </CardBody>
         </Card>
         <Card>
-          <CardHeader>Total Tokens</CardHeader>
+          <CardHeader>{translationMounted ? t('totalTokens') : 'Total Tokens'}</CardHeader>
           <CardBody><div className="text-3xl font-semibold">{formatNumber(costSummary.totalTokens)}</div></CardBody>
         </Card>
         <Card>
-          <CardHeader>Avg Cost/Token</CardHeader>
+          <CardHeader>{translationMounted ? t('avgCostPerToken') : 'Avg Cost/Token'}</CardHeader>
           <CardBody><div className="text-3xl font-semibold">{formatCurrency(costSummary.avgCostPerToken || 0)}</div></CardBody>
         </Card>
         <Card>
-          <CardHeader>Top Model</CardHeader>
+          <CardHeader>{translationMounted ? t('topModel') : 'Top Model'}</CardHeader>
           <CardBody>
             <div className="text-lg font-semibold">
               {costSummary.modelUsage[0]?.model || '—'}
@@ -143,13 +154,13 @@ export default function AiCostsPage() {
 
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <Card>
-          <CardHeader>Cost Trend</CardHeader>
+          <CardHeader>{translationMounted ? t('costTrend') : 'Cost Trend'}</CardHeader>
           <CardBody>
             <LineChart data={costSummary.costTrend} color="#10B981" width={400} height={200} />
           </CardBody>
         </Card>
         <Card>
-          <CardHeader>Token Usage Trend</CardHeader>
+          <CardHeader>{translationMounted ? t('tokenUsageTrend') : 'Token Usage Trend'}</CardHeader>
           <CardBody>
             <LineChart data={costSummary.tokenTrend} color="#3B82F6" width={400} height={200} />
           </CardBody>
@@ -157,7 +168,7 @@ export default function AiCostsPage() {
       </div>
 
       <Card>
-        <CardHeader>Model Usage Breakdown</CardHeader>
+        <CardHeader>{translationMounted ? t('modelUsageBreakdown') : 'Model Usage Breakdown'}</CardHeader>
         <CardBody>
           <div className="space-y-3">
             {costSummary.modelUsage.map((m, i) => (
@@ -173,20 +184,23 @@ export default function AiCostsPage() {
       </Card>
 
       <Card>
-        <CardHeader>Top Expensive Calls</CardHeader>
+        <CardHeader>{translationMounted ? t('topExpensiveCalls') : 'Top Expensive Calls'}</CardHeader>
         <CardBody>
           <Table
             columns={[
-              { key: 'start_time', title: 'Date & Time', sortable: true, onSort: (dir: 'asc'|'desc') => { setTopSortBy('start_time'); setTopSortDir(dir); }, render: (_: any, row: any) => (<span className="text-sm font-mono text-[color:var(--text-muted)]">{row.start_time ? new Date(row.start_time).toLocaleString() : '—'}</span>) },
-              { key: 'operation', title: 'Operation' },
-              { key: 'model', title: 'Model', render: (_: any, row: any) => (<Badge variant="info" size="sm">{row.model || '—'}</Badge>) },
-              { key: 'provider', title: 'Provider', render: (_: any, row: any) => (<span>{row.provider || '—'}</span>) },
-              { key: 'usage_total_tokens', title: 'Tokens', sortable: true, onSort: (dir: 'asc'|'desc') => { setTopSortBy('usage_total_tokens'); setTopSortDir(dir); }, render: (_: any, row: any) => (<span className="font-mono">{row.usage?.total_tokens ?? row.usage_total_tokens ?? '—'}</span>) },
-              { key: 'cost_total_usd', title: 'Cost', sortable: true, onSort: (dir: 'asc'|'desc') => { setTopSortBy('cost_total_usd'); setTopSortDir(dir); }, render: (_: any, row: any) => (<span className="font-mono">{(row.cost?.total_usd ?? row.cost_total_usd) != null ? Number(row.cost?.total_usd ?? row.cost_total_usd).toFixed(6) : '—'}</span>) },
+              { key: 'start_time', title: translationMounted ? t('dateTime') : 'Date & Time', sortable: true, render: (_: any, row: any) => (<span className="text-sm font-mono text-[color:var(--text-muted)]">{row.start_time ? new Date(row.start_time).toLocaleString() : '—'}</span>) },
+              { key: 'operation', title: translationMounted ? t('operation') : 'Operation' },
+              { key: 'model', title: translationMounted ? t('model') : 'Model', render: (_: any, row: any) => (<Badge variant="info" size="sm">{row.model || '—'}</Badge>) },
+              { key: 'provider', title: translationMounted ? t('provider') : 'Provider', render: (_: any, row: any) => (<span>{row.provider || '—'}</span>) },
+              { key: 'usage_total_tokens', title: translationMounted ? t('tokens') : 'Tokens', sortable: true, render: (_: any, row: any) => (<span className="font-mono">{row.usage?.total_tokens ?? row.usage_total_tokens ?? '—'}</span>) },
+              { key: 'cost_total_usd', title: translationMounted ? t('cost') : 'Cost', sortable: true, render: (_: any, row: any) => (<span className="font-mono">{(row.cost?.total_usd ?? row.cost_total_usd) != null ? Number(row.cost?.total_usd ?? row.cost_total_usd).toFixed(6) : '—'}</span>) },
             ]}
             data={topExpensive}
             loading={loading}
-            empty={<div className="text-sm text-[color:var(--text-muted)]">No data</div>}
+            onSort={(key, direction) => { setTopSortBy(key as any); setTopSortDir(direction); }}
+            sortKey={topSortBy}
+            sortDirection={topSortDir}
+            empty={<div className="text-sm text-[color:var(--text-muted)]">{translationMounted ? t('noData') : 'No data'}</div>}
           />
           <Pagination
             page={topPage}

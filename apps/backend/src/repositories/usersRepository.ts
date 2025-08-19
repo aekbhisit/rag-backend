@@ -7,6 +7,7 @@ export type RagUserRow = {
   email: string;
   role: 'admin' | 'operator' | 'viewer';
   status: 'active' | 'inactive' | 'pending';
+  timezone: string;
   last_login: string | null;
   created_at: string;
   updated_at: string | null;
@@ -25,6 +26,7 @@ export class UsersRepository {
         role varchar NOT NULL DEFAULT 'admin',
         name text,
         status varchar NOT NULL DEFAULT 'active',
+        timezone varchar NOT NULL DEFAULT 'UTC',
         password_hash text,
         last_login timestamptz,
         created_at timestamptz NOT NULL DEFAULT now(),
@@ -43,6 +45,7 @@ export class UsersRepository {
       END$$;
       ALTER TABLE public.users ADD COLUMN IF NOT EXISTS name text;
       ALTER TABLE public.users ADD COLUMN IF NOT EXISTS status varchar NOT NULL DEFAULT 'active';
+      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS timezone varchar NOT NULL DEFAULT 'UTC';
       ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash text;
       ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_login timestamptz;
     `);
@@ -101,15 +104,15 @@ export class UsersRepository {
     }
   }
 
-  async create(tenantId: string, data: { name?: string; email: string; role: RagUserRow['role']; status: RagUserRow['status'] }): Promise<RagUserRow> {
+  async create(tenantId: string, data: { name?: string; email: string; role: RagUserRow['role']; status: RagUserRow['status']; timezone?: string }): Promise<RagUserRow> {
     await this.ensureTable();
     await this.ensureColumnsDetected();
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [tenantId]);
-      const columns: string[] = ['tenant_id', 'email', 'role'];
-      const values: any[] = [tenantId, data.email, data.role];
+      const columns: string[] = ['tenant_id', 'email', 'role', 'timezone'];
+      const values: any[] = [tenantId, data.email, data.role, data.timezone || 'UTC'];
       if (this.columnsInfo.hasName) {
         columns.push('name');
         values.push(data.name ?? null);
@@ -131,7 +134,7 @@ export class UsersRepository {
     }
   }
 
-  async update(tenantId: string, id: string, data: { name?: string; email?: string; role?: RagUserRow['role']; status?: RagUserRow['status'] }): Promise<RagUserRow | null> {
+  async update(tenantId: string, id: string, data: { name?: string; email?: string; role?: RagUserRow['role']; status?: RagUserRow['status']; timezone?: string }): Promise<RagUserRow | null> {
     await this.ensureTable();
     await this.ensureColumnsDetected();
     const client = await this.pool.connect();
@@ -146,6 +149,7 @@ export class UsersRepository {
 
       if (data.email !== undefined) push('email', data.email);
       if (data.role !== undefined) push('role', data.role);
+      if (data.timezone !== undefined) push('timezone', data.timezone);
       if (this.columnsInfo.hasName && data.name !== undefined) push('name', data.name ?? null);
       if (this.columnsInfo.hasStatus && data.status !== undefined) push('status', data.status);
       fields.push('updated_at = now()');

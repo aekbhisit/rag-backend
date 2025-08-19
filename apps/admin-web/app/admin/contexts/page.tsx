@@ -10,6 +10,7 @@ import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { Badge } from "../../../components/ui/Badge";
 import { Pagination } from "../../../components/ui/Pagination";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type Context = {
   id: string;
@@ -26,6 +27,7 @@ type Context = {
 };
 
 export default function ContextsPage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const router = useRouter();
   const [contexts, setContexts] = React.useState<Context[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -38,6 +40,8 @@ export default function ContextsPage() {
   const [sortKey, setSortKey] = React.useState<string>("created_at");
   const [sortDirection, setSortDirection] = React.useState<"asc" | "desc">("desc");
   const dialog = useDialog();
+  const [isBusy, setIsBusy] = React.useState(false);
+  const [busyMessage, setBusyMessage] = React.useState<string>("");
 
   React.useEffect(() => {
     fetchContexts();
@@ -112,7 +116,12 @@ export default function ContextsPage() {
 
 
   const handleDelete = async (id: string) => {
-    const ok = await dialog.confirm({ title: 'Delete Context', description: 'Are you sure you want to delete this context?', confirmText: 'Delete', variant: 'danger' });
+    const ok = await dialog.confirm({ 
+      title: translationMounted ? `ลบ${t('contexts')}` : 'Delete Context', 
+      description: translationMounted ? `คุณแน่ใจหรือไม่ที่จะลบ${t('contexts')}นี้?` : 'Are you sure you want to delete this context?', 
+      confirmText: translationMounted ? t('delete') : 'Delete', 
+      variant: 'danger' 
+    });
     if (!ok) return;
     
     try {
@@ -159,9 +168,9 @@ export default function ContextsPage() {
       const bVal = b[sortKey as keyof Context];
       
       if (sortDirection === "asc") {
-        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return (aVal || '') < (bVal || '') ? -1 : (aVal || '') > (bVal || '') ? 1 : 0;
       } else {
-        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        return (aVal || '') > (bVal || '') ? -1 : (aVal || '') < (bVal || '') ? 1 : 0;
       }
     });
   }, [contexts, searchTerm, typeFilter, trustFilter, sortKey, sortDirection]);
@@ -169,7 +178,7 @@ export default function ContextsPage() {
   const columns = [
     {
       key: "title",
-      title: "Title",
+      title: translationMounted ? t('title') : "Title",
       sortable: true,
       render: (value: string, row: Context) => (
         <div>
@@ -182,7 +191,7 @@ export default function ContextsPage() {
     },
     {
       key: "type",
-      title: "Type",
+      title: translationMounted ? t('type') : "Type",
       sortable: true,
       render: (value: string) => (
         <Badge variant="info">{value.replace("_", " ")}</Badge>
@@ -190,7 +199,7 @@ export default function ContextsPage() {
     },
     {
       key: "trust_level",
-      title: "Trust",
+      title: translationMounted ? t('trust') : "Trust",
       sortable: true,
       render: (value: number) => (
         <Badge variant={value >= 4 ? "success" : value >= 3 ? "info" : "warning"}>
@@ -200,7 +209,7 @@ export default function ContextsPage() {
     },
     {
       key: "intent_scopes",
-      title: "Intents",
+      title: translationMounted ? t('intents') : "Intents",
       render: (value: string[]) => (
         <div className="flex flex-wrap gap-1">
           {(value || []).slice(0, 2).map(scope => (
@@ -214,13 +223,13 @@ export default function ContextsPage() {
     },
     {
       key: "attributes",
-      title: "Key Attributes",
+      title: translationMounted ? t('keyAttributes') : "Key Attributes",
       render: (value: Record<string, any>, row: Context) => {
         const keyAttrs = [];
         if (row.type === "place" && value.address) keyAttrs.push(value.address);
         if (row.type === "website" && value.domain) keyAttrs.push(value.domain);
         if (row.type === "ticket" && value.location) keyAttrs.push(value.location);
-        if (row.type === "doc_chunk" && value.source_uri) keyAttrs.push(value.source_uri);
+        if ((row.type as any) === "doc_chunk" && value.source_uri) keyAttrs.push(value.source_uri);
         
         return (
           <div className="text-sm text-[color:var(--text-muted)] max-w-xs truncate">
@@ -231,11 +240,29 @@ export default function ContextsPage() {
     },
     {
       key: "actions",
-      title: "Actions",
+      title: translationMounted ? t('actions') : "Actions",
       render: (_: any, row: Context) => (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => handleEdit(row)}>
-            Edit
+            {translationMounted ? t('edit') : 'Edit'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="whitespace-nowrap"
+            onClick={async () => {
+              try {
+                const res = await fetch(`${BACKEND_URL}/api/admin/contexts/${row.id}/duplicate`, {
+                  method: 'POST',
+                  headers: { 'X-Tenant-ID': getTenantId(), 'Content-Type': 'application/json' }
+                });
+                if (res.ok) {
+                  await fetchContexts();
+                }
+              } catch {}
+            }}
+          >
+            {translationMounted ? t('duplicate') : 'Duplicate'}
           </Button>
           <Button 
             size="sm" 
@@ -243,7 +270,7 @@ export default function ContextsPage() {
             onClick={() => handleDelete(row.id)}
             className="text-[color:var(--error)] hover:bg-red-50"
           >
-            Delete
+            {translationMounted ? t('delete') : 'Delete'}
           </Button>
         </div>
       )
@@ -253,18 +280,86 @@ export default function ContextsPage() {
   return (
     <main className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Contexts</h1>
-        <Button onClick={handleCreate}>
-          <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Create Context
-        </Button>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('contexts') : 'Contexts'}
+        </h1>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={async () => {
+            setIsBusy(true);
+            setBusyMessage(translationMounted ? t('createMissingEmbeddings') : 'Creating missing embeddings...');
+            try {
+              const res = await fetch(`${BACKEND_URL}/api/admin/contexts/embedding/missing`, {
+                method: 'POST',
+                headers: { 'X-Tenant-ID': getTenantId(), 'Content-Type': 'application/json' },
+              });
+              const data = await res.json().catch(() => ({}));
+              await fetchContexts();
+              await dialog.alert({
+                title: translationMounted ? t('done') : 'Done',
+                description: `${translationMounted ? t('createMissingEmbeddings') : 'Created missing embeddings'}: ${data.updated ?? 0}/${data.total_missing ?? 0}`,
+              });
+            } catch (e: any) {
+              await dialog.alert({ title: translationMounted ? t('error') : 'Error', description: String(e?.message || e) });
+            } finally {
+              setIsBusy(false);
+              setBusyMessage("");
+            }
+          }} disabled={isBusy}>
+            <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m-4-4h8" />
+            </svg>
+            {translationMounted ? t('createMissingEmbeddings') : 'Create Missing Embeddings'}
+          </Button>
+          <Button variant="outline" onClick={async () => {
+            setIsBusy(true);
+            setBusyMessage(translationMounted ? t('rebuildAllEmbeddings') : 'Rebuilding all embeddings...');
+            try {
+              const res = await fetch(`${BACKEND_URL}/api/admin/contexts/embedding/rebuild`, {
+                method: 'POST',
+                headers: { 'X-Tenant-ID': getTenantId(), 'Content-Type': 'application/json' },
+              });
+              const data = await res.json().catch(() => ({}));
+              await fetchContexts();
+              await dialog.alert({
+                title: translationMounted ? t('done') : 'Done',
+                description: `${translationMounted ? t('rebuildAllEmbeddings') : 'Rebuilt embeddings'}: ${data.updated ?? 0}/${data.total ?? 0}`,
+              });
+            } catch (e: any) {
+              await dialog.alert({ title: translationMounted ? t('error') : 'Error', description: String(e?.message || e) });
+            } finally {
+              setIsBusy(false);
+              setBusyMessage("");
+            }
+          }} disabled={isBusy}>
+            <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {translationMounted ? t('rebuildAllEmbeddings') : 'Rebuild All Embeddings'}
+          </Button>
+          <Button onClick={handleCreate}>
+            <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            {translationMounted ? t('createContext') : 'Create Context'}
+          </Button>
+        </div>
       </div>
+
+      {isBusy && (
+        <div className="rounded border px-3 py-2 text-sm bg-yellow-50 border-yellow-200 text-yellow-800">
+          <span className="inline-flex items-center gap-2">
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="12" cy="12" r="10" strokeWidth="2" className="opacity-25" />
+              <path d="M4 12a8 8 0 018-8" strokeWidth="2" className="opacity-75" />
+            </svg>
+            {busyMessage || (translationMounted ? t('processing') : 'Processing...')}
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Input
-          placeholder="Search contexts..."
+          placeholder={translationMounted ? `ค้นหา${t('contexts')}...` : "Search contexts..."}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           leftIcon={
@@ -278,12 +373,12 @@ export default function ContextsPage() {
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
           options={[
-            { value: "", label: "All Types" },
-            { value: "place", label: "Place" },
-            { value: "website", label: "Website" },
-            { value: "ticket", label: "Ticket" },
-            { value: "document", label: "Document" },
-            { value: "text", label: "Text" }
+            { value: "", label: translationMounted ? t('allTypes') : "All Types" },
+            { value: "place", label: translationMounted ? t('place') : "Place" },
+            { value: "website", label: translationMounted ? t('website') : "Website" },
+            { value: "ticket", label: translationMounted ? t('ticket') : "Ticket" },
+            { value: "document", label: translationMounted ? t('document') : "Document" },
+            { value: "text", label: translationMounted ? t('text') : "Text" }
           ]}
         />
         <Select
@@ -291,12 +386,12 @@ export default function ContextsPage() {
           value={trustFilter}
           onChange={(e) => setTrustFilter(e.target.value)}
           options={[
-            { value: "", label: "All Trust Levels" },
-            { value: "1", label: "1 - Low" },
-            { value: "2", label: "2 - Medium" },
-            { value: "3", label: "3 - High" },
-            { value: "4", label: "4 - Verified" },
-            { value: "5", label: "5 - Official" }
+            { value: "", label: translationMounted ? t('allTrustLevels') : "All Trust Levels" },
+            { value: "1", label: `1 - ${translationMounted ? t('low') : "Low"}` },
+            { value: "2", label: `2 - ${translationMounted ? t('medium') : "Medium"}` },
+            { value: "3", label: `3 - ${translationMounted ? t('high') : "High"}` },
+            { value: "4", label: `4 - ${translationMounted ? t('verified') : "Verified"}` },
+            { value: "5", label: `5 - ${translationMounted ? t('official') : "Official"}` }
           ]}
         />
         <div className="flex justify-end">

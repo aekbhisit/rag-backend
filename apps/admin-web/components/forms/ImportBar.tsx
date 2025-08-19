@@ -3,6 +3,7 @@
 import React from "react";
 import { BACKEND_URL, DEFAULT_TENANT_ID } from "../../components/config";
 import { Button } from "../Button";
+import { useTranslation } from "../../hooks/useTranslation";
 
 interface ImportBarProps {
   contextType: "place" | "website" | "ticket" | "document" | "text";
@@ -11,6 +12,7 @@ interface ImportBarProps {
 }
 
 export function ImportBar({ contextType, onImport, loading = false }: ImportBarProps) {
+  const { t, mounted: translationMounted } = useTranslation();
   const [importUrl, setImportUrl] = React.useState("");
   const [importing, setImporting] = React.useState(false);
   const [file, setFile] = React.useState<File | null>(null);
@@ -23,34 +25,34 @@ export function ImportBar({ contextType, onImport, loading = false }: ImportBarP
   const getPlaceholder = () => {
     switch (contextType) {
       case "place":
-        return "Paste Google Maps URL (e.g., https://goo.gl/maps/...)";
+        return translationMounted ? t('pasteGoogleMapsUrl') : "Paste Google Maps URL (e.g., https://goo.gl/maps/...)";
       case "website":
-        return "Enter website URL to scrape content";
+        return translationMounted ? t('enterWebsiteUrl') : "Enter website URL to scrape content";
       case "ticket":
-        return "Enter event page URL (same as website import)";
+        return translationMounted ? t('enterEventPageUrl') : "Enter event page URL (same as website import)";
       case "document":
-        return "Enter document URL to import";
+        return translationMounted ? t('enterDocumentUrl') : "Enter document URL to import";
       case "text":
-        return "Paste text or leave blank (no import)";
+        return translationMounted ? t('pasteTextOrLeaveBlank') : "Paste text or leave blank (no import)";
       default:
-        return "Enter import source";
+        return translationMounted ? t('enterImportSource') : "Enter import source";
     }
   };
 
   const getImportLabel = () => {
     switch (contextType) {
       case "place":
-        return "Import from Google Maps";
+        return translationMounted ? t('importFromGoogleMaps') : "Import from Google Maps";
       case "website":
-        return "Scrape Website";
+        return translationMounted ? t('scrapeWebsite') : "Scrape Website";
       case "ticket":
-        return "Import Event Detail";
+        return translationMounted ? t('importEventDetail') : "Import Event Detail";
       case "document":
-        return "Import Document";
+        return translationMounted ? t('importDocument') : "Import Document";
       case "text":
-        return "Import Text";
+        return translationMounted ? t('importText') : "Import Text";
       default:
-        return "Import Data";
+        return translationMounted ? t('importData') : "Import Data";
     }
   };
 
@@ -155,14 +157,16 @@ export function ImportBar({ contextType, onImport, loading = false }: ImportBarP
         <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
         </svg>
-        <h3 className="text-sm font-medium text-blue-900">Quick Import</h3>
+        <h3 className="text-sm font-medium text-blue-900">
+          {translationMounted ? t('quickImport') : "Quick Import"}
+        </h3>
       </div>
       
       <p className="text-sm text-blue-700 mb-3">
-        {contextType === "place" && "Import location data directly from Google Maps URL"}
-        {contextType === "website" && "Automatically extract and summarize website content"}
-        {contextType === "ticket" && "Two options: 1) Import Event Detail via URL (same as website). 2) Upload Ticket Image for OCR to fill ticket fields."}
-        {contextType === "document" && "Upload a document file or paste a document URL"}
+        {contextType === "place" && (translationMounted ? t('importLocationData') : "Import location data directly from Google Maps URL")}
+        {contextType === "website" && (translationMounted ? t('automaticallyExtractContent') : "Automatically extract and summarize website content")}
+        {contextType === "ticket" && (translationMounted ? t('twoOptionsTicket') : "Two options: 1) Import Event Detail via URL (same as website). 2) Upload Ticket Image for OCR to fill ticket fields.")}
+        {contextType === "document" && (translationMounted ? t('uploadDocumentFile') : "Upload a document file or paste a document URL")}
       </p>
 
       <div className="flex flex-col sm:flex-row gap-2">
@@ -266,20 +270,20 @@ export function ImportBar({ contextType, onImport, loading = false }: ImportBarP
             disabled={importing || loading}
           />
           <label htmlFor="prefer-firecrawl-first">
-            Use Firecrawl first (fallback to local scraper)
+            {translationMounted ? t('useFirecrawlFirst') : "Use Firecrawl first (fallback to local scraper)"}
           </label>
         </div>
       )}
 
       {contextType === 'ticket' && (
         <div className="mt-2 text-xs text-blue-700">
-          Ticket OCR upload uses your Generating Model API key from Settings. Supported: OpenAI vision models.
+          {translationMounted ? t('ticketOcrUploadUses') : "Ticket OCR upload uses your Generating Model API key from Settings. Supported: OpenAI vision models."}
         </div>
       )}
 
       {contextType === "place" && (
         <div className="mt-2 text-xs text-blue-600">
-          💡 Tip: Right-click on Google Maps and select "Share" to get the URL
+          {translationMounted ? t('tipRightClickGoogleMaps') : "💡 Tip: Right-click on Google Maps and select \"Share\" to get the URL"}
         </div>
       )}
     </div>

@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { BACKEND_URL, getTenantId } from "../../../../components/config";
 import { ContextForm } from "../../../../components/forms/ContextForm";
+import { useTranslation } from "../../../../hooks/useTranslation";
 
 // Mock edit history data for template creation
 const mockEditHistory = [
@@ -65,6 +66,7 @@ type ContextFormData = {
 
 export default function CreateContextPage() {
   const router = useRouter();
+  const { t, mounted: translationMounted } = useTranslation();
   const [submitting, setSubmitting] = React.useState(false);
 
   const handleSubmit = async (formData: ContextFormData) => {
@@ -106,14 +108,16 @@ export default function CreateContextPage() {
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Back to Contexts
+          {translationMounted ? t('backToContexts') : 'Back to Contexts'}
         </button>
       </div>
 
       <div>
-        <h1 className="text-2xl font-semibold">Create New Context</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('createNewContext') : 'Create New Context'}
+        </h1>
         <p className="text-[color:var(--text-muted)] mt-1">
-          Add a new context to your knowledge base with type-specific attributes and instructions.
+          {translationMounted ? t('contextDescription') : 'Add a new context to your knowledge base with type-specific attributes and instructions.'}
         </p>
       </div>
 

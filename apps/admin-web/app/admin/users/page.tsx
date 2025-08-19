@@ -10,6 +10,8 @@ import { Select } from "../../../components/ui/Select";
 import { Badge } from "../../../components/ui/Badge";
 import { useDialog } from "../../../components/ui/DialogProvider";
 import { Pagination } from "../../../components/ui/Pagination";
+import { formatDateForTable } from "../../../utils/timezone";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type User = {
   id: string;
@@ -17,6 +19,7 @@ type User = {
   email: string;
   role: "admin" | "operator" | "viewer";
   status: "active" | "inactive" | "pending";
+  timezone: string;
   tenant_id: string;
   last_login?: string;
   created_at: string;
@@ -24,6 +27,7 @@ type User = {
 };
 
 export default function UsersPage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const router = useRouter();
   const [users, setUsers] = React.useState<User[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -55,6 +59,7 @@ export default function UsersPage() {
           email: u.email,
           role: u.role || 'viewer',
           status: u.status || 'active',
+          timezone: u.timezone || 'UTC',
           tenant_id: u.tenant_id,
           last_login: u.last_login || undefined,
           created_at: u.created_at,
@@ -75,7 +80,12 @@ export default function UsersPage() {
 
 
   const handleDelete = async (id: string) => {
-    const ok = await dialog.confirm({ title: 'Delete User', description: 'Are you sure you want to delete this user?', confirmText: 'Delete', variant: 'danger' });
+    const ok = await dialog.confirm({ 
+      title: translationMounted ? t('deleteUser') : 'Delete User', 
+      description: translationMounted ? t('deleteUserConfirm') : 'Are you sure you want to delete this user?', 
+      confirmText: translationMounted ? t('delete') : 'Delete', 
+      variant: 'danger' 
+    });
     if (!ok) return;
     
     try {
@@ -121,9 +131,9 @@ export default function UsersPage() {
       const bVal = b[sortKey as keyof User];
       
       if (sortDirection === "asc") {
-        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return (aVal || '') < (bVal || '') ? -1 : (aVal || '') > (bVal || '') ? 1 : 0;
       } else {
-        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        return (aVal || '') > (bVal || '') ? -1 : (aVal || '') < (bVal || '') ? 1 : 0;
       }
     });
   }, [users, searchTerm, roleFilter, statusFilter, sortKey, sortDirection]);
@@ -146,21 +156,14 @@ export default function UsersPage() {
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "Never";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+  const formatDate = (dateString?: string, userTimezone?: string) => {
+    return formatDateForTable(dateString, userTimezone);
   };
 
   const columns = [
     {
       key: "name",
-      title: "Name",
+      title: translationMounted ? t('name') : "Name",
       sortable: true,
       render: (value: string, row: User) => (
         <div>
@@ -171,11 +174,14 @@ export default function UsersPage() {
     },
     {
       key: "role",
-      title: "Role",
+      title: translationMounted ? t('role') : "Role",
       sortable: true,
       render: (value: string) => {
         const safe = value || '';
-        const text = safe ? safe.charAt(0).toUpperCase() + safe.slice(1) : '—';
+        let text = safe ? safe.charAt(0).toUpperCase() + safe.slice(1) : '—';
+        if (translationMounted && safe) {
+          text = t(safe as any) || text;
+        }
         return (
           <Badge variant={getRoleBadgeVariant(safe)}>
             {text}
@@ -185,11 +191,14 @@ export default function UsersPage() {
     },
     {
       key: "status",
-      title: "Status",
+      title: translationMounted ? t('status') : "Status",
       sortable: true,
       render: (value: string) => {
         const safe = value || '';
-        const text = safe ? safe.charAt(0).toUpperCase() + safe.slice(1) : '—';
+        let text = safe ? safe.charAt(0).toUpperCase() + safe.slice(1) : '—';
+        if (translationMounted && safe) {
+          text = t(safe as any) || text;
+        }
         return (
           <Badge variant={getStatusBadgeVariant(safe)}>
             {text}
@@ -198,32 +207,42 @@ export default function UsersPage() {
       }
     },
     {
-      key: "last_login",
-      title: "Last Login",
+      key: "timezone",
+      title: translationMounted ? t('timezone') : "Timezone",
       sortable: true,
       render: (value: string) => (
+        <span className="text-sm font-mono text-[color:var(--text-muted)]">
+          {value || 'UTC'}
+        </span>
+      )
+    },
+    {
+      key: "last_login",
+      title: translationMounted ? t('lastLogin') : "Last Login",
+      sortable: true,
+      render: (value: string, row: User) => (
         <span className="text-sm text-[color:var(--text-muted)]">
-          {formatDate(value)}
+          {formatDate(value, row.timezone)}
         </span>
       )
     },
     {
       key: "created_at",
-      title: "Created",
+      title: translationMounted ? t('created') : "Created",
       sortable: true,
-      render: (value: string) => (
+      render: (value: string, row: User) => (
         <span className="text-sm text-[color:var(--text-muted)]">
-          {formatDate(value)}
+          {formatDate(value, row.timezone)}
         </span>
       )
     },
     {
       key: "actions",
-      title: "Actions",
+      title: translationMounted ? t('actions') : "Actions",
       render: (_: any, row: User) => (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => handleEdit(row)}>
-            Edit
+            {translationMounted ? t('edit') : 'Edit'}
           </Button>
           <Button 
             size="sm" 
@@ -231,7 +250,7 @@ export default function UsersPage() {
             onClick={() => handleDelete(row.id)}
             className="text-[color:var(--error)] hover:bg-red-50"
           >
-            Delete
+            {translationMounted ? t('delete') : 'Delete'}
           </Button>
         </div>
       )
@@ -241,18 +260,20 @@ export default function UsersPage() {
   return (
     <main className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Users</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('users') : 'Users'}
+        </h1>
         <Button onClick={handleCreate}>
           <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Create User
+          {translationMounted ? t('createUser') : 'Create User'}
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Input
-          placeholder="Search users..."
+          placeholder={translationMounted ? t('searchUsers') : "Search users..."}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           leftIcon={
@@ -262,25 +283,25 @@ export default function UsersPage() {
           }
         />
         <Select
-          placeholder="Filter by role"
+          placeholder={translationMounted ? t('filterByRole') : "Filter by role"}
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value)}
           options={[
-            { value: "", label: "All Roles" },
-            { value: "admin", label: "Admin" },
-            { value: "operator", label: "Operator" },
-            { value: "viewer", label: "Viewer" }
+            { value: "", label: translationMounted ? t('allRoles') : "All Roles" },
+            { value: "admin", label: translationMounted ? t('admin') : "Admin" },
+            { value: "operator", label: translationMounted ? t('operator') : "Operator" },
+            { value: "viewer", label: translationMounted ? t('viewer') : "Viewer" }
           ]}
         />
         <Select
-          placeholder="Filter by status"
+          placeholder={translationMounted ? t('filterByStatus') : "Filter by status"}
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           options={[
-            { value: "", label: "All Statuses" },
-            { value: "active", label: "Active" },
-            { value: "inactive", label: "Inactive" },
-            { value: "pending", label: "Pending" }
+            { value: "", label: translationMounted ? t('allStatuses') : "All Statuses" },
+            { value: "active", label: translationMounted ? t('active') : "Active" },
+            { value: "inactive", label: translationMounted ? t('inactive') : "Inactive" },
+            { value: "pending", label: translationMounted ? t('pending') : "Pending" }
           ]}
         />
         <div className="flex justify-end">
@@ -288,7 +309,7 @@ export default function UsersPage() {
             <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Refresh
+            {translationMounted ? t('refresh') : 'Refresh'}
           </Button>
         </div>
       </div>
@@ -305,14 +326,18 @@ export default function UsersPage() {
             <svg className="mx-auto h-12 w-12 text-[color:var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-[color:var(--text)]">No users</h3>
-            <p className="mt-1 text-sm text-[color:var(--text-muted)]">Get started by creating a new user.</p>
+            <h3 className="mt-2 text-sm font-medium text-[color:var(--text)]">
+              {translationMounted ? `ไม่มี${t('users')}` : 'No users'}
+            </h3>
+            <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+              {translationMounted ? t('getStartedCreateUser') : 'Get started by creating a new user.'}
+            </p>
             <div className="mt-6">
               <Button onClick={handleCreate}>
                 <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Create User
+                {translationMounted ? t('createUser') : 'Create User'}
               </Button>
             </div>
           </div>

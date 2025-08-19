@@ -9,6 +9,7 @@ import { Button } from "../../../components/Button";
 import { Badge } from "../../../components/ui/Badge";
 import { Textarea } from "../../../components/ui/Textarea";
 import { useDialog } from "../../../components/ui/DialogProvider";
+import { TIMEZONE_OPTIONS, formatDateForTable } from "../../../utils/timezone";
 
 type AppSettings = {
   appName: string;
@@ -308,13 +309,7 @@ export default function SettingsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    return formatDateForTable(dateString);
   };
 
   const tabs = [
@@ -401,12 +396,7 @@ export default function SettingsPage() {
                 label="Timezone"
                 value={appSettings.timezone}
                 onChange={(e) => updateAppSetting("timezone", e.target.value)}
-                options={[
-                  { value: "Asia/Bangkok", label: "Asia/Bangkok (UTC+7)" },
-                  { value: "UTC", label: "UTC" },
-                  { value: "America/New_York", label: "America/New_York (EST)" },
-                  { value: "Europe/London", label: "Europe/London (GMT)" }
-                ]}
+                options={TIMEZONE_OPTIONS}
               />
             </CardBody>
           </Card>

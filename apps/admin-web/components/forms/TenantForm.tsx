@@ -3,6 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { BACKEND_URL, getTenantId } from "../config";
+import { useTranslation } from "../../hooks/useTranslation";
 
 type TenantFormProps = {
   tenantId?: string;
@@ -10,6 +11,7 @@ type TenantFormProps = {
 
 export default function TenantForm({ tenantId }: TenantFormProps) {
   const router = useRouter();
+  const { t, mounted: translationMounted } = useTranslation();
   const [loading, setLoading] = React.useState(false);
   const [form, setForm] = React.useState({ name: "", code: "", contact_email: "", is_active: true });
   const [settings, setSettings] = React.useState<any>({
@@ -99,34 +101,34 @@ export default function TenantForm({ tenantId }: TenantFormProps) {
   return (
     <div className="grid gap-6">
       <section className="border rounded p-4 space-y-3">
-        <div className="font-medium">General</div>
+        <div className="font-medium">{translationMounted ? t('general') : 'General'}</div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-3">
-            <label className="text-sm">Name
+            <label className="text-sm">{translationMounted ? t('name') : 'Name'}
               <input className="mt-1 w-full border rounded px-2 py-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </label>
-            <label className="text-sm">Code
+            <label className="text-sm">{translationMounted ? t('code') : 'Code'}
               <input className="mt-1 w-full border rounded px-2 py-1" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="AA1234" />
             </label>
-            <label className="text-sm">Contact Email
+            <label className="text-sm">{translationMounted ? t('contactEmail') : 'Contact Email'}
               <input type="email" className="mt-1 w-full border rounded px-2 py-1" value={form.contact_email} onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))} />
             </label>
           </div>
           <div className="space-y-3">
-            <label className="text-sm">Default Language
+            <label className="text-sm">{translationMounted ? t('defaultLanguage') : 'Default Language'}
               <select className="mt-1 w-full border rounded px-2 py-1" value={settings.profile?.defaultLanguage || 'en'} onChange={e => setSettings((s: any) => ({ ...s, profile: { ...(s.profile || {}), defaultLanguage: e.target.value } }))}>
-                <option value="en">English</option>
-                <option value="th">Thai</option>
+                <option value="en">{translationMounted ? t('english') : 'English'}</option>
+                <option value="th">{translationMounted ? t('thai') : 'Thai'}</option>
               </select>
             </label>
-            <label className="text-sm">Theme
+            <label className="text-sm">{translationMounted ? t('theme') : 'Theme'}
               <select className="mt-1 w-full border rounded px-2 py-1" value={settings.profile?.theme || 'auto'} onChange={e => setSettings((s: any) => ({ ...s, profile: { ...(s.profile || {}), theme: e.target.value } }))}>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="auto">Auto</option>
+                <option value="light">{translationMounted ? t('light') : 'Light'}</option>
+                <option value="dark">{translationMounted ? t('dark') : 'Dark'}</option>
+                <option value="auto">{translationMounted ? t('auto') : 'Auto'}</option>
               </select>
             </label>
-            <label className="text-sm flex items-center gap-2">Status (Active)
+            <label className="text-sm flex items-center gap-2">{translationMounted ? t('status') : 'Status'} ({translationMounted ? t('active') : 'Active'})
               <input type="checkbox" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />
             </label>
           </div>
@@ -134,24 +136,24 @@ export default function TenantForm({ tenantId }: TenantFormProps) {
       </section>
 
       <section className="border rounded p-4 space-y-3">
-        <div className="font-medium">AI</div>
+        <div className="font-medium">{translationMounted ? t('ai') : 'AI'}</div>
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            <div className="text-sm font-medium">Provider API Keys</div>
-            <label className="text-sm">OpenAI API Key
+            <div className="text-sm font-medium">{translationMounted ? t('providerApiKeys') : 'Provider API Keys'}</div>
+            <label className="text-sm">{translationMounted ? t('openaiApiKey') : 'OpenAI API Key'}
               <input className="mt-1 w-full border rounded px-2 py-1" type="password" value={settings.ai?.providers?.openai?.apiKey || ''} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), providers: { ...(s.ai?.providers || {}), openai: { ...(s.ai?.providers?.openai || {}), apiKey: e.target.value } } } }))} />
             </label>
-            <label className="text-sm">Anthropic API Key
+            <label className="text-sm">{translationMounted ? t('anthropicApiKey') : 'Anthropic API Key'}
               <input className="mt-1 w-full border rounded px-2 py-1" type="password" value={settings.ai?.providers?.anthropic?.apiKey || ''} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), providers: { ...(s.ai?.providers || {}), anthropic: { ...(s.ai?.providers?.anthropic || {}), apiKey: e.target.value } } } }))} />
             </label>
-            <label className="text-sm">Google (Gemini) API Key
+            <label className="text-sm">{translationMounted ? t('googleGeminiApiKey') : 'Google (Gemini) API Key'}
               <input className="mt-1 w-full border rounded px-2 py-1" type="password" value={settings.ai?.providers?.google?.apiKey || ''} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), providers: { ...(s.ai?.providers || {}), google: { ...(s.ai?.providers?.google || {}), apiKey: e.target.value } } } }))} />
             </label>
           </div>
 
           <div className="space-y-3">
-            <div className="text-sm font-medium">Embedding</div>
-            <label className="text-sm">Provider
+            <div className="text-sm font-medium">{translationMounted ? t('embedding') : 'Embedding'}</div>
+            <label className="text-sm">{translationMounted ? t('provider') : 'Provider'}
               <select className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.embedding?.provider || ''} onChange={e => {
                 const newProvider = e.target.value;
                 const firstModel = embeddingOptions.find(o => o.provider === newProvider)?.model || '';
@@ -160,14 +162,14 @@ export default function TenantForm({ tenantId }: TenantFormProps) {
                 {[...new Set(embeddingOptions.map(o => o.provider))].map(p => (<option key={p} value={p}>{p}</option>))}
               </select>
             </label>
-            <label className="text-sm">Model
+            <label className="text-sm">{translationMounted ? t('model') : 'Model'}
               <select className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.embedding?.model || ''} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), embedding: { ...(s.ai?.embedding || {}), model: e.target.value } } }))}>
                 {embeddingOptions.filter(o => o.provider === settings.ai?.embedding?.provider).map(o => (<option key={`${o.provider}:${o.model}`} value={o.model}>{o.model}</option>))}
               </select>
             </label>
 
-            <div className="text-sm font-medium pt-2">Generating</div>
-            <label className="text-sm">Provider
+            <div className="text-sm font-medium pt-2">{translationMounted ? t('generating') : 'Generating'}</div>
+            <label className="text-sm">{translationMounted ? t('provider') : 'Provider'}
               <select className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.generating?.provider || ''} onChange={e => {
                 const newProvider = e.target.value;
                 const firstModel = generatingOptions.find(o => o.provider === newProvider)?.model || '';
@@ -176,16 +178,16 @@ export default function TenantForm({ tenantId }: TenantFormProps) {
                 {[...new Set(generatingOptions.map(o => o.provider))].map(p => (<option key={p} value={p}>{p}</option>))}
               </select>
             </label>
-            <label className="text-sm">Model
+            <label className="text-sm">{translationMounted ? t('model') : 'Model'}
               <select className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.generating?.model || ''} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), generating: { ...(s.ai?.generating || {}), model: e.target.value } } }))}>
                 {generatingOptions.filter(o => o.provider === settings.ai?.generating?.provider).map(o => (<option key={`${o.provider}:${o.model}`} value={o.model}>{o.model}</option>))}
               </select>
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm">Max Tokens
+              <label className="text-sm">{translationMounted ? t('maxTokens') : 'Max Tokens'}
                 <input type="number" className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.generating?.maxTokens || 0} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), generating: { ...(s.ai?.generating || {}), maxTokens: parseInt(e.target.value) || 0 } } }))} />
               </label>
-              <label className="text-sm">Temperature
+              <label className="text-sm">{translationMounted ? t('temperature') : 'Temperature'}
                 <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.generating?.temperature || 0} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), generating: { ...(s.ai?.generating || {}), temperature: parseFloat(e.target.value) || 0 } } }))} />
               </label>
             </div>
@@ -194,33 +196,33 @@ export default function TenantForm({ tenantId }: TenantFormProps) {
       </section>
 
       <section className="border rounded p-4 space-y-3">
-        <div className="font-medium">API</div>
+        <div className="font-medium">{translationMounted ? t('api') : 'API'}</div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-3">
-            <label className="text-sm flex items-center gap-2">Enabled
+            <label className="text-sm flex items-center gap-2">{translationMounted ? t('enabled') : 'Enabled'}
               <input type="checkbox" checked={!!settings.api?.enabled} onChange={e => setSettings((s: any) => ({ ...s, api: { ...(s.api || {}), enabled: e.target.checked } }))} />
             </label>
-            <label className="text-sm">Rate limit / minute
+            <label className="text-sm">{translationMounted ? t('rateLimitPerMinute') : 'Rate limit / minute'}
               <input type="number" className="mt-1 w-full border rounded px-2 py-1" value={settings.api?.rateLimitPerMinute || 0} onChange={e => setSettings((s: any) => ({ ...s, api: { ...(s.api || {}), rateLimitPerMinute: parseInt(e.target.value) || 0 } }))} />
             </label>
-            <label className="text-sm">Rate limit / day
+            <label className="text-sm">{translationMounted ? t('rateLimitPerDay') : 'Rate limit / day'}
               <input type="number" className="mt-1 w-full border rounded px-2 py-1" value={settings.api?.rateLimitPerDay || 0} onChange={e => setSettings((s: any) => ({ ...s, api: { ...(s.api || {}), rateLimitPerDay: parseInt(e.target.value) || 0 } }))} />
             </label>
-            <label className="text-sm">Allowed Origins (comma separated)
+            <label className="text-sm">{translationMounted ? t('allowedOrigins') : 'Allowed Origins (comma separated)'}
               <input className="mt-1 w-full border rounded px-2 py-1" value={(settings.api?.allowedOrigins || []).join(', ')} onChange={e => setSettings((s: any) => ({ ...s, api: { ...(s.api || {}), allowedOrigins: e.target.value.split(',').map((v: string) => v.trim()).filter(Boolean) } }))} />
             </label>
           </div>
           <div className="space-y-3">
-            <label className="text-sm">Allowed Origins (comma separated)
+            <label className="text-sm">{translationMounted ? t('allowedOrigins') : 'Allowed Origins (comma separated)'}
               <input className="mt-1 w-full border rounded px-2 py-1" value={(settings.api?.allowedOrigins || []).join(', ')} onChange={e => setSettings((s: any) => ({ ...s, api: { ...(s.api || {}), allowedOrigins: e.target.value.split(',').map((v: string) => v.trim()).filter(Boolean) } }))} />
             </label>
-            <label className="text-sm">IP Allowlist (comma separated)
+            <label className="text-sm">{translationMounted ? t('ipAllowlist') : 'IP Allowlist (comma separated)'}
               <input className="mt-1 w-full border rounded px-2 py-1" value={(settings.api?.ipAllowlist || []).join(', ')} onChange={e => setSettings((s: any) => ({ ...s, api: { ...(s.api || {}), ipAllowlist: e.target.value.split(',').map((v: string) => v.trim()).filter(Boolean) } }))} />
             </label>
-            <label className="text-sm">Webhook Endpoint
+            <label className="text-sm">{translationMounted ? t('webhookEndpoint') : 'Webhook Endpoint'}
               <input className="mt-1 w-full border rounded px-2 py-1" value={settings.api?.webhookEndpoint || ''} onChange={e => setSettings((s: any) => ({ ...s, api: { ...(s.api || {}), webhookEndpoint: e.target.value } }))} />
             </label>
-            <label className="text-sm">Webhook Secret
+            <label className="text-sm">{translationMounted ? t('webhookSecret') : 'Webhook Secret'}
               <input className="mt-1 w-full border rounded px-2 py-1" type="password" value={settings.api?.webhookSecret || ''} onChange={e => setSettings((s: any) => ({ ...s, api: { ...(s.api || {}), webhookSecret: e.target.value } }))} />
             </label>
           </div>
@@ -228,20 +230,24 @@ export default function TenantForm({ tenantId }: TenantFormProps) {
       </section>
 
       <section className="border rounded p-4 space-y-3">
-        <div className="font-medium">Integrations</div>
+        <div className="font-medium">{translationMounted ? t('integrations') : 'Integrations'}</div>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="text-sm">Google Maps API Key
+          <label className="text-sm">{translationMounted ? t('googleMapsApiKey') : 'Google Maps API Key'}
             <input className="mt-1 w-full border rounded px-2 py-1" value={settings.integrations?.googleMapsApiKey || ''} onChange={e => setSettings((s: any) => ({ ...s, integrations: { ...(s.integrations || {}), googleMapsApiKey: e.target.value } }))} />
           </label>
-          <label className="text-sm">Firecrawl API Key
+          <label className="text-sm">{translationMounted ? t('firecrawlApiKey') : 'Firecrawl API Key'}
             <input className="mt-1 w-full border rounded px-2 py-1" value={settings.integrations?.firecrawlApiKey || ''} onChange={e => setSettings((s: any) => ({ ...s, integrations: { ...(s.integrations || {}), firecrawlApiKey: e.target.value } }))} />
           </label>
         </div>
       </section>
 
       <div className="flex gap-2">
-        <button onClick={save} disabled={loading} className="h-9 px-4 rounded bg-black text-white">Save</button>
-        <button onClick={() => router.push('/admin/tenants')} className="h-9 px-4 rounded border">Cancel</button>
+        <button onClick={save} disabled={loading} className="h-9 px-4 rounded bg-black text-white">
+          {translationMounted ? t('save') : 'Save'}
+        </button>
+        <button onClick={() => router.push('/admin/tenants')} className="h-9 px-4 rounded border">
+          {translationMounted ? t('cancel') : 'Cancel'}
+        </button>
       </div>
     </div>
   );

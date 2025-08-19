@@ -5,6 +5,8 @@ import { Input } from "../ui/Input";
 import { Select } from "../ui/Select";
 import { BACKEND_URL } from "../config";
 import { Button } from "../Button";
+import { TIMEZONE_OPTIONS } from "../../utils/timezone";
+import { useTranslation } from "../../hooks/useTranslation";
 
 interface UserFormData {
   id?: string;
@@ -12,6 +14,7 @@ interface UserFormData {
   email: string;
   role: "admin" | "operator" | "viewer";
   status: "active" | "inactive" | "pending";
+  timezone: string;
   tenant_id?: string;
   password?: string;
 }
@@ -36,11 +39,13 @@ const USER_STATUSES = [
 ];
 
 export function UserForm({ initialData, onSubmit, onCancel, loading = false }: UserFormProps) {
+  const { t, mounted: translationMounted } = useTranslation();
   const [formData, setFormData] = React.useState<UserFormData>({
     name: "",
     email: "",
     role: "viewer",
     status: "pending",
+    timezone: "UTC",
     password: "",
     ...initialData
   });
@@ -73,6 +78,7 @@ export function UserForm({ initialData, onSubmit, onCancel, loading = false }: U
       email: initialData.email ?? prev.email,
       role: (initialData.role as any) ?? prev.role,
       status: (initialData.status as any) ?? prev.status,
+      timezone: initialData.timezone ?? prev.timezone,
       tenant_id: initialData.tenant_id ?? prev.tenant_id,
       password: "",
     }));
@@ -87,22 +93,22 @@ export function UserForm({ initialData, onSubmit, onCancel, loading = false }: U
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!formData.tenant_id) newErrors.tenant_id = "Tenant is required";
+    if (!formData.tenant_id) newErrors.tenant_id = translationMounted ? t('tenantRequired') : "Tenant is required";
 
-    if (!formData.name.trim()) newErrors.name = "Name is required";
+    if (!formData.name.trim()) newErrors.name = translationMounted ? t('nameRequired') : "Name is required";
     if (!formData.email.trim()) {
-      newErrors.email = "Email is required";
+      newErrors.email = translationMounted ? t('emailRequired') : "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
+      newErrors.email = translationMounted ? t('validEmailAddress') : "Please enter a valid email address";
     }
 
     // password validation: required for create; optional for edit (if provided, min 6)
     const isEdit = Boolean(initialData?.id);
     if (!isEdit) {
-      if (!(formData.password || "").trim()) newErrors.password = "Password is required";
-      else if ((formData.password || '').length < 6) newErrors.password = "At least 6 characters";
+      if (!(formData.password || "").trim()) newErrors.password = translationMounted ? t('passwordRequired') : "Password is required";
+      else if ((formData.password || '').length < 6) newErrors.password = translationMounted ? t('atLeast6Characters') : "At least 6 characters";
     } else if ((formData.password || '').length > 0 && (formData.password || '').length < 6) {
-      newErrors.password = "At least 6 characters";
+      newErrors.password = translationMounted ? t('atLeast6Characters') : "At least 6 characters";
     }
 
     setErrors(newErrors);
@@ -119,60 +125,67 @@ export function UserForm({ initialData, onSubmit, onCancel, loading = false }: U
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <Input
-        label="Name *"
+        label={translationMounted ? t('name') : "Name *"}
         value={formData.name}
         onChange={(e) => updateField("name", e.target.value)}
         error={errors.name}
-        placeholder="Enter full name"
+        placeholder={translationMounted ? t('enterFullName') : "Enter full name"}
       />
 
       <Input
-        label="Email *"
+        label={translationMounted ? t('email') : "Email *"}
         type="email"
         value={formData.email}
         onChange={(e) => updateField("email", e.target.value)}
         error={errors.email}
-        placeholder="user@example.com"
+        placeholder={translationMounted ? t('userExampleEmail') : "user@example.com"}
       />
 
       <Select
-        label="Tenant *"
+        label={translationMounted ? t('tenant') : "Tenant *"}
         value={formData.tenant_id || ""}
         onChange={(e) => updateField("tenant_id", e.target.value)}
-        options={[{ value: "", label: "Select tenant" }, ...tenants.map(t => ({ value: t.id, label: t.name }))]}
+        options={[{ value: "", label: translationMounted ? t('selectTenant') : "Select tenant" }, ...tenants.map(t => ({ value: t.id, label: t.name }))]}
       />
 
       <div className="grid grid-cols-2 gap-4">
         <Select
-          label="Role *"
+          label={translationMounted ? t('role') : "Role *"}
           value={formData.role}
           onChange={(e) => updateField("role", e.target.value)}
           options={USER_ROLES}
         />
         <Select
-          label="Status *"
+          label={translationMounted ? t('status') : "Status *"}
           value={formData.status}
           onChange={(e) => updateField("status", e.target.value)}
           options={USER_STATUSES}
         />
       </div>
 
+      <Select
+        label={translationMounted ? t('timezone') : "Timezone *"}
+        value={formData.timezone}
+        onChange={(e) => updateField("timezone", e.target.value)}
+        options={TIMEZONE_OPTIONS}
+      />
+
       <Input
-        label={initialData?.id ? "Password" : "Password *"}
+        label={initialData?.id ? (translationMounted ? t('password') : "Password") : (translationMounted ? t('password') : "Password *")}
         type="password"
         value={formData.password || ""}
         onChange={(e) => updateField("password", e.target.value)}
         error={errors.password}
-        placeholder={initialData?.id ? "Leave blank to keep current password" : "Enter a new password"}
-        hint={initialData?.id ? "Leave blank to keep current password" : undefined}
+        placeholder={initialData?.id ? (translationMounted ? t('leaveBlankToKeep') : "Leave blank to keep current password") : (translationMounted ? t('enterNewPassword') : "Enter a new password")}
+        hint={initialData?.id ? (translationMounted ? t('leaveBlankToKeep') : "Leave blank to keep current password") : undefined}
       />
 
       <div className="flex justify-end space-x-3 pt-4 border-t border-[color:var(--border)]">
         <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
+          {translationMounted ? t('cancel') : "Cancel"}
         </Button>
         <Button type="submit" loading={loading}>
-          {initialData?.id ? "Update" : "Create"} User
+          {initialData?.id ? (translationMounted ? t('updateUser') : "Update") : (translationMounted ? t('createUser') : "Create")} {translationMounted ? t('auditUser') : "User"}
         </Button>
       </div>
     </form>

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 import { buildIntentsRouter } from '../intents'
+import { buildContextsRouter } from '../contexts'
 
 // naive pg pool stub
 const pool: any = {
@@ -17,8 +18,10 @@ const pool: any = {
 
 function createTestApp() {
   const app = express()
+  app.use(express.json())
   app.use((req, _res, next) => { (req as any).tenantId = 't1'; next() })
   app.use('/api/admin/intents', buildIntentsRouter(pool))
+  app.use('/api/admin/contexts', buildContextsRouter(undefined))
   return app
 }
 
@@ -29,5 +32,24 @@ describe('Intents routes', () => {
     expect(res.status).toBe(200)
     expect(res.body.items.length).toBeGreaterThan(0)
     expect(res.body.items[0].scope).toBe('general')
+  })
+
+  it('imports a context with embedding', async () => {
+    const app = createTestApp()
+    const payload = {
+      type: 'text',
+      title: 'Hello',
+      body: 'World',
+      attributes: { source: 'test' },
+      trust_level: 1,
+      keywords: ['k1','k2'],
+      embedding: [0.1,0.2,0.3]
+    }
+    const res = await request(app)
+      .post('/api/admin/contexts/import')
+      .set('X-Tenant-ID', 't1')
+      .send(payload)
+    expect(res.status).toBe(201)
+    expect(res.body.title).toBe('Hello')
   })
 })

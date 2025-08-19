@@ -3,6 +3,7 @@
 import React from "react";
 import { BACKEND_URL, getTenantId } from "../config";
 import { Badge } from "./Badge";
+import { useTranslation } from "../../hooks/useTranslation";
 
 interface IntentScope {
   id: string;
@@ -36,6 +37,7 @@ export function IntentSelector({
   maxScopes = 3,
   maxActions = 10
 }: IntentSelectorProps) {
+  const { t, mounted: translationMounted } = useTranslation();
   const [scopes, setScopes] = React.useState<IntentScope[]>([]);
   const [loading, setLoading] = React.useState(true);
   // Nested UI (scopes with actions), no tabs
@@ -108,7 +110,9 @@ export function IntentSelector({
   if (loading) {
     return (
       <div className="space-y-2">
-        <label className="text-sm font-medium text-[color:var(--text)]">Intent Configuration</label>
+        <label className="text-sm font-medium text-[color:var(--text)]">
+          {translationMounted ? t('intentConfiguration') : "Intent Configuration"}
+        </label>
         <div className="animate-pulse bg-gray-200 h-20 rounded-md"></div>
       </div>
     );
@@ -117,7 +121,7 @@ export function IntentSelector({
   return (
     <div className="space-y-4">
       <label className="text-sm font-medium text-[color:var(--text)]">
-        Intent Configuration
+        {translationMounted ? t('intentConfiguration') : "Intent Configuration"}
       </label>
 
       {/* Nested Scopes with Actions */}
@@ -125,8 +129,8 @@ export function IntentSelector({
         {/* Selected summary */}
         {(selectedScopes.length > 0 || selectedActions.length > 0) && (
           <div className="text-xs text-gray-600">
-            <span className="mr-4">Scopes: {selectedScopes.length}/{maxScopes}</span>
-            <span>Actions: {selectedActions.length}/{maxActions}</span>
+            <span className="mr-4">{translationMounted ? t('scopes') : "Scopes"}: {selectedScopes.length}/{maxScopes}</span>
+            <span>{translationMounted ? t('actions') : "Actions"}: {selectedActions.length}/{maxActions}</span>
           </div>
         )}
 
@@ -175,7 +179,7 @@ export function IntentSelector({
 
       {/* Help text */}
       <div className="text-xs text-gray-500">
-        Select a scope to reveal its available actions.
+        {translationMounted ? t('selectScopeToReveal') : "Select a scope to reveal its available actions."}
       </div>
     </div>
   );

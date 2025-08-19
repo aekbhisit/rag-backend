@@ -4,10 +4,12 @@ import React from "react";
 import Link from "next/link";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type Tenant = { id?: string; name: string; slug?: string; contact_email?: string; is_active?: boolean; settings?: any; created_at?: string };
 
 export default function TenantsPage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const [items, setItems] = React.useState<Tenant[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [page, setPage] = React.useState(1);
@@ -27,7 +29,7 @@ export default function TenantsPage() {
   React.useEffect(() => { load(); }, [page, size]);
 
   const remove = async (id: string) => {
-    if (!confirm('Delete tenant?')) return;
+    if (!confirm(translationMounted ? t('deleteTenantConfirm') : 'Delete tenant?')) return;
     await fetch(`${BACKEND_URL}/api/admin/tenants/${id}`, { method: 'DELETE', headers: { 'X-Tenant-ID': getTenantId() } });
     await load();
   };
@@ -35,10 +37,16 @@ export default function TenantsPage() {
   return (
     <main className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Tenants</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('tenants') : 'Tenants'}
+        </h1>
         <div className="flex gap-2">
-          <button onClick={load} className="h-9 px-3 rounded border">Refresh</button>
-          <Link href="/admin/tenants/create" className="h-9 px-3 rounded bg-black text-white inline-flex items-center">Create Tenant</Link>
+          <button onClick={load} className="h-9 px-3 rounded border">
+            {translationMounted ? t('refresh') : 'Refresh'}
+          </button>
+          <Link href="/admin/tenants/create" className="h-9 px-3 rounded bg-black text-white inline-flex items-center">
+            {translationMounted ? t('createTenant') : 'Create Tenant'}
+          </Link>
         </div>
       </div>
 
@@ -46,26 +54,30 @@ export default function TenantsPage() {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left px-3 py-2">Name</th>
-              <th className="text-left px-3 py-2">Email</th>
-              <th className="text-left px-3 py-2">Active</th>
-              <th className="text-left px-3 py-2">Created</th>
-              <th className="text-left px-3 py-2">Actions</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('name') : 'Name'}</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('email') : 'Email'}</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('active') : 'Active'}</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('created') : 'Created'}</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('actions') : 'Actions'}</th>
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={3} className="px-3 py-6 text-center text-gray-500">Loading…</td></tr>}
-            {!loading && items.length === 0 && <tr><td colSpan={3} className="px-3 py-6 text-center text-gray-500">No tenants</td></tr>}
-            {items.map(t => (
-              <tr key={t.id} className="border-t">
-                <td className="px-3 py-2">{t.name}</td>
-                <td className="px-3 py-2">{t.contact_email || '—'}</td>
-                <td className="px-3 py-2">{t.is_active ? 'Yes' : 'No'}</td>
-                <td className="px-3 py-2">{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</td>
+            {loading && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500">{translationMounted ? t('loading') : 'Loading…'}</td></tr>}
+            {!loading && items.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500">{translationMounted ? `ไม่มี${t('tenants')}` : 'No tenants'}</td></tr>}
+            {items.map(tenant => (
+              <tr key={tenant.id} className="border-t">
+                <td className="px-3 py-2">{tenant.name}</td>
+                <td className="px-3 py-2">{tenant.contact_email || '—'}</td>
+                <td className="px-3 py-2">{tenant.is_active ? (translationMounted ? t('yes') : 'Yes') : (translationMounted ? t('no') : 'No')}</td>
+                <td className="px-3 py-2">{tenant.created_at ? new Date(tenant.created_at).toLocaleString() : '—'}</td>
                 <td className="px-3 py-2">
                   <div className="flex gap-2">
-                    <Link href={`/admin/tenants/edit/${t.id}`} className="h-8 px-3 rounded border inline-flex items-center">Edit</Link>
-                    {t.id && <button onClick={() => remove(t.id!)} className="h-8 px-3 rounded border text-red-600">Delete</button>}
+                    <Link href={`/admin/tenants/edit/${tenant.id}`} className="h-8 px-3 rounded border inline-flex items-center">
+                      {translationMounted ? t('edit') : 'Edit'}
+                    </Link>
+                    {tenant.id && <button onClick={() => remove(tenant.id!)} className="h-8 px-3 rounded border text-red-600">
+                      {translationMounted ? t('delete') : 'Delete'}
+                    </button>}
                   </div>
                 </td>
               </tr>

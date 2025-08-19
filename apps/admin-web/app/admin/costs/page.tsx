@@ -10,6 +10,7 @@ import { Select } from "../../../components/ui/Select";
 import { Input } from "../../../components/ui/Input";
 import { Badge } from "../../../components/ui/Badge";
 import { BACKEND_URL, DEFAULT_TENANT_ID } from "../../../components/config";
+import { formatDateForTable } from "../../../utils/timezone";
 
 type CostSummary = {
   totalCost: number;
@@ -160,9 +161,9 @@ export default function CostSummaryPage() {
       const bVal = b[sortKey as keyof EmbeddingHistory];
       
       if (sortDirection === "asc") {
-        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return (aVal || '') < (bVal || '') ? -1 : (aVal || '') > (bVal || '') ? 1 : 0;
       } else {
-        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        return (aVal || '') > (bVal || '') ? -1 : (aVal || '') < (bVal || '') ? 1 : 0;
       }
     });
   }, [embeddingHistory, searchTerm, modelFilter, sortKey, sortDirection]);
@@ -181,13 +182,7 @@ export default function CostSummaryPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    return formatDateForTable(dateString);
   };
 
   const getStatusBadgeVariant = (status: string) => {

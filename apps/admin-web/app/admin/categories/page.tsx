@@ -4,10 +4,12 @@ import React from "react";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
 import { useDialog } from "../../../components/ui/DialogProvider";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type Category = { id: string; name: string; slug: string; parent_id?: string | null };
 
 export default function CategoriesPage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const [items, setItems] = React.useState<Category[]>([]);
   const [q, setQ] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -48,7 +50,12 @@ export default function CategoriesPage() {
   };
 
   const remove = async (id: string) => {
-    const ok = await dialog.confirm({ title: 'Delete Category', description: 'Are you sure you want to delete this category?', confirmText: 'Delete', variant: 'danger' });
+    const ok = await dialog.confirm({ 
+      title: translationMounted ? t('deleteCategoryTitle') : 'Delete Category', 
+      description: translationMounted ? t('deleteCategoryMessage') : 'Are you sure you want to delete this category?', 
+      confirmText: translationMounted ? t('delete') : 'Delete', 
+      variant: 'danger' 
+    });
     if (!ok) return;
     await fetch(`${BACKEND_URL}/api/admin/categories/${id}`, { method: 'DELETE', headers: { 'X-Tenant-ID': getTenantId() } });
     await load();
@@ -57,10 +64,12 @@ export default function CategoriesPage() {
   return (
     <main className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Categories</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('categories') : 'Categories'}
+        </h1>
         <div className="flex gap-2">
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search" className="border rounded px-2 py-1 text-sm" />
-          <button onClick={load} className="h-9 px-3 rounded border">Refresh</button>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={translationMounted ? t('search') : "Search"} className="border rounded px-2 py-1 text-sm" />
+          <button onClick={load} className="h-9 px-3 rounded border">{translationMounted ? t('refresh') : 'Refresh'}</button>
         </div>
       </div>
 
@@ -69,10 +78,10 @@ export default function CategoriesPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left px-3 py-2">Name</th>
-                <th className="text-left px-3 py-2">Slug</th>
-                <th className="text-left px-3 py-2">Parent</th>
-                <th className="text-left px-3 py-2">Actions</th>
+                <th className="text-left px-3 py-2">{translationMounted ? t('name') : 'Name'}</th>
+                <th className="text-left px-3 py-2">{translationMounted ? t('slug') : 'Slug'}</th>
+                <th className="text-left px-3 py-2">{translationMounted ? t('parent') : 'Parent'}</th>
+                <th className="text-left px-3 py-2">{translationMounted ? t('actions') : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
@@ -85,9 +94,9 @@ export default function CategoriesPage() {
                   const childrenByParent: Record<string, Category[]> = {};
                   filtered.forEach(i => { if (i.parent_id) { (childrenByParent[i.parent_id] ||= []).push(i); } });
                   // sort children for stable order
-                  Object.values(childrenByParent).forEach(arr => arr.sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name)));
+                  Object.values(childrenByParent).forEach(arr => arr.sort((a,b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0) || a.name.localeCompare(b.name)));
                   const rows: JSX.Element[] = [];
-                  parents.sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name)).forEach(p => {
+                  parents.sort((a,b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0) || a.name.localeCompare(b.name)).forEach(p => {
                     rows.push(
                       <tr key={p.id} className="border-t bg-[color:var(--surface)]">
                         <td className="px-3 py-2 font-medium">{p.name}</td>
@@ -95,8 +104,8 @@ export default function CategoriesPage() {
                         <td className="px-3 py-2">-</td>
                         <td className="px-3 py-2">
                           <div className="flex gap-2">
-                            <button onClick={() => edit(p)} className="h-8 px-3 rounded border">Edit</button>
-                            <button onClick={() => remove(p.id)} className="h-8 px-3 rounded border text-red-600">Delete</button>
+                            <button onClick={() => edit(p)} className="h-8 px-3 rounded border">{translationMounted ? t('edit') : 'Edit'}</button>
+                            <button onClick={() => remove(p.id)} className="h-8 px-3 rounded border text-red-600">{translationMounted ? t('delete') : 'Delete'}</button>
                           </div>
                         </td>
                       </tr>
@@ -110,8 +119,8 @@ export default function CategoriesPage() {
                           <td className="px-3 py-2">{nameById[c.parent_id || ''] || '-'}</td>
                           <td className="px-3 py-2">
                             <div className="flex gap-2">
-                              <button onClick={() => edit(c)} className="h-8 px-3 rounded border">Edit</button>
-                              <button onClick={() => remove(c.id)} className="h-8 px-3 rounded border text-red-600">Delete</button>
+                              <button onClick={() => edit(c)} className="h-8 px-3 rounded border">{translationMounted ? t('edit') : 'Edit'}</button>
+                              <button onClick={() => remove(c.id)} className="h-8 px-3 rounded border text-red-600">{translationMounted ? t('delete') : 'Delete'}</button>
                             </div>
                           </td>
                         </tr>
@@ -134,23 +143,23 @@ export default function CategoriesPage() {
         </div>
 
         <div className="border rounded p-4">
-          <div className="text-sm font-medium mb-2">{editing ? 'Edit Category' : 'Create Category'}</div>
+          <div className="text-sm font-medium mb-2">{editing ? (translationMounted ? t('editCategory') : 'Edit Category') : (translationMounted ? t('createCategory') : 'Create Category')}</div>
           <div className="grid gap-2">
-            <label className="text-sm">Name<input className="mt-1 w-full border rounded px-2 py-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></label>
-            <label className="text-sm">Slug<input className="mt-1 w-full border rounded px-2 py-1" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} /></label>
-            <label className="text-sm">Parent Category
+            <label className="text-sm">{translationMounted ? t('name') : 'Name'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></label>
+            <label className="text-sm">{translationMounted ? t('slug') : 'Slug'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} /></label>
+            <label className="text-sm">{translationMounted ? t('parentCategory') : 'Parent Category'}
               <select className="mt-1 w-full border rounded px-2 py-1" value={form.parent_id} onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}>
-                <option value="">— None (Level 1) —</option>
+                <option value="">{translationMounted ? t('noneLevel1') : '— None (Level 1) —'}</option>
                 {items.filter(i => !i.parent_id).map(i => (
                   <option key={i.id} value={i.id}>{i.name}</option>
                 ))}
               </select>
-              <div className="text-xs text-gray-600 mt-1">Leave empty to create Level 1. Select a Level 1 category to create Level 2 under it.</div>
+              <div className="text-xs text-gray-600 mt-1">{translationMounted ? t('level1Info') : 'Leave empty to create Level 1. Select a Level 1 category to create Level 2 under it.'}</div>
             </label>
           </div>
           <div className="mt-3 flex gap-2">
-            <button onClick={save} className="h-9 px-4 rounded bg-black text-white">Save</button>
-            {editing && <button onClick={() => { setEditing(false); setForm({ id: '', name: '', slug: '', parent_id: '' }); }} className="h-9 px-4 rounded border">Cancel</button>}
+            <button onClick={save} className="h-9 px-4 rounded bg-black text-white">{translationMounted ? t('save') : 'Save'}</button>
+            {editing && <button onClick={() => { setEditing(false); setForm({ id: '', name: '', slug: '', parent_id: '' }); }} className="h-9 px-4 rounded border">{translationMounted ? t('cancel') : 'Cancel'}</button>}
           </div>
         </div>
       </div>

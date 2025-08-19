@@ -5,6 +5,7 @@ import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
 import { useDialog } from "../../../components/ui/DialogProvider";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type Prompt = {
   id: string;
@@ -17,6 +18,7 @@ type Prompt = {
 };
 
 export default function PromptsPage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const router = useRouter();
   const [items, setItems] = React.useState<Prompt[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -40,24 +42,28 @@ export default function PromptsPage() {
   return (
     <main className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Prompts</h1>
-        <button onClick={() => router.push('/admin/prompts/create')} className="h-9 px-4 rounded bg-black text-white">Create</button>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('prompts') : 'Prompts'}
+        </h1>
+        <button onClick={() => router.push('/admin/prompts/create')} className="h-9 px-4 rounded bg-black text-white">
+          {translationMounted ? t('create') : 'Create'}
+        </button>
       </div>
 
       <div className="flex gap-2">
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search..." className="border rounded px-2 py-1 w-full max-w-md" />
-        <button onClick={load} className="h-9 px-3 rounded border">Search</button>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder={translationMounted ? `${t('search')}...` : "Search..."} className="border rounded px-2 py-1 w-full max-w-md" />
+        <button onClick={load} className="h-9 px-3 rounded border">{translationMounted ? t('search') : 'Search'}</button>
       </div>
 
       <div className="border rounded overflow-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left px-3 py-2">Key</th>
-              <th className="text-left px-3 py-2">Name</th>
-              <th className="text-left px-3 py-2">Default</th>
-              <th className="text-left px-3 py-2">Description</th>
-              <th className="text-left px-3 py-2">Actions</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('promptKey') : 'Key'}</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('name') : 'Name'}</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('status') : 'Default'}</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('description') : 'Description'}</th>
+              <th className="text-left px-3 py-2">{translationMounted ? t('actions') : 'Actions'}</th>
             </tr>
           </thead>
           <tbody>
@@ -69,14 +75,16 @@ export default function PromptsPage() {
                 <td className="px-3 py-2 text-gray-600">{p.description || ''}</td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <button onClick={() => router.push(`/admin/prompts/edit/${p.id}`)} className="h-8 px-3 rounded border">Edit</button>
+                    <button onClick={() => router.push(`/admin/prompts/edit/${p.id}`)} className="h-8 px-3 rounded border">{translationMounted ? t('edit') : 'Edit'}</button>
                     <DeleteButton id={p.id} onDeleted={load} />
                   </div>
                 </td>
               </tr>
             ))}
             {!loading && items.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-500">No prompts</td></tr>
+              <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-500">
+                {translationMounted ? `ไม่มี${t('prompts')}` : 'No prompts'}
+              </td></tr>
             )}
           </tbody>
         </table>
@@ -87,10 +95,16 @@ export default function PromptsPage() {
 }
 
 function DeleteButton({ id, onDeleted }: { id: string; onDeleted: () => void }) {
+  const { t, mounted: translationMounted } = useTranslation();
   const [loading, setLoading] = React.useState(false);
   const dialog = useDialog();
   const run = async () => {
-    const ok = await dialog.confirm({ title: 'Delete Prompt', description: 'Are you sure you want to delete this prompt?', confirmText: 'Delete', variant: 'danger' });
+    const ok = await dialog.confirm({ 
+      title: translationMounted ? `ลบ${t('prompts')}` : 'Delete Prompt', 
+      description: translationMounted ? `คุณแน่ใจหรือไม่ที่จะลบ${t('prompts')}นี้?` : 'Are you sure you want to delete this prompt?', 
+      confirmText: translationMounted ? t('delete') : 'Delete', 
+      variant: 'danger' 
+    });
     if (!ok) return;
     setLoading(true);
     try {
@@ -98,7 +112,9 @@ function DeleteButton({ id, onDeleted }: { id: string; onDeleted: () => void }) 
       onDeleted();
     } finally { setLoading(false); }
   };
-  return <button onClick={run} disabled={loading} className="h-8 px-3 rounded border text-red-600">{loading ? '...' : 'Delete'}</button>;
+  return <button onClick={run} disabled={loading} className="h-8 px-3 rounded border text-red-600">
+    {loading ? '...' : (translationMounted ? t('delete') : 'Delete')}
+  </button>;
 }
 
 

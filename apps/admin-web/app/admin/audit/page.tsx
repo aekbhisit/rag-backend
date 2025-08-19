@@ -8,6 +8,8 @@ import { Button } from "../../../components/Button";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { Badge } from "../../../components/ui/Badge";
+import { formatDateDetailed } from "../../../utils/timezone";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type AuditLogEntry = {
   id: string;
@@ -34,6 +36,8 @@ export default function AuditLogPage() {
   const [page, setPage] = React.useState(1);
   const [size, setSize] = React.useState(20);
   const [total, setTotal] = React.useState(0);
+  
+  const { t, mounted: translationMounted } = useTranslation();
 
   React.useEffect(() => {
     fetchAuditLogs();
@@ -96,9 +100,9 @@ export default function AuditLogPage() {
       const bVal = b[sortKey as keyof AuditLogEntry];
       
       if (sortDirection === "asc") {
-        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return (aVal || '') < (bVal || '') ? -1 : (aVal || '') > (bVal || '') ? 1 : 0;
       } else {
-        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        return (aVal || '') > (bVal || '') ? -1 : (aVal || '') < (bVal || '') ? 1 : 0;
       }
     });
   }, [auditLogs, searchTerm, actionFilter, statusFilter, userFilter, sortKey, sortDirection]);
@@ -154,20 +158,13 @@ export default function AuditLogPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
+    return formatDateDetailed(dateString);
   };
 
   const columns = [
     {
       key: "timestamp",
-      title: "Timestamp",
+      title: translationMounted ? t('auditTimestamp') : "Timestamp",
       sortable: true,
       render: (value: string) => (
         <span className="text-sm font-mono text-[color:var(--text-muted)]">
@@ -177,7 +174,7 @@ export default function AuditLogPage() {
     },
     {
       key: "user",
-      title: "User",
+      title: translationMounted ? t('auditUser') : "User",
       sortable: true,
       render: (value: string) => {
         const safe = value || '';
@@ -194,7 +191,7 @@ export default function AuditLogPage() {
     },
     {
       key: "action",
-      title: "Action",
+      title: translationMounted ? t('auditAction') : "Action",
       sortable: true,
       render: (value: string, row: AuditLogEntry) => (
         <div className="flex items-center gap-2">
@@ -210,7 +207,7 @@ export default function AuditLogPage() {
     },
     {
       key: "details",
-      title: "Details",
+      title: translationMounted ? t('auditDetails') : "Details",
       render: (value: string, row: AuditLogEntry) => (
         <div>
           <div className="text-sm">{value}</div>
@@ -224,7 +221,7 @@ export default function AuditLogPage() {
     },
     {
       key: "ipAddress",
-      title: "IP Address",
+      title: translationMounted ? t('auditIP') : "IP Address",
       render: (value: string) => (
         <span className="text-sm font-mono text-[color:var(--text-muted)]">
           {value}
@@ -233,7 +230,7 @@ export default function AuditLogPage() {
     },
     {
       key: "status",
-      title: "Status",
+      title: translationMounted ? t('status') : "Status",
       sortable: true,
       render: (value: string) => {
         const safe = value || '';
@@ -250,26 +247,26 @@ export default function AuditLogPage() {
   return (
     <main className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Audit Log</h1>
+        <h1 className="text-2xl font-semibold">{translationMounted ? t('auditLog') : 'Audit Log'}</h1>
         <div className="flex gap-3">
           <Button variant="outline" onClick={fetchAuditLogs} disabled={loading}>
             <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Refresh
+{translationMounted ? t('refresh') : 'Refresh'}
           </Button>
           <Button variant="outline">
             <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Export
+{translationMounted ? t('export') : 'Export'}
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Input
-          placeholder="Search logs..."
+          placeholder={translationMounted ? t('searchLogs') : 'Search logs...'}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           leftIcon={
@@ -279,31 +276,31 @@ export default function AuditLogPage() {
           }
         />
         <Select
-          placeholder="Filter by action"
+          placeholder={translationMounted ? t('filterByAction') : 'Filter by action'}
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
           options={[
-            { value: "", label: "All Actions" },
-            { value: "CREATE", label: "Create" },
-            { value: "UPDATE", label: "Update" },
-            { value: "DELETE", label: "Delete" },
-            { value: "LOGIN", label: "Login" },
-            { value: "BULK_UPDATE", label: "Bulk Update" }
+            { value: "", label: translationMounted ? t('allActions') : "All Actions" },
+            { value: "CREATE", label: translationMounted ? t('create') : "Create" },
+            { value: "UPDATE", label: translationMounted ? t('update') : "Update" },
+            { value: "DELETE", label: translationMounted ? t('delete') : "Delete" },
+            { value: "LOGIN", label: translationMounted ? t('login') : "Login" },
+            { value: "BULK_UPDATE", label: translationMounted ? t('bulkUpdate') : "Bulk Update" }
           ]}
         />
         <Select
-          placeholder="Filter by status"
+          placeholder={translationMounted ? t('filterByStatus') : 'Filter by status'}
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           options={[
-            { value: "", label: "All Statuses" },
-            { value: "success", label: "Success" },
-            { value: "failure", label: "Failure" },
-            { value: "warning", label: "Warning" }
+            { value: "", label: translationMounted ? t('allStatuses') : "All Statuses" },
+            { value: "success", label: translationMounted ? t('success') : "Success" },
+            { value: "failure", label: translationMounted ? t('failure') : "Failure" },
+            { value: "warning", label: translationMounted ? t('warning') : "Warning" }
           ]}
         />
         <Input
-          placeholder="Filter by user"
+          placeholder={translationMounted ? t('filterByUser') : 'Filter by user'}
           value={userFilter}
           onChange={(e) => setUserFilter(e.target.value)}
         />
@@ -312,7 +309,7 @@ export default function AuditLogPage() {
             <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
-            Clear Filters
+{translationMounted ? t('clearFilters') : 'Clear Filters'}
           </Button>
         </div>
       </div>
@@ -329,8 +326,8 @@ export default function AuditLogPage() {
             <svg className="mx-auto h-12 w-12 text-[color:var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-[color:var(--text)]">No audit logs</h3>
-            <p className="mt-1 text-sm text-[color:var(--text-muted)]">No activity has been recorded yet.</p>
+            <h3 className="mt-2 text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('noAuditLogs') : 'No audit logs'}</h3>
+            <p className="mt-1 text-sm text-[color:var(--text-muted)]">{translationMounted ? t('noActivityRecorded') : 'No activity has been recorded yet.'}</p>
           </div>
         }
       />

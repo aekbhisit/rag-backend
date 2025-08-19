@@ -36,6 +36,7 @@ export class ContextsRepository {
     const { type, title, body, instruction, attributes, trust_level } = input as any;
     const keywords = (input as any).keywords || [];
     const status = (input as any).status || 'active';
+    const language = (input as any).language || null;
     const categories = (input as any).categories || [];
     const intent_scopes = (input as any).intent_scopes || [];
     const intent_actions = (input as any).intent_actions || [];
@@ -47,10 +48,10 @@ export class ContextsRepository {
       
       // Create the context
       const { rows } = await client.query(
-        `INSERT INTO contexts (tenant_id, type, title, body, instruction, attributes, trust_level, status, keywords)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         RETURNING id, tenant_id, type, title, body, instruction, attributes, trust_level, status, keywords, created_at, updated_at`,
-        [tenantId, type, title, body, instruction ?? null, attributes, trust_level, status, keywords]
+        `INSERT INTO contexts (tenant_id, type, title, body, instruction, attributes, trust_level, language, status, keywords)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         RETURNING id, tenant_id, type, title, body, instruction, attributes, trust_level, language, status, keywords, created_at, updated_at`,
+        [tenantId, type, title, body, instruction ?? null, attributes, trust_level, language, status, keywords]
       );
       
       const context = rows[0];

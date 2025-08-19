@@ -101,6 +101,14 @@ export async function createApp() {
   app.use('/api/admin/auth', buildAuthRouter(getPostgresPool()));
   const { buildDashboardRouter } = require('./routes/admin/dashboard');
   app.use('/api/admin/dashboard', buildDashboardRouter(getPostgresPool()));
+  
+  // Cache management routes
+  try {
+    const { buildCacheRouter } = await import('./routes/admin/cache.js');
+    app.use('/api/admin/cache', buildCacheRouter());
+  } catch (error) {
+    console.error('Failed to load cache routes:', error);
+  }
 
   // Import routes
   const { importRoutes } = require('./routes/admin/import');

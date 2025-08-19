@@ -6,7 +6,7 @@ interface SelectOption {
   disabled?: boolean;
 }
 
-interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'children'> {
+interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'children' | 'size'> {
   label?: string;
   error?: string;
   hint?: string;

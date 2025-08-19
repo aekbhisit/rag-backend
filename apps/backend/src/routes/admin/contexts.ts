@@ -153,6 +153,143 @@ export function buildContextsRouter(pool?: Pool) {
     } catch (e) { next(e); }
   });
 
+  // Import a context with full fields including optional embedding vector
+  router.post('/import', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const ImportSchema = CreateContextSchema.extend({
+        id: z.string().uuid().optional(),
+        embedding: z.array(z.number()).min(2).optional(),
+        latitude: z.number().optional(),
+        longitude: z.number().optional(),
+        created_at: z.string().optional(),
+        updated_at: z.string().optional(),
+      });
+      const input = ImportSchema.parse(req.body) as any;
+      const now = new Date().toISOString();
+
+      if (useMock || !repo) {
+        const item = {
+          id: input.id || randomUUID(),
+          tenant_id: tenantId,
+          created_at: input.created_at || now,
+          updated_at: input.updated_at || now,
+          ...input,
+        };
+        mockStore.unshift(item);
+        // Best-effort index when embedding provided
+        try {
+          const keywords = Array.isArray((req.body as any)?.keywords)
+            ? (req.body as any).keywords
+            : (typeof (req.body as any)?.keywords === 'string'
+                ? (req.body as any).keywords.split(',').map((s: string) => s.trim()).filter(Boolean)
+                : []);
+          if (Array.isArray(input.embedding)) {
+            await indexContextDocument({
+              tenant_id: tenantId,
+              context_id: item.id,
+              type: item.type,
+              title: item.title,
+              body: item.body,
+              instruction: item.instruction,
+              keywords,
+              status: item.status,
+              embedding: input.embedding,
+              trust_level: item.trust_level,
+              language: item.language,
+              attributes: item.attributes,
+              created_at: item.created_at,
+              updated_at: item.updated_at,
+            });
+          }
+        } catch {}
+        return res.status(201).json(item);
+      }
+
+      // Persist without embedding first
+      const { embedding, latitude, longitude, id: providedId, created_at, updated_at, ...rest } = input as any;
+      const created = await repo.create(tenantId, rest);
+
+      // Ensure DB vector columns exist
+      await ensureContextsVectorColumns(getPostgresPool(), Number(process.env.EMBEDDING_DIM || '1536'));
+
+      // Audit: context import
+      try {
+        await logsRepo.create(tenantId, {
+          userId: (req as any).userId || null,
+          action: 'IMPORT',
+          resource: 'context',
+          resourceId: created.id,
+          details: `Imported context ${created.title}`,
+          request: { body: req.body },
+          response: { id: created.id },
+        });
+      } catch {}
+
+      const keywords = Array.isArray((req.body as any)?.keywords)
+        ? (req.body as any).keywords
+        : (typeof (req.body as any)?.keywords === 'string'
+            ? (req.body as any).keywords.split(',').map((s: string) => s.trim()).filter(Boolean)
+            : []);
+
+      let usedEmbedding: number[] | null = null;
+      if (Array.isArray(embedding) && embedding.length > 0) {
+        usedEmbedding = embedding.map((n: number) => Number(n));
+      } else {
+        // Fallback: create embedding
+        try {
+          const tenant = await tenantsRepo.get(tenantId);
+          const settings: any = tenant?.settings || {};
+          const ai = settings.ai || {};
+          const embSettings = ai.embedding || {};
+          const provider = (embSettings.provider || '').toLowerCase() === 'openai' ? 'openai' : (process.env.EMBEDDING_PROVIDER === 'openai' ? 'openai' : 'none');
+          const targetDim = Number(process.env.EMBEDDING_DIM || '1536');
+          const emb = await createEmbedding({ title: created.title, body: created.body, keywords }, {
+            provider,
+            apiKey: (ai.providers?.[embSettings.provider?.toLowerCase?.() || 'openai']?.apiKey) || process.env.OPENAI_API_KEY,
+            model: embSettings.model || process.env.OPENAI_EMBEDDING_MODEL,
+            targetDim,
+            metadata: { tenant_id: tenantId, context_id: created.id },
+          });
+          usedEmbedding = emb.vector as number[];
+        } catch {}
+      }
+
+      // Index and persist embedding/geo if available
+      try {
+        if (usedEmbedding) {
+          await indexContextDocument({
+            tenant_id: tenantId,
+            context_id: created.id,
+            type: created.type,
+            title: created.title,
+            instruction: created.instruction,
+            body: created.body,
+            keywords,
+            status: (req.body as any)?.status || created.status,
+            embedding: usedEmbedding,
+            trust_level: created.trust_level,
+            language: created.language,
+            attributes: created.attributes,
+            created_at: created.created_at,
+            updated_at: created.updated_at,
+          });
+          const pool = getPostgresPool();
+          const { lat, lon } = typeof latitude === 'number' && typeof longitude === 'number'
+            ? { lat: latitude, lon: longitude }
+            : extractLatLon(created.attributes as any);
+          const vectorLiteral = `[${usedEmbedding.map((n: number) => Number(n)).join(',')}]`;
+          await pool.query(
+            `UPDATE contexts SET embedding = $3::vector, latitude = $4, longitude = $5 WHERE tenant_id=$1 AND id=$2`,
+            [tenantId, created.id, vectorLiteral, lat, lon]
+          );
+        }
+      } catch {}
+
+      res.status(201).json(created);
+    } catch (e) { next(e); }
+  });
+
   router.get('/:id', async (req, res, next) => {
     try {
       const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
@@ -293,6 +430,205 @@ export function buildContextsRouter(pool?: Pool) {
         });
       } catch {}
       res.status(204).end();
+    } catch (e) { next(e); }
+  });
+
+  // Duplicate a context by id (copy all fields and relations)
+  router.post('/:id/duplicate', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const id = req.params.id;
+      if (useMock || !repo) {
+        const src = mockStore.find(x => x.id === id);
+        if (!src) return res.status(404).json({ message: 'Not found' });
+        const now = new Date().toISOString();
+        const dup = { ...src, id: randomUUID(), title: `${src.title} (copy)`, created_at: now, updated_at: now };
+        mockStore.unshift(dup);
+        return res.status(201).json(dup);
+      }
+
+      const pool = getPostgresPool();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.current_tenant', $1, true)", [tenantId]);
+        const { rows: srcRows } = await client.query(
+          `SELECT type, title, body, instruction, attributes, trust_level, language, status, keywords, embedding, latitude, longitude
+           FROM contexts WHERE tenant_id=$1 AND id=$2 LIMIT 1`,
+          [tenantId, id]
+        );
+        const src = srcRows[0];
+        if (!src) { await client.query('ROLLBACK'); return res.status(404).json({ message: 'Not found' }); }
+        const newId = randomUUID();
+        const title = `${src.title} (copy)`;
+        // Insert duplicate with same vector/geo
+        await client.query(
+          `INSERT INTO contexts (id, tenant_id, type, title, body, instruction, attributes, trust_level, language, status, keywords, embedding, latitude, longitude)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+          [newId, tenantId, src.type, title, src.body, src.instruction ?? null, src.attributes, src.trust_level, src.language ?? null, src.status ?? 'active', src.keywords || [], src.embedding ?? null, src.latitude ?? null, src.longitude ?? null]
+        );
+        // Copy relations
+        await client.query(
+          `INSERT INTO context_categories (tenant_id, context_id, category_id)
+           SELECT tenant_id, $2, category_id FROM context_categories WHERE tenant_id=$1 AND context_id=$3`,
+          [tenantId, newId, id]
+        );
+        await client.query(
+          `INSERT INTO context_intent_scopes (tenant_id, context_id, scope_id)
+           SELECT tenant_id, $2, scope_id FROM context_intent_scopes WHERE tenant_id=$1 AND context_id=$3`,
+          [tenantId, newId, id]
+        );
+        await client.query(
+          `INSERT INTO context_intent_actions (tenant_id, context_id, action_id)
+           SELECT tenant_id, $2, action_id FROM context_intent_actions WHERE tenant_id=$1 AND context_id=$3`,
+          [tenantId, newId, id]
+        );
+        await client.query('COMMIT');
+
+        // Audit: context duplicate
+        try {
+          await logsRepo.create(tenantId, {
+            userId: (req as any).userId || null,
+            action: 'CREATE',
+            resource: 'context',
+            resourceId: newId,
+            details: `Duplicated context ${id} -> ${title}`,
+            request: { params: req.params },
+            response: { id: newId },
+          });
+        } catch {}
+
+        // Return minimal fields
+        const { rows } = await pool.query(
+          `SELECT id, tenant_id, type, title, body, instruction, attributes, trust_level, language, status, keywords, created_at, updated_at
+           FROM contexts WHERE tenant_id=$1 AND id=$2`,
+          [tenantId, newId]
+        );
+        return res.status(201).json(rows[0]);
+      } catch (e) {
+        try { await (e as any).code ? null : null; } catch {}
+        try { await (await getPostgresPool().connect()).query('ROLLBACK'); } catch {}
+        throw e;
+      } finally {
+        try { client.release(); } catch {}
+      }
+    } catch (e) { next(e); }
+  });
+
+  // Create embeddings for contexts missing embedding
+  router.post('/embedding/missing', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const pool = getPostgresPool();
+      await ensureContextsVectorColumns(pool, Number(process.env.EMBEDDING_DIM || '1536'));
+      // Load tenant AI settings
+      const tenant = await tenantsRepo.get(tenantId);
+      const settings: any = tenant?.settings || {};
+      const ai = settings.ai || {};
+      const embSettings = ai.embedding || {};
+      const provider = (embSettings.provider || '').toLowerCase() === 'openai' ? 'openai' : (process.env.EMBEDDING_PROVIDER === 'openai' ? 'openai' : 'none');
+      const targetDim = Number(process.env.EMBEDDING_DIM || '1536');
+
+      const { rows } = await pool.query(
+        `SELECT id, type, title, body, instruction, attributes, trust_level, language, status, keywords
+         FROM contexts WHERE tenant_id=$1 AND embedding IS NULL ORDER BY updated_at DESC LIMIT 10000`,
+        [tenantId]
+      );
+      let updated = 0;
+      for (const r of rows) {
+        try {
+          const keywords = Array.isArray(r.keywords) ? r.keywords : [];
+          const emb = await createEmbedding({ title: r.title, body: r.body, keywords }, {
+            provider,
+            apiKey: (ai.providers?.[embSettings.provider?.toLowerCase?.() || 'openai']?.apiKey) || process.env.OPENAI_API_KEY,
+            model: embSettings.model || process.env.OPENAI_EMBEDDING_MODEL,
+            targetDim,
+            metadata: { tenant_id: tenantId, context_id: r.id },
+          });
+          const { lat, lon } = extractLatLon(r.attributes as any);
+          const vectorLiteral = `[${emb.vector.map((n: number) => Number(n)).join(',')}]`;
+          await pool.query(
+            `UPDATE contexts SET embedding = $3::vector, latitude = $4, longitude = $5, updated_at=now() WHERE tenant_id=$1 AND id=$2`,
+            [tenantId, r.id, vectorLiteral, lat, lon]
+          );
+          try {
+            await indexContextDocument({
+              tenant_id: tenantId,
+              context_id: r.id,
+              type: r.type,
+              title: r.title,
+              instruction: r.instruction,
+              body: r.body,
+              keywords,
+              status: r.status,
+              embedding: emb.vector,
+              trust_level: r.trust_level,
+              language: r.language,
+              attributes: r.attributes,
+            });
+          } catch {}
+          updated += 1;
+        } catch {}
+      }
+      res.json({ updated, total_missing: rows.length });
+    } catch (e) { next(e); }
+  });
+
+  // Re-embed all contexts
+  router.post('/embedding/rebuild', async (req, res, next) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const pool = getPostgresPool();
+      await ensureContextsVectorColumns(pool, Number(process.env.EMBEDDING_DIM || '1536'));
+      const tenant = await tenantsRepo.get(tenantId);
+      const settings: any = tenant?.settings || {};
+      const ai = settings.ai || {};
+      const embSettings = ai.embedding || {};
+      const provider = (embSettings.provider || '').toLowerCase() === 'openai' ? 'openai' : (process.env.EMBEDDING_PROVIDER === 'openai' ? 'openai' : 'none');
+      const targetDim = Number(process.env.EMBEDDING_DIM || '1536');
+
+      const { rows } = await pool.query(
+        `SELECT id, type, title, body, instruction, attributes, trust_level, language, status, keywords
+         FROM contexts WHERE tenant_id=$1 ORDER BY updated_at DESC LIMIT 20000`,
+        [tenantId]
+      );
+      let updated = 0;
+      for (const r of rows) {
+        try {
+          const keywords = Array.isArray(r.keywords) ? r.keywords : [];
+          const emb = await createEmbedding({ title: r.title, body: r.body, keywords }, {
+            provider,
+            apiKey: (ai.providers?.[embSettings.provider?.toLowerCase?.() || 'openai']?.apiKey) || process.env.OPENAI_API_KEY,
+            model: embSettings.model || process.env.OPENAI_EMBEDDING_MODEL,
+            targetDim,
+            metadata: { tenant_id: tenantId, context_id: r.id },
+          });
+          const { lat, lon } = extractLatLon(r.attributes as any);
+          const vectorLiteral = `[${emb.vector.map((n: number) => Number(n)).join(',')}]`;
+          await pool.query(
+            `UPDATE contexts SET embedding = $3::vector, latitude = $4, longitude = $5, updated_at=now() WHERE tenant_id=$1 AND id=$2`,
+            [tenantId, r.id, vectorLiteral, lat, lon]
+          );
+          try {
+            await indexContextDocument({
+              tenant_id: tenantId,
+              context_id: r.id,
+              type: r.type,
+              title: r.title,
+              instruction: r.instruction,
+              body: r.body,
+              keywords,
+              status: r.status,
+              embedding: emb.vector,
+              trust_level: r.trust_level,
+              language: r.language,
+              attributes: r.attributes,
+            });
+          } catch {}
+          updated += 1;
+        } catch {}
+      }
+      res.json({ updated, total: rows.length });
     } catch (e) { next(e); }
   });
 

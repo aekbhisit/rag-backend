@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { BACKEND_URL, getTenantId } from "../../../../components/config";
 import { UserForm } from "../../../../components/forms/UserForm";
+import { useTranslation } from "../../../../hooks/useTranslation";
 
 type UserFormData = {
   id?: string;
@@ -11,12 +12,14 @@ type UserFormData = {
   email: string;
   role: "admin" | "operator" | "viewer";
   status: "active" | "inactive" | "pending";
+  timezone: string;
   tenant_id?: string;
   password?: string;
 };
 
 export default function CreateUserPage() {
   const router = useRouter();
+  const { t, mounted: translationMounted } = useTranslation();
   const [submitting, setSubmitting] = React.useState(false);
 
   const handleSubmit = async (formData: UserFormData) => {
@@ -54,14 +57,16 @@ export default function CreateUserPage() {
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Back to Users
+          {translationMounted ? t('backToUsers') : 'Back to Users'}
         </button>
       </div>
 
       <div>
-        <h1 className="text-2xl font-semibold">Create New User</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('createNewUser') : 'Create New User'}
+        </h1>
         <p className="text-[color:var(--text-muted)] mt-1">
-          Add a new user to the system with appropriate role and permissions.
+          {translationMounted ? t('userDescription') : 'Add a new user to the system with appropriate role and permissions.'}
         </p>
       </div>
 

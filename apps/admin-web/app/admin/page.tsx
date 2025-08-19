@@ -8,6 +8,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/Button";
 import { BACKEND_URL, getTenantId } from "../../components/config";
+import { useTranslation } from "../../hooks/useTranslation";
 
 type StatsData = {
   totalQueries: number;
@@ -24,6 +25,7 @@ type StatsData = {
 };
 
 export default function AdminDashboard() {
+  const { t, mounted: translationMounted } = useTranslation();
   const [timeRange, setTimeRange] = React.useState("7d");
   const [loading, setLoading] = React.useState(false);
   const [stats, setStats] = React.useState<StatsData>({
@@ -118,23 +120,25 @@ export default function AdminDashboard() {
   return (
     <main className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('dashboard') : 'Dashboard'}
+        </h1>
         <div className="flex gap-3">
           <Select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
             options={[
-              { value: "1d", label: "Last 24 hours" },
-              { value: "7d", label: "Last 7 days" },
-              { value: "30d", label: "Last 30 days" },
-              { value: "90d", label: "Last 90 days" }
+              { value: "1d", label: translationMounted ? t('last24Hours') : "Last 24 hours" },
+              { value: "7d", label: translationMounted ? t('last7Days') : "Last 7 days" },
+              { value: "30d", label: translationMounted ? t('last30Days') : "Last 30 days" },
+              { value: "90d", label: translationMounted ? t('last90Days') : "Last 90 days" }
             ]}
           />
           <Button variant="outline" onClick={fetchStats} disabled={loading}>
             <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Refresh
+            {translationMounted ? t('refresh') : 'Refresh'}
           </Button>
         </div>
       </div>
@@ -142,27 +146,29 @@ export default function AdminDashboard() {
       {/* Key Metrics */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader>Total Queries</CardHeader>
+          <CardHeader>{translationMounted ? t('totalQueries') : 'Total Queries'}</CardHeader>
           <CardBody>
             <div className="flex items-center justify-between">
               <span className="text-3xl font-semibold">{formatNumber(stats.totalQueries)}</span>
               {stats.queryTrend.length > 0 ? (
                 <Sparkline data={stats.queryTrend} stroke="#10B981" />
               ) : (
-                <span className="text-xs text-[color:var(--text-muted)]">No data</span>
+                <span className="text-xs text-[color:var(--text-muted)]">
+                  {translationMounted ? t('noData') : 'No data'}
+                </span>
               )}
             </div>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader>Success Rate</CardHeader>
+          <CardHeader>{translationMounted ? t('successRate') : 'Success Rate'}</CardHeader>
           <CardBody>
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-3xl font-semibold">{formatPercentage(stats.successRate)}</span>
                 <Badge variant={getSuccessRateColor(stats.successRate)} className="ml-2">
-                  {stats.successRate >= 95 ? "Excellent" : stats.successRate >= 90 ? "Good" : "Needs Attention"}
+                  {stats.successRate >= 95 ? (translationMounted ? t('excellent') : 'Excellent') : stats.successRate >= 90 ? (translationMounted ? t('good') : 'Good') : (translationMounted ? t('needsAttention') : 'Needs Attention')}
                 </Badge>
               </div>
             </div>
@@ -170,32 +176,34 @@ export default function AdminDashboard() {
         </Card>
 
         <Card>
-          <CardHeader>Avg Response Time</CardHeader>
+          <CardHeader>{translationMounted ? t('avgResponseTime') : 'Avg Response Time'}</CardHeader>
           <CardBody>
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-3xl font-semibold">{stats.avgResponseTime}ms</span>
                 <Badge variant={getResponseTimeColor(stats.avgResponseTime)} className="ml-2">
-                  {stats.avgResponseTime <= 500 ? "Fast" : stats.avgResponseTime <= 1000 ? "OK" : "Slow"}
+                  {stats.avgResponseTime <= 500 ? (translationMounted ? t('fast') : 'Fast') : stats.avgResponseTime <= 1000 ? (translationMounted ? t('ok') : 'OK') : (translationMounted ? t('slow') : 'Slow')}
                 </Badge>
               </div>
               {stats.responseTimes.length > 0 ? (
                 <Sparkline data={stats.responseTimes} stroke="#F59E0B" />
               ) : (
-                <span className="text-xs text-[color:var(--text-muted)]">No data</span>
+                <span className="text-xs text-[color:var(--text-muted)]">
+                  {translationMounted ? t('noData') : 'No data'}
+                </span>
               )}
             </div>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader>Zero-Hit Rate</CardHeader>
+          <CardHeader>{translationMounted ? t('zeroHitRate') : 'Zero-Hit Rate'}</CardHeader>
           <CardBody>
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-3xl font-semibold">{formatPercentage(stats.zeroHitRate)}</span>
                 <Badge variant={stats.zeroHitRate <= 10 ? "success" : stats.zeroHitRate <= 20 ? "warning" : "error"} className="ml-2">
-                  {stats.zeroHitRate <= 10 ? "Good" : stats.zeroHitRate <= 20 ? "Fair" : "High"}
+                  {stats.zeroHitRate <= 10 ? (translationMounted ? t('good') : 'Good') : stats.zeroHitRate <= 20 ? (translationMounted ? t('fair') : 'Fair') : (translationMounted ? t('high') : 'High')}
                 </Badge>
               </div>
             </div>
@@ -206,39 +214,45 @@ export default function AdminDashboard() {
       {/* Charts and Detailed Stats */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         <Card>
-          <CardHeader>Query Volume Trend</CardHeader>
+          <CardHeader>{translationMounted ? t('queryVolumeTrend') : 'Query Volume Trend'}</CardHeader>
           <CardBody>
             {stats.queryTrend.length > 0 ? (
               <BarChart data={stats.queryTrend} color="#4F46E5" />
             ) : (
-              <div className="text-sm text-[color:var(--text-muted)]">No trend data</div>
+              <div className="text-sm text-[color:var(--text-muted)]">
+                {translationMounted ? t('noTrendData') : 'No trend data'}
+              </div>
             )}
             <p className="text-sm text-[color:var(--text-muted)] mt-2">
-              Daily query volume over the selected time period
+              {translationMounted ? t('dailyQueryVolume') : 'Daily query volume over the selected time period'}
             </p>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader>Response Time Distribution</CardHeader>
+          <CardHeader>{translationMounted ? t('responseTimeDistribution') : 'Response Time Distribution'}</CardHeader>
           <CardBody>
             {stats.responseTimes.length > 0 ? (
               <BarChart data={stats.responseTimes} color="#F59E0B" />
             ) : (
-              <div className="text-sm text-[color:var(--text-muted)]">No response time data</div>
+              <div className="text-sm text-[color:var(--text-muted)]">
+                {translationMounted ? t('noResponseTimeData') : 'No response time data'}
+              </div>
             )}
             <p className="text-sm text-[color:var(--text-muted)] mt-2">
-              Response time distribution (milliseconds)
+              {translationMounted ? t('responseTimeDistributionMs') : 'Response time distribution (milliseconds)'}
             </p>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader>Top Intents</CardHeader>
+          <CardHeader>{translationMounted ? t('topIntents') : 'Top Intents'}</CardHeader>
           <CardBody>
             <div className="space-y-3">
               {stats.topIntents.length === 0 && (
-                <div className="text-sm text-[color:var(--text-muted)]">No intent data</div>
+                <div className="text-sm text-[color:var(--text-muted)]">
+                  {translationMounted ? t('noIntentData') : 'No intent data'}
+                </div>
               )}
               {stats.topIntents.map((intent, index) => (
                 <div key={intent.intent} className="flex items-center justify-between">
@@ -263,11 +277,13 @@ export default function AdminDashboard() {
         </Card>
 
         <Card>
-          <CardHeader>Context Type Usage</CardHeader>
+          <CardHeader>{translationMounted ? t('contextTypeUsage') : 'Context Type Usage'}</CardHeader>
           <CardBody>
             <div className="space-y-3">
               {stats.contextUsage.length === 0 && (
-                <div className="text-sm text-[color:var(--text-muted)]">No context data</div>
+                <div className="text-sm text-[color:var(--text-muted)]">
+                  {translationMounted ? t('noContextData') : 'No context data'}
+                </div>
               )}
               {stats.contextUsage.map((context) => (
                 <div key={context.type} className="flex items-center justify-between">

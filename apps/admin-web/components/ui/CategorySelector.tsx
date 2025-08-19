@@ -3,6 +3,7 @@
 import React from "react";
 import { BACKEND_URL, getTenantId } from "../config";
 import { Badge } from "./Badge";
+import { useTranslation } from "../../hooks/useTranslation";
 
 interface Category {
   id: string;
@@ -26,6 +27,7 @@ export function CategorySelector({
   onCategoriesChange,
   maxSelections = 5
 }: CategorySelectorProps) {
+  const { t, mounted: translationMounted } = useTranslation();
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [showDropdown, setShowDropdown] = React.useState(false);
@@ -125,8 +127,8 @@ export function CategorySelector({
         >
           <span className="text-gray-500">
             {selectedCategories.length === 0 
-              ? "Select categories..." 
-              : `${selectedCategories.length} selected`}
+              ? (translationMounted ? t('selectCategories') : "Select categories...")
+              : `${selectedCategories.length} ${translationMounted ? t('selected') : "selected"}`}
           </span>
           <span className="float-right">
             {showDropdown ? "▲" : "▼"}
@@ -142,7 +144,7 @@ export function CategorySelector({
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search categories..."
+                placeholder={translationMounted ? t('searchCategories') : "Search categories..."}
                 className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
               />
             </div>
@@ -150,7 +152,9 @@ export function CategorySelector({
             {/* Categories list */}
             <div className="max-h-48 overflow-y-auto">
               {filteredCategories.length === 0 ? (
-                <div className="p-3 text-gray-500 text-sm">No categories found</div>
+                <div className="p-3 text-gray-500 text-sm">
+                  {translationMounted ? t('noCategoriesFound') : "No categories found"}
+                </div>
               ) : (
                 filteredCategories.map((category) => (
                   <div
@@ -168,7 +172,7 @@ export function CategorySelector({
                       {category.name}
                       {category.level > 0 && (
                         <span className="text-xs text-gray-500 ml-1">
-                          (Level {category.level})
+                          ({translationMounted ? t('level') : "Level"} {category.level})
                         </span>
                       )}
                     </span>
@@ -180,8 +184,8 @@ export function CategorySelector({
             {/* Footer */}
             <div className="p-2 border-t bg-gray-50 text-xs text-gray-600">
               {selectedCategories.length >= maxSelections 
-                ? `Maximum ${maxSelections} categories selected`
-                : `Select up to ${maxSelections} categories`}
+                ? (translationMounted ? t('maximumCategoriesSelected').replace('{max}', maxSelections.toString()) : `Maximum ${maxSelections} categories selected`)
+                : (translationMounted ? t('selectUpToCategories').replace('{max}', maxSelections.toString()) : `Select up to ${maxSelections} categories`)}
             </div>
           </div>
         )}

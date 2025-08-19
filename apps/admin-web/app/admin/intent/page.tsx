@@ -4,11 +4,13 @@ import React from "react";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
 import { useDialog } from "../../../components/ui/DialogProvider";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type Scope = { id: string; name: string; slug?: string; description?: string; actions?: Action[] };
 type Action = { id: string; scope_id: string; name: string; slug?: string; description?: string };
 
 export default function IntentPage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const [scopes, setScopes] = React.useState<Scope[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [q, setQ] = React.useState("");
@@ -84,10 +86,12 @@ export default function IntentPage() {
   return (
     <main className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Intent System</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('intentSystem') : 'Intent System'}
+        </h1>
         <div className="flex gap-2">
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search" className="border rounded px-2 py-1 text-sm" />
-          <button onClick={load} className="h-9 px-3 rounded border">Refresh</button>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={translationMounted ? t('search') : "Search"} className="border rounded px-2 py-1 text-sm" />
+          <button onClick={load} className="h-9 px-3 rounded border">{translationMounted ? t('refresh') : 'Refresh'}</button>
         </div>
       </div>
 
@@ -96,10 +100,10 @@ export default function IntentPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left px-3 py-2">Name</th>
-                <th className="text-left px-3 py-2">Slug</th>
-                <th className="text-left px-3 py-2">Parent</th>
-                <th className="text-left px-3 py-2">Actions</th>
+                <th className="text-left px-3 py-2">{translationMounted ? t('name') : 'Name'}</th>
+                <th className="text-left px-3 py-2">{translationMounted ? t('slug') : 'Slug'}</th>
+                <th className="text-left px-3 py-2">{translationMounted ? t('parent') : 'Parent'}</th>
+                <th className="text-left px-3 py-2">{translationMounted ? t('actions') : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
@@ -116,8 +120,8 @@ export default function IntentPage() {
                       <td className="px-3 py-2">-</td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
-                          <button onClick={() => editScope(s)} className="h-8 px-3 rounded border">Edit</button>
-                          <button onClick={() => removeScope(s.id)} className="h-8 px-3 rounded border text-red-600">Delete</button>
+                          <button onClick={() => editScope(s)} className="h-8 px-3 rounded border">{translationMounted ? t('edit') : 'Edit'}</button>
+                          <button onClick={() => removeScope(s.id)} className="h-8 px-3 rounded border text-red-600">{translationMounted ? t('delete') : 'Delete'}</button>
                         </div>
                       </td>
                     </tr>
@@ -131,8 +135,8 @@ export default function IntentPage() {
                         <td className="px-3 py-2">{nameById[a.scope_id] || '-'}</td>
                         <td className="px-3 py-2">
                           <div className="flex gap-2">
-                            <button onClick={() => editAction(a)} className="h-8 px-3 rounded border">Edit</button>
-                            <button onClick={() => removeAction(a.id)} className="h-8 px-3 rounded border text-red-600">Delete</button>
+                            <button onClick={() => editAction(a)} className="h-8 px-3 rounded border">{translationMounted ? t('edit') : 'Edit'}</button>
+                            <button onClick={() => removeAction(a.id)} className="h-8 px-3 rounded border text-red-600">{translationMounted ? t('delete') : 'Delete'}</button>
                           </div>
                         </td>
                       </tr>
@@ -154,19 +158,19 @@ export default function IntentPage() {
         </div>
 
         <div className="border rounded p-4">
-          <div className="text-sm font-medium mb-2">{editing ? 'Edit Intent' : 'Create Intent'}</div>
+          <div className="text-sm font-medium mb-2">{editing ? (translationMounted ? t('editIntent') : 'Edit Intent') : (translationMounted ? t('createIntent') : 'Create Intent')}</div>
           <div className="grid gap-2">
-            <label className="text-sm">Name<input className="mt-1 w-full border rounded px-2 py-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></label>
-            <label className="text-sm">Slug<input className="mt-1 w-full border rounded px-2 py-1" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder="auto from name if empty" /></label>
-            <label className="text-sm">Description<input className="mt-1 w-full border rounded px-2 py-1" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></label>
-            <label className="text-sm">Parent Scope
+            <label className="text-sm">{translationMounted ? t('name') : 'Name'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></label>
+            <label className="text-sm">{translationMounted ? t('slug') : 'Slug'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder={translationMounted ? t('autoFromName') : "auto from name if empty"} /></label>
+            <label className="text-sm">{translationMounted ? t('description') : 'Description'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></label>
+            <label className="text-sm">{translationMounted ? t('parentScope') : 'Parent Scope'}
               <select className="mt-1 w-full border rounded px-2 py-1" value={form.parent_scope_id} onChange={e => setForm(f => ({ ...f, parent_scope_id: e.target.value }))}>
-                <option value="">— None (Scope / Level 1) —</option>
+                <option value="">{translationMounted ? t('noneScopeLevel1') : '— None (Scope / Level 1) —'}</option>
                 {scopes.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
-              <div className="text-xs text-gray-600 mt-1">Leave empty to create a Scope (level 1). Select a Scope to create an Action (level 2) under it.</div>
+              <div className="text-xs text-gray-600 mt-1">{translationMounted ? t('scopeInfo') : 'Leave empty to create a Scope (level 1). Select a Scope to create an Action (level 2) under it.'}</div>
             </label>
           </div>
           <div className="mt-3 flex gap-2">

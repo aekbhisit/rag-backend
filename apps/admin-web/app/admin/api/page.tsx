@@ -2,12 +2,14 @@
 
 import React from "react";
 import { BACKEND_URL, DEFAULT_TENANT_ID, getTenantId } from "../../../components/config";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 type Method = "GET" | "POST";
 
 type Ep = { key: string; method: Method; path: string; summary?: string; params?: any[]; requestBodySchema?: any };
 
 export default function ApiPage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const [tenantId, setTenantId] = React.useState<string>(() => getTenantId());
 
   React.useEffect(() => {
@@ -18,6 +20,7 @@ export default function ApiPage() {
   const [spec, setSpec] = React.useState<any>(null);
   const [endpoints, setEndpoints] = React.useState<Ep[]>([]);
   const [selected, setSelected] = React.useState<Ep | null>(null);
+  const [importType, setImportType] = React.useState<'text'|'document'|'website'|'place'|'ticket'>('text');
   const [serverBase, setServerBase] = React.useState<string>('/api');
   const [pathParams, setPathParams] = React.useState<Record<string, string>>({});
   const [queryParams, setQueryParams] = React.useState<Record<string, string>>({});
@@ -76,8 +79,8 @@ export default function ApiPage() {
     setPathParams(pp);
     if (selected.method === 'POST') {
       const initial = buildExampleFromSchema(selected.requestBodySchema);
-      setBody(prev => (prev && Object.keys(prev).length > 0 ? prev : initial));
-      setBodyText(prev => (prev && prev.trim().length > 2 ? prev : JSON.stringify(initial, null, 2)));
+      setBody((prev: any) => (prev && Object.keys(prev).length > 0 ? prev : initial));
+      setBodyText((prev: string) => (prev && prev.trim().length > 2 ? prev : JSON.stringify(initial, null, 2)));
       setJsonError("");
     } else {
       setBody({});
@@ -88,6 +91,24 @@ export default function ApiPage() {
     setStatus('');
     setLatency(undefined);
   }, [selected?.key]);
+
+  // When selecting type for import endpoint, replace body template with that variant's example
+  React.useEffect(() => {
+    if (!selected || selected.method !== 'POST') return;
+    if (!selected.path.endsWith('/admin/contexts/import')) return;
+    try {
+      // Try to use OpenAPI example for the chosen oneOf variant
+      const schema = selected.requestBodySchema;
+      const variants = Array.isArray(schema?.oneOf) ? schema.oneOf : [];
+      const idx = { text: 0, document: 1, website: 2, place: 3, ticket: 4 }[importType] ?? 0;
+      const chosen = variants[idx];
+      const ex = (chosen && chosen.example) ? chosen.example : buildExampleFromSchema(chosen || schema);
+      setBody(ex);
+      setBodyText(JSON.stringify(ex, null, 2));
+      setJsonError("");
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importType, selected?.key]);
 
   function buildExampleFromSchema(schema: any): any {
     if (!schema) return {};
@@ -190,7 +211,9 @@ export default function ApiPage() {
   return (
     <main className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">API Docs & Test</h1>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('apiDocs') : 'API Docs & Test'}
+        </h1>
         <div className="flex items-center gap-3">
           <button
             onClick={() => spec && downloadPostmanCollection(spec)}
@@ -207,11 +230,11 @@ export default function ApiPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-1 space-y-3">
           <div>
-            <label className="text-sm font-medium">Tenant ID</label>
+            <label className="text-sm font-medium">{translationMounted ? t('tenantId') : 'Tenant ID'}</label>
             <input value={tenantId} onChange={e => setTenantId(e.target.value)} className="w-full mt-1 border rounded px-2 py-1" />
           </div>
           <div>
-            <label className="text-sm font-medium">Endpoint</label>
+            <label className="text-sm font-medium">{translationMounted ? t('apiEndpoint') : 'Endpoint'}</label>
             <select value={selected?.key || ''} onChange={(e) => setSelected(endpoints.find(x => x.key === e.target.value) || null)} className="w-full mt-1 border rounded px-2 py-1">
               {endpoints.map(ep => <option key={ep.key} value={ep.key}>{ep.key}</option>)}
             </select>
@@ -238,7 +261,19 @@ export default function ApiPage() {
 
           {selected && selected.method === 'POST' && (
             <div>
-              <label className="text-sm font-medium">Body (JSON)</label>
+              <label className="text-sm font-medium">{translationMounted ? t('apiBody') : 'Body (JSON)'}</label>
+              {selected.path.endsWith('/admin/contexts/import') && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-gray-600">Type</span>
+                  <select value={importType} onChange={e => setImportType(e.target.value as any)} className="h-7 px-2 border rounded text-xs">
+                    <option value="text">text</option>
+                    <option value="document">document</option>
+                    <option value="website">website</option>
+                    <option value="place">place</option>
+                    <option value="ticket">ticket</option>
+                  </select>
+                </div>
+              )}
               <textarea
                 rows={selected?.key?.startsWith('POST /api/rag/summary') ? 18 : 12}
                 style={{ minHeight: ((selected?.key?.startsWith('POST /api/rag/summary') ? 18 : 12) * 24) + 'px' }}
@@ -252,16 +287,20 @@ export default function ApiPage() {
               />
               <div className="flex items-center gap-2 mt-1">
                 <button onClick={resetBodyToSchema} className="h-7 px-2 rounded border text-xs">Reset to schema</button>
-                <button onClick={() => copyToClipboard('body', bodyText)} className="h-7 px-2 rounded border text-xs">Copy</button>
+                <button onClick={() => copyToClipboard('body', bodyText)} className="h-7 px-2 rounded border text-xs">{translationMounted ? t('apiCopy') : 'Copy'}</button>
                 {jsonError && <span className="text-xs text-red-600">{jsonError}</span>}
                 {copied === 'body' && <span className="text-xs text-green-600">Copied</span>}
               </div>
             </div>
           )}
 
-          <button onClick={execute} disabled={loading} className="h-9 px-4 rounded bg-black text-white disabled:opacity-50">{loading ? 'Sending…' : 'Send'}</button>
+          <button onClick={execute} disabled={loading} className="h-9 px-4 rounded bg-black text-white disabled:opacity-50">
+            {loading ? 'Sending…' : (translationMounted ? t('apiSend') : 'Send')}
+          </button>
           {status && (
-            <div className="text-sm text-gray-600">Status: {status}{latency !== undefined ? ` • ${latency} ms` : ''}</div>
+            <div className="text-sm text-gray-600">
+              {translationMounted ? t('status') : 'Status'}: {status}{latency !== undefined ? ` • ${latency} ms` : ''}
+            </div>
           )}
         </div>
         <div className="md:col-span-2 space-y-3 min-w-0">
@@ -274,40 +313,40 @@ export default function ApiPage() {
               {selected.summary && <div className="text-sm text-gray-700 mb-3">{selected.summary}</div>}
 
               {(selected.params || []).length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Parameters</div>
-                  <div className="overflow-auto border rounded">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-3 py-2">Name</th>
-                          <th className="text-left px-3 py-2">In</th>
-                          <th className="text-left px-3 py-2">Type</th>
-                          <th className="text-left px-3 py-2">Required</th>
-                          <th className="text-left px-3 py-2">Default</th>
-                          <th className="text-left px-3 py-2">Enum</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(selected.params || []).map((p: any) => (
-                          <tr key={`${p.in}:${p.name}`} className="border-t">
-                            <td className="px-3 py-2 font-mono text-[12px]">{p.name}</td>
-                            <td className="px-3 py-2">{p.in}</td>
-                            <td className="px-3 py-2">{p.schema?.type || ''}</td>
-                            <td className="px-3 py-2">{p.required ? 'yes' : 'no'}</td>
-                            <td className="px-3 py-2">{p.schema?.default !== undefined ? String(p.schema.default) : ''}</td>
-                            <td className="px-3 py-2">{Array.isArray(p.schema?.enum) ? p.schema.enum.join(', ') : ''}</td>
+                                  <div className="space-y-2">
+                    <div className="text-sm font-medium">{translationMounted ? t('apiParams') : 'Parameters'}</div>
+                    <div className="overflow-auto border rounded">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-3 py-2">{translationMounted ? t('name') : 'Name'}</th>
+                            <th className="text-left px-3 py-2">{translationMounted ? t('apiMethod') : 'In'}</th>
+                            <th className="text-left px-3 py-2">{translationMounted ? t('type') : 'Type'}</th>
+                            <th className="text-left px-3 py-2">{translationMounted ? t('required') : 'Required'}</th>
+                            <th className="text-left px-3 py-2">{translationMounted ? t('default') : 'Default'}</th>
+                            <th className="text-left px-3 py-2">Enum</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {(selected.params || []).map((p: any) => (
+                            <tr key={`${p.in}:${p.name}`} className="border-t">
+                              <td className="px-3 py-2 font-mono text-[12px]">{p.name}</td>
+                              <td className="px-3 py-2">{p.in}</td>
+                              <td className="px-3 py-2">{p.schema?.type || ''}</td>
+                              <td className="px-3 py-2">{p.required ? (translationMounted ? t('yes') : 'yes') : (translationMounted ? t('no') : 'no')}</td>
+                              <td className="px-3 py-2">{p.schema?.default !== undefined ? String(p.schema.default) : ''}</td>
+                              <td className="px-3 py-2">{Array.isArray(p.schema?.enum) ? p.schema.enum.join(', ') : ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
               )}
 
               {selected.method === 'POST' && selected.requestBodySchema && (
                 <div className="space-y-2 mt-4">
-                  <div className="text-sm font-medium">Request Body</div>
+                  <div className="text-sm font-medium">{translationMounted ? t('apiBody') : 'Request Body'}</div>
                   <div className="text-xs text-gray-600">JSON</div>
                   <div className="overflow-auto border rounded p-3 bg-gray-50 text-xs">
                     {renderSchema(selected.requestBodySchema)}
@@ -318,8 +357,8 @@ export default function ApiPage() {
           )}
           <div>
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Response</label>
-              <button onClick={() => copyToClipboard('resp', responseText)} className="h-7 px-2 rounded border text-xs">Copy</button>
+              <label className="text-sm font-medium">{translationMounted ? t('apiResponse') : 'Response'}</label>
+              <button onClick={() => copyToClipboard('resp', responseText)} className="h-7 px-2 rounded border text-xs">{translationMounted ? t('apiCopy') : 'Copy'}</button>
               {copied === 'resp' && <span className="text-xs text-green-600">Copied</span>}
             </div>
             <pre className="mt-1 p-3 border rounded bg-gray-50 overflow-auto max-h-[420px] text-sm"><code>{responseText}</code></pre>
@@ -328,7 +367,7 @@ export default function ApiPage() {
             <div>
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">cURL</label>
-                <button onClick={() => copyToClipboard('curl', curlText)} className="h-7 px-2 rounded border text-xs">Copy</button>
+                <button onClick={() => copyToClipboard('curl', curlText)} className="h-7 px-2 rounded border text-xs">{translationMounted ? t('apiCopy') : 'Copy'}</button>
                 {copied === 'curl' && <span className="text-xs text-green-600">Copied</span>}
               </div>
               <pre className="mt-1 p-3 border rounded bg-gray-50 overflow-auto text-xs"><code>{curlText}</code></pre>
@@ -414,19 +453,37 @@ function openapiToPostman(openapi: any) {
       if (!ops?.[m]) return;
       const op = ops[m];
       const urlPath = path.replace(/\{(.*?)\}/g, ':$1');
+      const baseReq = () => ({
+        method: m.toUpperCase(),
+        header: [
+          { key: 'X-Tenant-ID', value: '{{X_TENANT_ID}}' },
+          ...(m === 'post' ? [{ key: 'Content-Type', value: 'application/json' }] : [])
+        ],
+        url: {
+          raw: `{{BASE_URL}}${baseUrl}${urlPath}`,
+          host: ['{{BASE_URL}}'],
+          path: (baseUrl + urlPath).split('/').filter(Boolean)
+        }
+      });
+      // Special handling: expand oneOf variants for import endpoint
+      if (m === 'post' && path === '/admin/contexts/import' && Array.isArray(op?.requestBody?.content?.['application/json']?.schema?.oneOf)) {
+        const variants: any[] = op.requestBody.content['application/json'].schema.oneOf;
+        const typeNames = ['text','document','website','place','ticket'];
+        variants.forEach((variant: any, i: number) => {
+          items.push({
+            name: `${m.toUpperCase()} ${path} (${typeNames[i] || 'variant'})`,
+            request: {
+              ...baseReq(),
+              body: { mode: 'raw', raw: JSON.stringify(variant.example ?? exampleFromSchema(variant), null, 2) }
+            }
+          });
+        });
+        return;
+      }
       const req: any = {
         name: `${m.toUpperCase()} ${path}`,
         request: {
-          method: m.toUpperCase(),
-          header: [
-            { key: 'X-Tenant-ID', value: '{{X_TENANT_ID}}' },
-            ...(m === 'post' ? [{ key: 'Content-Type', value: 'application/json' }] : [])
-          ],
-          url: {
-            raw: `{{BASE_URL}}${baseUrl}${urlPath}`,
-            host: ['{{BASE_URL}}'],
-            path: (baseUrl + urlPath).split('/').filter(Boolean)
-          },
+          ...baseReq(),
           ...(m === 'post' ? { body: { mode: 'raw', raw: JSON.stringify(exampleFromSchema(op?.requestBody?.content?.['application/json']?.schema) ?? {}, null, 2) } } : {})
         }
       };

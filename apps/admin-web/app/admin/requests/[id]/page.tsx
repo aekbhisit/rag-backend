@@ -3,6 +3,8 @@
 import React from "react";
 import { useParams } from "next/navigation";
 import { BACKEND_URL, getTenantId } from "../../../../components/config";
+import { formatDateForTable } from "../../../../utils/timezone";
+import { useAuth } from "../../../../components/AuthProvider";
 
 export default function RequestDetailPage() {
   const params = useParams() as { id?: string };
@@ -10,6 +12,9 @@ export default function RequestDetailPage() {
   const [item, setItem] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [usage, setUsage] = React.useState<any[]>([]);
+  const { userTimezone } = useAuth();
+
+
 
   React.useEffect(() => {
     const load = async () => {
@@ -112,7 +117,7 @@ export default function RequestDetailPage() {
           <div className="text-sm font-medium mb-2">Overview</div>
           <div className="text-sm"><b>ID:</b> {item.id}</div>
           <div className="text-sm"><b>Endpoint:</b> {item.endpoint}</div>
-          <div className="text-sm"><b>Time:</b> {item.created_at}</div>
+          <div className="text-sm"><b>Time:</b> {formatDateForTable(item.created_at, userTimezone)}</div>
           <div className="text-sm"><b>Latency:</b> {item.latency_ms} ms</div>
           <div className="text-sm"><b>Model:</b> {item.model}</div>
           <div className="text-sm"><b>Answer status:</b> {item.answer_status ? 'OK' : 'NO'}</div>

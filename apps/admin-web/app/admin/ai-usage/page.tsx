@@ -3,8 +3,12 @@
 import React from "react";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
+import { formatDateForTable } from "../../../utils/timezone";
+import { useAuth } from "../../../components/AuthProvider";
+import { useTranslation } from "../../../hooks/useTranslation";
 
 export default function AiUsagePage() {
+  const { t, mounted: translationMounted } = useTranslation();
   const [items, setItems] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [range, setRange] = React.useState('7d');
@@ -18,6 +22,7 @@ export default function AiUsagePage() {
   const [total, setTotal] = React.useState(0);
   const [sortBy, setSortBy] = React.useState<'start_time'|'cost_total_usd'|'usage_total_tokens'|'latency_ms'|'model'|'provider'|'operation'>('start_time');
   const [sortDir, setSortDir] = React.useState<'asc'|'desc'>('desc');
+  const { userTimezone } = useAuth();
 
   const load = async () => {
     setLoading(true);
@@ -40,35 +45,41 @@ export default function AiUsagePage() {
     } finally { setLoading(false); }
   };
 
+
+
   React.useEffect(() => { load(); }, [range, model, provider, operation, page, size, sortBy, sortDir]);
 
   return (
     <main className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">AI Usage Logs</h1>
-        <button onClick={load} className="h-9 px-3 rounded border">Refresh</button>
+        <h1 className="text-2xl font-semibold">
+          {translationMounted ? t('aiUsage') : 'AI Usage Logs'}
+        </h1>
+        <button onClick={load} className="h-9 px-3 rounded border">
+          {translationMounted ? t('refresh') : 'Refresh'}
+        </button>
       </div>
       <div className="grid gap-3 md:grid-cols-5">
         <select className="border rounded px-2 py-1" value={range} onChange={e => setRange(e.target.value)}>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-          <option value="90d">Last 90 days</option>
-          <option value="1y">Last year</option>
+          <option value="7d">{translationMounted ? t('last7Days') : 'Last 7 days'}</option>
+          <option value="30d">{translationMounted ? t('last30Days') : 'Last 30 days'}</option>
+          <option value="90d">{translationMounted ? t('last90Days') : 'Last 90 days'}</option>
+          <option value="1y">{translationMounted ? t('lastYear') : 'Last year'}</option>
         </select>
-        <input className="border rounded px-2 py-1" placeholder="Model" value={model} onChange={e => setModel(e.target.value)} />
-        <input className="border rounded px-2 py-1" placeholder="Provider" value={provider} onChange={e => setProvider(e.target.value)} />
-        <input className="border rounded px-2 py-1" placeholder="Operation (generate/embedding)" value={operation} onChange={e => setOperation(e.target.value)} />
+        <input className="border rounded px-2 py-1" placeholder={translationMounted ? t('model') : "Model"} value={model} onChange={e => setModel(e.target.value)} />
+        <input className="border rounded px-2 py-1" placeholder={translationMounted ? t('provider') : "Provider"} value={provider} onChange={e => setProvider(e.target.value)} />
+        <input className="border rounded px-2 py-1" placeholder={translationMounted ? t('operationPlaceholder') : "Operation (generate/embedding)"} value={operation} onChange={e => setOperation(e.target.value)} />
         <div className="flex gap-2">
-          <input className="border rounded px-2 py-1 w-full" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} />
-          <button onClick={load} className="h-9 px-3 rounded border">Go</button>
+          <input className="border rounded px-2 py-1 w-full" placeholder={translationMounted ? t('search') : "Search"} value={q} onChange={e => setQ(e.target.value)} />
+          <button onClick={load} className="h-9 px-3 rounded border">{translationMounted ? t('go') : 'Go'}</button>
         </div>
       </div>
       {summary && (
         <div className="grid gap-3 md:grid-cols-4">
-          <div className="border rounded p-3 text-sm">Total Cost: <span className="font-mono">${summary.totalCost.toFixed(4)}</span></div>
-          <div className="border rounded p-3 text-sm">Total Tokens: <span className="font-mono">{summary.totalTokens}</span></div>
-          <div className="border rounded p-3 text-sm">Top Model: <span className="font-mono">{summary.byModel?.[0]?.key || '—'}</span></div>
-          <div className="border rounded p-3 text-sm">Top Provider: <span className="font-mono">{summary.byProvider?.[0]?.key || '—'}</span></div>
+          <div className="border rounded p-3 text-sm">{translationMounted ? t('totalCost') : 'Total Cost'}: <span className="font-mono">${summary.totalCost.toFixed(4)}</span></div>
+          <div className="border rounded p-3 text-sm">{translationMounted ? t('totalTokens') : 'Total Tokens'}: <span className="font-mono">{summary.totalTokens}</span></div>
+          <div className="border rounded p-3 text-sm">{translationMounted ? t('topModel') : 'Top Model'}: <span className="font-mono">{summary.byModel?.[0]?.key || '—'}</span></div>
+          <div className="border rounded p-3 text-sm">{translationMounted ? t('topProvider') : 'Top Provider'}: <span className="font-mono">{summary.byProvider?.[0]?.key || '—'}</span></div>
         </div>
       )}
       <div className="border rounded overflow-auto">
@@ -76,15 +87,15 @@ export default function AiUsagePage() {
           <thead className="bg-gray-50">
             <tr>
               {[
-                { key: 'start_time', label: 'Time' },
-                { key: 'operation', label: 'Operation' },
-                { key: 'model', label: 'Model' },
-                { key: 'provider', label: 'Provider' },
-                { key: 'usage_input_tokens', label: 'Input' },
-                { key: 'usage_cached_input_tokens', label: 'Cached' },
-                { key: 'usage_output_tokens', label: 'Output' },
-                { key: 'usage_total_tokens', label: 'Total Tokens' },
-                { key: 'cost_total_usd', label: 'Cost (USD)' },
+                { key: 'start_time', label: translationMounted ? t('time') : 'Time' },
+                { key: 'operation', label: translationMounted ? t('operation') : 'Operation' },
+                { key: 'model', label: translationMounted ? t('model') : 'Model' },
+                { key: 'provider', label: translationMounted ? t('provider') : 'Provider' },
+                { key: 'usage_input_tokens', label: translationMounted ? t('input') : 'Input' },
+                { key: 'usage_cached_input_tokens', label: translationMounted ? t('cached') : 'Cached' },
+                { key: 'usage_output_tokens', label: translationMounted ? t('output') : 'Output' },
+                { key: 'usage_total_tokens', label: translationMounted ? t('totalTokens') : 'Total Tokens' },
+                { key: 'cost_total_usd', label: translationMounted ? t('costUSD') : 'Cost (USD)' },
               ].map(col => (
                 <th key={col.key} className="text-left px-3 py-2 cursor-pointer select-none" onClick={() => {
                   if (sortBy === (col.key as any)) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -96,11 +107,11 @@ export default function AiUsagePage() {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">Loading…</td></tr>}
-            {!loading && items.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">No data</td></tr>}
+            {loading && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">{translationMounted ? t('loading') : 'Loading…'}</td></tr>}
+            {!loading && items.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">{translationMounted ? t('noData') : 'No data'}</td></tr>}
             {items.map((i) => (
               <tr key={i.id} className="border-t">
-                <td className="px-3 py-2">{i.start_time || ''}</td>
+                <td className="px-3 py-2">{formatDateForTable(i.start_time, userTimezone)}</td>
                 <td className="px-3 py-2">{i.operation}</td>
                 <td className="px-3 py-2">{i.model || ''}</td>
                 <td className="px-3 py-2">{i.provider || ''}</td>

@@ -12,6 +12,7 @@ import { PlaceForm } from "./PlaceForm";
 import { WebsiteForm } from "./WebsiteForm";
 import { TicketForm } from "./TicketForm";
 import { DocumentForm } from "./DocumentForm";
+import { useTranslation } from "../../hooks/useTranslation";
 
 // import { KeywordEditor } from "../ui/KeywordEditor";
 import { CategorySelector } from "../ui/CategorySelector";
@@ -80,6 +81,7 @@ const TICKET_STATUSES = [
 ];
 
 export function ContextForm({ initialData, onSubmit, onCancel, loading = false, editHistory = [] }: ContextFormProps) {
+  const { t, mounted: translationMounted } = useTranslation();
   const [changeHistory, setChangeHistory] = React.useState<Array<{ id: string; field: string; oldValue: any; newValue: any; timestamp: string }>>([]);
   const [formData, setFormData] = React.useState<ContextFormData>({
     type: "place",
@@ -246,58 +248,64 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.title.trim()) newErrors.title = "Title is required";
-    if (!formData.body.trim()) newErrors.body = "Body is required";
+    if (!formData.title.trim()) newErrors.title = translationMounted ? t('titleRequired') : "Title is required";
+    if (!formData.body.trim()) newErrors.body = translationMounted ? t('bodyRequired') : "Body is required";
     if (formData.trust_level < 1 || formData.trust_level > 5) {
-      newErrors.trust_level = "Trust level must be between 1 and 5";
+      newErrors.trust_level = translationMounted ? t('trustLevelRange') : "Trust level must be between 1 and 5";
     }
 
     // Type-specific validation
     if (formData.type === "place") {
       const { lat, lon, address } = formData.attributes;
-      if (!address) newErrors["attributes.address"] = "Address is required for places";
+      if (!address) newErrors["attributes.address"] = translationMounted ? t('addressRequired') : "Address is required for places";
       if (lat !== undefined && (lat < -90 || lat > 90)) {
-        newErrors["attributes.lat"] = "Latitude must be between -90 and 90";
+        newErrors["attributes.lat"] = translationMounted ? t('latitudeRange') : "Latitude must be between -90 and 90";
       }
       if (lon !== undefined && (lon < -180 || lon > 180)) {
-        newErrors["attributes.lon"] = "Longitude must be between -180 and 180";
+        newErrors["attributes.lon"] = translationMounted ? t('longitudeRange') : "Longitude must be between -180 and 180";
       }
     }
 
     if (formData.type === "website") {
       const { url } = formData.attributes;
-      if (!url) newErrors["attributes.url"] = "URL is required for websites";
+      if (!url) newErrors["attributes.url"] = translationMounted ? t('urlRequired') : "URL is required for websites";
       else if (!/^https?:\/\/.+/.test(url)) {
-        newErrors["attributes.url"] = "URL must start with http:// or https://";
+        newErrors["attributes.url"] = translationMounted ? t('urlFormat') : "URL must start with http:// or https://";
       }
     }
 
     if (formData.type === "ticket") {
       const { price, location, event_time } = formData.attributes;
       if (price !== undefined && price < 0) {
-        newErrors["attributes.price"] = "Price cannot be negative";
+        newErrors["attributes.price"] = translationMounted ? t('pricePositive') : "Price cannot be negative";
       }
-      if (!location) newErrors["attributes.location"] = "Location is required for tickets";
-      if (!event_time) newErrors["attributes.event_time"] = "Event time is required for tickets";
+      if (!location) newErrors["attributes.location"] = translationMounted ? t('locationRequired') : "Location is required for tickets";
+      if (!event_time) newErrors["attributes.event_time"] = translationMounted ? t('eventTimeRequired') : "Event time is required for tickets";
     }
 
     if (formData.type === "document") {
       const { source_uri, page } = formData.attributes;
-      if (!source_uri) newErrors["attributes.source_uri"] = "Source URI is required for document chunks";
+      if (!source_uri) newErrors["attributes.source_uri"] = translationMounted ? t('sourceUriRequired') : "Source URI is required for document chunks";
       if (page !== undefined && page < 1) {
-        newErrors["attributes.page"] = "Page number must be positive";
+        newErrors["attributes.page"] = translationMounted ? t('pagePositive') : "Page number must be positive";
       }
     }
 
     // Combined character constraint: Title + Keywords + Body
     const combinedPlain = [formData.title, getKeywordsPlain(), getPlainText(formData.body)].filter(Boolean).join(' \n\n');
     if (combinedPlain.length > MAX_COMBINED_CHARS) {
-      newErrors["body"] = `Combined Title/Keywords/Body exceeds ${MAX_COMBINED_CHARS} characters (currently ${combinedPlain.length}). Please shorten content.`;
+      const message = translationMounted 
+        ? t('combinedLengthExceeded').replace('{max}', MAX_COMBINED_CHARS.toString()).replace('{current}', combinedPlain.length.toString())
+        : `Combined Title/Keywords/Body exceeds ${MAX_COMBINED_CHARS} characters (currently ${combinedPlain.length}). Please shorten content.`;
+      newErrors["body"] = message;
     }
     // Embedding token constraint (advisory)
     const approxTokens = estimateTokens(combinedPlain);
     if (approxTokens > MAX_ALLOWED_TOKENS) {
-      newErrors["body"] = `Combined Title/Keywords/Body is too long for embedding (~${approxTokens} tokens > ${MAX_ALLOWED_TOKENS} allowed). Please shorten content.`;
+      const message = translationMounted 
+        ? t('combinedLengthTooLong').replace('{tokens}', approxTokens.toString()).replace('{max}', MAX_ALLOWED_TOKENS.toString())
+        : `Combined Title/Keywords/Body is too long for embedding (~${approxTokens} tokens > ${MAX_ALLOWED_TOKENS} allowed). Please shorten content.`;
+      newErrors["body"] = message;
     }
 
     setErrors(newErrors);
@@ -363,14 +371,14 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
       <form onSubmit={handleSubmit} className="space-y-6 w-full">
         <div className="grid grid-cols-3 gap-4">
           <Select
-            label="Type *"
+            label={translationMounted ? t('type') : "Type *"}
             value={formData.type}
             onChange={(e) => updateField("type", e.target.value)}
             onBlur={(e) => commitField("type", e.target.value)}
             options={CONTEXT_TYPES}
           />
           <Select
-            label="Trust Level *"
+            label={translationMounted ? t('trustLevel') : "Trust Level *"}
             value={String(formData.trust_level)}
             onChange={(e) => updateField("trust_level", parseInt(e.target.value))}
             onBlur={(e) => commitField("trust_level", parseInt(e.target.value))}
@@ -378,7 +386,7 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
             error={errors.trust_level}
           />
           <Select
-            label="Status *"
+            label={translationMounted ? t('status') : "Status *"}
             value={formData.status}
             onChange={(e) => updateField("status", e.target.value)}
             onBlur={(e) => commitField("status", e.target.value)}
@@ -396,55 +404,55 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
         {/* Common Fields for All Types */}
         <div className="space-y-4">
           <h3 className="text-lg font-medium text-[color:var(--text)] border-b border-[color:var(--border)] pb-2">
-            Basic Information
+            {translationMounted ? t('basicInformation') : "Basic Information"}
           </h3>
           <div className="text-xs text-[color:var(--text-muted)]">
-            Limit: {MAX_COMBINED_CHARS.toLocaleString()} characters combined (Title + Keywords + Body). Also ~{MAX_ALLOWED_TOKENS} tokens with headroom.
+            {translationMounted ? t('limit') : "Limit"}: {MAX_COMBINED_CHARS.toLocaleString()} {translationMounted ? t('characters') : "characters"} {translationMounted ? t('combined') : "combined"} ({translationMounted ? t('title') : "Title"} + {translationMounted ? t('keywords') : "Keywords"} + {translationMounted ? t('body') : "Body"}). {translationMounted ? t('tokens') : "Also ~"} {MAX_ALLOWED_TOKENS} {translationMounted ? t('withHeadroom') : "tokens with headroom"}.
           </div>
           
           <Input
-            label="Title *"
+            label={translationMounted ? t('title') : "Title *"}
             value={formData.title}
             onChange={(e) => updateField("title", e.target.value)}
             onBlur={(e) => commitField("title", e.target.value)}
             error={errors.title}
-            placeholder="Enter a descriptive title"
+            placeholder={translationMounted ? t('enterDescriptiveTitle') : "Enter a descriptive title"}
           />
 
           <SimpleHtmlEditor
-            label="Body *"
+            label={translationMounted ? t('body') : "Body *"}
             value={formData.body}
             onChange={(v) => updateField("body", v)}
             onBlurCapture={() => commitField("body", formData.body)}
             error={errors.body}
-            placeholder="Write content here..."
+            placeholder={translationMounted ? t('writeContentHere') : "Write content here..."}
             rows={5}
           />
           <div className="flex justify-between text-xs text-[color:var(--text-muted)]">
-            <span>Body chars: {getPlainText(formData.body).length.toLocaleString()} / {MAX_COMBINED_CHARS.toLocaleString()}</span>
-            <span>~{estimateTokens([formData.title, getKeywordsPlain(), getPlainText(formData.body)].filter(Boolean).join(' \n\n'))} tokens</span>
+            <span>{translationMounted ? t('bodyChars') : "Body chars"}: {getPlainText(formData.body).length.toLocaleString()} / {MAX_COMBINED_CHARS.toLocaleString()}</span>
+            <span>~{estimateTokens([formData.title, getKeywordsPlain(), getPlainText(formData.body)].filter(Boolean).join(' \n\n'))} {translationMounted ? t('tokens') : "tokens"}</span>
           </div>
 
           <SimpleHtmlEditor
-            label="Keywords"
+            label={translationMounted ? t('keywords') : "Keywords"}
             value={(formData.keywords || []).join(", ")}
             onChange={(v) => updateField("keywords", parseKeywords(v))}
             onBlurCapture={() => commitField("keywords", formData.keywords)}
-            placeholder="Comma/newline separated keywords"
-            hint="Separate by comma or newline. Duplicates are removed automatically."
+            placeholder={translationMounted ? t('commaNewlineKeywords') : "Comma/newline separated keywords"}
+            hint={translationMounted ? t('separateByComma') : "Separate by comma or newline. Duplicates are removed automatically."}
             rows={5}
           />
           <div className="text-right text-xs text-[color:var(--text-muted)]">
-            Keywords chars: {getKeywordsPlain().length.toLocaleString()} / {MAX_COMBINED_CHARS.toLocaleString()}
+            {translationMounted ? t('keywordsChars') : "Keywords chars"}: {getKeywordsPlain().length.toLocaleString()} / {MAX_COMBINED_CHARS.toLocaleString()}
           </div>
 
           <SimpleHtmlEditor
-            label="Instruction"
+            label={translationMounted ? t('instruction') : "Instruction"}
             value={formData.instruction || ""}
             onChange={(v) => updateField("instruction", v)}
             onBlurCapture={() => commitField("instruction", formData.instruction)}
-            placeholder="Guidance for AI"
-            hint="Use toolbar to format"
+            placeholder={translationMounted ? t('guidanceForAI') : "Guidance for AI"}
+            hint={translationMounted ? t('useToolbarToFormat') : "Use toolbar to format"}
             rows={5}
           />
         </div>
@@ -452,17 +460,17 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
         {/* Type-Specific Fields */}
         <div className="space-y-4">
           <h3 className="text-lg font-medium text-[color:var(--text)] border-b border-[color:var(--border)] pb-2">
-            {formData.type.charAt(0).toUpperCase() + formData.type.slice(1)} Specific Details
+            {formData.type.charAt(0).toUpperCase() + formData.type.slice(1)} {translationMounted ? t('typeSpecificDetails') : "Specific Details"}
           </h3>
           {renderTypeSpecificFields()}
         </div>
 
         <div className="flex justify-end space-x-3 pt-4 border-t border-[color:var(--border)]">
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {translationMounted ? t('cancel') : "Cancel"}
           </Button>
           <Button type="submit" loading={loading}>
-            {initialData?.id ? "Update" : "Create"} Context
+            {initialData?.id ? (translationMounted ? t('updateContext') : "Update Context") : (translationMounted ? t('createContext') : "Create Context")}
           </Button>
         </div>
       </form>
@@ -471,12 +479,12 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
       <div className="space-y-6">
         {/* Category & Intent Configuration */}
         <div className="bg-[color:var(--surface)] border border-[color:var(--border)] rounded-lg p-4">
-          <h3 className="text-lg font-semibold mb-4">Classification</h3>
+          <h3 className="text-lg font-semibold mb-4">{translationMounted ? t('classification') : "Classification"}</h3>
           
           <div className="space-y-4">
             {/* Category Selection */}
             <CategorySelector
-              label="Categories"
+              label={translationMounted ? t('categories') : "Categories"}
               selectedCategories={formData.categories || []}
               onCategoriesChange={(categories) => updateField("categories", categories)}
               maxSelections={5}
@@ -494,15 +502,15 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
 
             {/* Change History (this session) */}
             <div className="mt-4 border-t border-[color:var(--border)] pt-3">
-              <h4 className="text-sm font-medium text-[color:var(--text)] mb-2">Recent Changes (this session)</h4>
+              <h4 className="text-sm font-medium text-[color:var(--text)] mb-2">{translationMounted ? t('recentChanges') : "Recent Changes (this session)"}</h4>
               {changeHistory.length === 0 ? (
-                <div className="text-xs text-[color:var(--text-muted)]">No changes yet</div>
+                <div className="text-xs text-[color:var(--text-muted)]">{translationMounted ? t('noChangesYet') : "No changes yet"}</div>
               ) : (
                 <div className="max-h-48 overflow-y-auto space-y-2">
                   {changeHistory.map(item => (
                     <div key={item.id} className="text-xs text-[color:var(--text-muted)]">
                       <span className="font-medium text-[color:var(--text)]">{item.field}</span>
-                      : updated at {new Date(item.timestamp).toLocaleTimeString()}
+                      : {translationMounted ? t('updatedAt') : "updated at"} {new Date(item.timestamp).toLocaleTimeString()}
                     </div>
                   ))}
                 </div>
@@ -511,9 +519,9 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
 
             {/* Edit History (server) */}
             <div className="mt-4 border-t border-[color:var(--border)] pt-3">
-              <h4 className="text-sm font-medium text-[color:var(--text)] mb-2">Edit History</h4>
+              <h4 className="text-sm font-medium text-[color:var(--text)] mb-2">{translationMounted ? t('editHistory') : "Edit History"}</h4>
               {(!editHistory || editHistory.length === 0) ? (
-                <div className="text-xs text-[color:var(--text-muted)]">No edit history</div>
+                <div className="text-xs text-[color:var(--text-muted)]">{translationMounted ? t('noEditHistory') : "No edit history"}</div>
               ) : (
                 <div className="max-h-60 overflow-y-auto space-y-3">
                   {editHistory.map((entry) => (
@@ -523,7 +531,7 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
                         <span className="text-[color:var(--text-muted)]">{new Date(entry.timestamp).toLocaleString()}</span>
                       </div>
                       {entry.field && (
-                        <div className="text-[color:var(--text-muted)]">Field: {entry.field}</div>
+                        <div className="text-[color:var(--text-muted)]">{translationMounted ? t('field') : "Field"}: {entry.field}</div>
                       )}
                       {entry.description && (
                         <div className="text-[color:var(--text)]">{entry.description}</div>
