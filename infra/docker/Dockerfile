@@ -8,20 +8,21 @@ RUN npm install -g pnpm && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files and workspace manifest
+# Copy package files and workspace manifest (include workspace package manifests)
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
+COPY packages/*/package*.json ./packages/
 
-# Install all dependencies (including dev dependencies for building)
-RUN pnpm install --no-frozen-lockfile
+# Install all dependencies (workspace-wide, include dev deps for building)
+RUN pnpm -r install --no-frozen-lockfile
 
 # Copy source code
 COPY . .
 
-# Build the backend application
-RUN pnpm run build:backend
+# Build shared first, then backend
+RUN pnpm run build:shared && pnpm run build:backend
 
 # Production stage
 FROM node:20-alpine AS production
@@ -42,6 +43,7 @@ COPY package*.json ./
 COPY pnpm-lock.yaml ./
 COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
+COPY packages/*/package*.json ./packages/
 
 # Install all dependencies (including dev dependencies for now)
 RUN pnpm install --no-frozen-lockfile

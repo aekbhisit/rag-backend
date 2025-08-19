@@ -20,7 +20,7 @@
     "build:backend": "pnpm --filter @rag/backend run build",
     "start:admin": "pnpm --filter @rag/admin-web run start",
     "start:backend": "node apps/backend/dist/index.js",
-    "build:shared": "npm --workspace @rag/shared run build",
+    "build:shared": "pnpm --filter @rag/shared run build",
     "clean": "rimraf **/dist",
     "infra:up": "docker compose -f infra/docker/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker/docker-compose.yml down -v"

@@ -1,0 +1,25 @@
+# Exclude local dependencies and builds
+node_modules
+**/node_modules
+**/dist
+
+# VCS
+.git
+.gitignore
+
+# Docker local data
+infra/docker/data
+infra/docker/data/**
+
+# Logs and temp
+**/*.log
+infra/docker/nginx/logs
+**/.DS_Store
+
+# Env files
+.env
+**/.env
+
+# Editor settings
+.vscode
+.idea

@@ -41,7 +41,7 @@ async function main() {
     `);
     
     console.log("Sample users with timezones:");
-    users.forEach(user => {
+    users.forEach((user: { email: string; timezone: string; created_at: string }) => {
       console.log(`- ${user.email}: ${user.timezone} (created: ${user.created_at})`);
     });
     
