@@ -266,7 +266,7 @@ export function buildContextsRouter(pool?: Pool) {
             instruction: created.instruction,
             body: created.body,
             keywords,
-            status: (req.body as any)?.status || created.status,
+            // status: (req.body as any)?.status || created.status, // Status not supported in Context type
             embedding: usedEmbedding,
             trust_level: created.trust_level,
             language: created.language,
@@ -349,7 +349,7 @@ export function buildContextsRouter(pool?: Pool) {
             instruction: mockStore[idx].instruction,
             body: mockStore[idx].body,
             keywords,
-            status: (req.body as any)?.status || mockStore[idx].status,
+            // status: (req.body as any)?.status || mockStore[idx].status, // Status not supported in Context type
             embedding: emb.vector,
             trust_level: mockStore[idx].trust_level,
             language: mockStore[idx].language,

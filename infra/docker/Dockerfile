@@ -1,32 +1,34 @@
-# Multi-stage build for production
-FROM node:18-alpine AS base
+# Multi-stage build for RAG Assistant
+FROM node:20-alpine AS base
 
-# Install dependencies for native modules
-RUN apk add --no-cache python3 make g++
+# Install pnpm and build dependencies
+RUN npm install -g pnpm && \
+    apk add --no-cache python3 make g++
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files from root
+# Copy package files and workspace manifest
 COPY package*.json ./
+COPY pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
-COPY tsconfig*.json ./
-COPY nx.json ./
 
-# Install ALL dependencies (including dev dependencies for building)
-RUN npm ci && npm cache clean --force
+# Install all dependencies (including dev dependencies for building)
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the backend application
+RUN pnpm run build:backend
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
-# Install runtime dependencies
-RUN apk add --no-cache dumb-init
+# Install pnpm and dumb-init for proper signal handling
+RUN npm install -g pnpm && \
+    apk add --no-cache dumb-init
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -35,35 +37,33 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files for production install
+# Copy package files for production dependencies
 COPY package*.json ./
+COPY pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
 
-# Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (including dev dependencies for now)
+RUN pnpm install --frozen-lockfile
 
-# Copy built application from base stage
-COPY --from=base --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=base --chown=nodejs:nodejs /app/apps ./apps
-COPY --from=base --chown=nodejs:nodejs /app/package*.json ./
-COPY --from=base --chown=nodejs:nodejs /app/nx.json ./
+# Copy built application and all dependencies from base stage
+COPY --from=base /app/apps/backend/dist ./apps/backend/dist
+COPY --from=base /app/apps/backend/package*.json ./apps/backend/
+COPY --from=base /app/packages ./packages
+COPY --from=base /app/node_modules ./node_modules
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/uploads /app/temp && \
-    chown -R nodejs:nodejs /app/logs /app/uploads /app/temp
+# Change ownership to non-root user
+RUN chown -R nodejs:nodejs /app
 
 # Switch to non-root user
 USER nodejs
 
 # Expose port
-EXPOSE 3000
+EXPOSE 3001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
-
-# Use dumb-init to handle signals properly
-ENTRYPOINT ["dumb-init", "--"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start the application
-CMD ["npm", "run", "start:prod"]
+CMD ["dumb-init", "node", "apps/backend/dist/index.js"]

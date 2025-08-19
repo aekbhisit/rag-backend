@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      PORT: 3000
+      PORT: 3001
       # Database
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # Redis
@@ -22,8 +22,6 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET}
       # JWT
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "3000:3000"
     volumes:
       - ./data/logs:/app/logs
       - ./data/uploads:/app/uploads
@@ -38,7 +36,33 @@ services:
     networks:
       - rag-network
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Web (Next.js)
+  admin-web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.admin-web
+    container_name: rag-admin-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Frontend will call the backend via Nginx on the same domain
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://rag-backend:3001
+      NEXT_TELEMETRY_DISABLED: 1
+    depends_on:
+      rag-backend:
+        condition: service_started
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3

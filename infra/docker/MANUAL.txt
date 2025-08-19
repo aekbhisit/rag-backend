@@ -1,0 +1,193 @@
+RAG Assistant - Deployment & Operations Manual (Docker)
+=======================================================
+
+This manual explains how to run the application in production and manage daily operations.
+
+1) Requirements
+---------------
+- Docker Engine and Docker Compose installed
+- A domain and valid SSL certificates (replace self-signed later)
+- Ports open: 80 (HTTP), 443 (HTTPS)
+
+2) Folder Structure (this directory)
+------------------------------------
+infra/docker/
+- docker-compose.prod.yml  -> Production services
+- Dockerfile               -> Backend build
+- Dockerfile.admin-web     -> Admin Web build
+- deploy.sh                -> Helper script (start/stop/status/logs/backup)
+- env.example              -> Template env vars (copy to .env)
+- nginx/                   -> Nginx config
+- scripts/                 -> Backup scripts
+- data/                    -> Persistent data (auto-created)
+  - postgres/  redis/  minio/  logs/  uploads/  temp/  backups/  ssl/
+
+3) One-time Setup
+-----------------
+cd infra/docker
+cp env.example .env
+# Edit .env and set strong secrets: POSTGRES_PASSWORD, MINIO keys, JWT_SECRET, etc.
+chmod +x deploy.sh
+./deploy.sh setup
+# This creates data folders and self-signed SSL (replace with real certs for prod)
+
+4) Start / Stop / Status / Logs
+-------------------------------
+# Start all services
+./deploy.sh start
+
+# Stop all services
+./deploy.sh stop
+
+# Status of services
+./deploy.sh status
+
+# Tail logs (all or one service)
+./deploy.sh logs
+./deploy.sh logs nginx
+./deploy.sh logs rag-backend
+./deploy.sh logs admin-web
+./deploy.sh logs postgres
+
+5) Access URLs (through Nginx)
+------------------------------
+- Admin Web UI: https://your-domain/
+- API Base:     https://your-domain/api
+- RAG Endpoints: https://your-domain/rag
+- MinIO console (optional exposure via Nginx is disabled by default)
+
+6) Environment Variables (quick reference)
+------------------------------------------
+Edit .env to set:
+- POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+- REDIS_PASSWORD
+- MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_BUCKET, MINIO_BROWSER_REDIRECT_URL
+- JWT_SECRET
+- NODE_ENV=production
+- Backend PORT is fixed to 3001 internally; Admin Web runs at 3000 internally
+- Admin Web (already set via compose): NEXT_PUBLIC_API_URL=/api
+
+7) Backups
+----------
+Automated (cron inside backup service): Daily at 02:00 creates DB backups into data/backups
+Manual backup:
+./deploy.sh backup
+
+Manual scripts (advanced):
+- scripts/backup/backup.sh (used by cron)
+- scripts/manual-backup.sh (db / volumes / full / restore)
+
+8) Restore (outline)
+--------------------
+1. Stop the stack: ./deploy.sh stop
+2. Place backup file(s) into data/backups
+3. Run restore helper: ./scripts/manual-backup.sh restore
+4. Start the stack: ./deploy.sh start
+
+9) SSL Certificates
+-------------------
+- Self-signed certs are generated at data/ssl/cert.pem and data/ssl/key.pem
+- Replace with your real certificates for production (same paths)
+- Nginx mounts data/ssl/ as /etc/nginx/ssl inside the container
+
+10) Data Locations
+------------------
+- PostgreSQL: infra/docker/data/postgres
+- Redis:      infra/docker/data/redis
+- MinIO:      infra/docker/data/minio
+- Backups:    infra/docker/data/backups
+- SSL:        infra/docker/data/ssl
+- Logs:       infra/docker/data/logs (Nginx logs inside logs/nginx)
+- App uploads/temp: infra/docker/data/uploads, infra/docker/data/temp
+
+11) Updating
+------------
+# Pull, rebuild, and restart
+./deploy.sh update
+
+12) Troubleshooting
+-------------------
+- Ports in use: ensure 80/443 are free on the host
+- SSL errors: verify data/ssl/cert.pem and key.pem exist and match
+- Backend unhealthy/restarting:
+  - ./deploy.sh logs rag-backend
+  - Verify DB connectivity and env vars in .env
+- Admin Web restarting:
+  - ./deploy.sh logs admin-web
+  - Ensure images were built successfully: ./deploy.sh update
+- Nginx 502/504:
+  - ./deploy.sh logs nginx
+  - Check backend health: curl -f http://rag-backend:3001/health from within container (docker exec)
+
+13) Security Notes
+------------------
+- Use strong passwords and secrets
+- Rotate credentials periodically
+- Restrict server firewall to necessary ports only
+- Consider replacing Nginx with a hardened ingress or managed LB if needed
+
+=======================================================
+(TH) คู่มือการใช้งานและดูแลระบบ (Docker)
+=======================================================
+
+1) ความต้องการ
+---------------
+- ติดตั้ง Docker และ Docker Compose
+- มีโดเมนและใบรับรอง SSL จริง (ควรแทนที่ self-signed)
+- เปิดพอร์ต 80 และ 443
+
+2) โครงสร้างโฟลเดอร์
+----------------------
+ดูในโฟลเดอร์ infra/docker (รายละเอียดตามด้านบน)
+
+3) ตั้งค่าครั้งแรก
+-------------------
+cd infra/docker
+cp env.example .env
+แก้ไข .env ให้ใส่รหัสลับที่ปลอดภัย
+chmod +x deploy.sh
+./deploy.sh setup
+
+4) เริ่ม/หยุด/สถานะ/ล็อก
+------------------------
+./deploy.sh start
+./deploy.sh stop
+./deploy.sh status
+./deploy.sh logs
+
+5) การเข้าถึงระบบ
+------------------
+- UI ผู้ดูแล: https://your-domain/
+- API:        https://your-domain/api
+
+6) ตัวแปรสภาพแวดล้อม (สรุป)
+-----------------------------
+ตั้งค่าใน .env (ฐานข้อมูล Redis MinIO JWT ฯลฯ)
+NODE_ENV=production
+
+7) แบ็กอัพ
+----------
+- ระบบจะทำแบ็กอัพฐานข้อมูลอัตโนมัติทุกวันเวลา 02:00 น.
+- สำรองข้อมูลด้วยตนเอง: ./deploy.sh backup
+
+8) การกู้คืน
+-----------
+- หยุดระบบ -> วางไฟล์แบ็กอัพ -> ./scripts/manual-backup.sh restore -> เริ่มระบบ
+
+9) SSL
+------
+- แทนที่ไฟล์ที่ data/ssl/cert.pem และ data/ssl/key.pem ด้วยใบจริงในโปรดักชัน
+
+10) ตำแหน่งข้อมูลถาวร
+-----------------------
+- ดูตามหัวข้อ Data Locations ด้านบน
+
+11) อัปเดตระบบ
+--------------
+./deploy.sh update
+
+12) การแก้ปัญหาเบื้องต้น
+-------------------------
+- ตรวจพอร์ต/ใบรับรอง/ตัวแปรแวดล้อม และดูล็อกของแต่ละบริการด้วย ./deploy.sh logs <service>
+
+หมายเหตุ: โปรดอ่าน README.md สำหรับรายละเอียดเชิงลึกเพิ่มเติม
