@@ -36,7 +36,11 @@ export function buildIntentsRouter(pool: Pool) {
     try {
       const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
       const input = CreateIntentSchema.parse(req.body);
-      const created = await repo.create(tenantId, input);
+      const created = await repo.create(tenantId, {
+        scope: input.scope,
+        action: input.action,
+        description: input.description
+      });
       res.status(201).json(created);
     } catch (e) { next(e); }
   });

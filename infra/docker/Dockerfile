@@ -16,10 +16,13 @@ COPY apps/*/package*.json ./apps/
 COPY packages/*/package*.json ./packages/
 
 # Install all dependencies (workspace-wide, include dev deps for building)
-RUN pnpm -r install --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source code
 COPY . .
+
+# Ensure workspace dependencies are properly linked
+RUN cd packages/shared && pnpm install --no-frozen-lockfile
 
 # Build shared first, then backend
 RUN pnpm run build:shared && pnpm run build:backend

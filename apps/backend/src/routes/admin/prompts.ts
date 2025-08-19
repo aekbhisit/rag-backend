@@ -31,7 +31,14 @@ export function buildPromptsRouter(pool: Pool) {
     try {
       const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
       const input = CreateSchema.parse(req.body || {});
-      const created = await repo.create(tenantId, { id: randomUUID(), ...input });
+      const created = await repo.create(tenantId, {
+        id: randomUUID(),
+        key: input.key,
+        name: input.name,
+        template: input.template,
+        description: input.description,
+        is_default: input.is_default
+      });
       if (input.is_default) {
         await repo.setDefault(tenantId, created.id);
       }
