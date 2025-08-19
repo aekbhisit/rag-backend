@@ -8,17 +8,21 @@ RUN npm install -g pnpm && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files and workspace manifest
+# Copy package files and workspace manifest (include packages for @rag/shared)
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
+COPY packages/*/package*.json ./packages/
 
 # Install all dependencies
 RUN pnpm install --no-frozen-lockfile
 
 # Copy source code
 COPY . .
+
+# Build the admin-web application with explicit node_modules setup
+RUN cd apps/admin-web && pnpm install --no-frozen-lockfile && pnpm run build
 
 # Production stage
 FROM node:20-alpine AS production
