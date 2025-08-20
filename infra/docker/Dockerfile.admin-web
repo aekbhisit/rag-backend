@@ -17,8 +17,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 COPY pnpm-workspace.yaml ./
-COPY apps/*/package*.json ./apps/
-COPY packages/*/package*.json ./packages/
+# Copy package.json files preserving directory structure
+COPY apps/admin-web/package*.json ./apps/admin-web/
+COPY packages/shared/package*.json ./packages/shared/
 
 # Install all dependencies (including dev dependencies for building)
 RUN pnpm install --no-frozen-lockfile

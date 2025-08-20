@@ -17,8 +17,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 COPY pnpm-workspace.yaml ./
-COPY apps/*/package*.json ./apps/
-COPY packages/*/package*.json ./packages/
+# Copy package.json files preserving directory structure
+COPY apps/backend/package*.json ./apps/backend/
+COPY packages/shared/package*.json ./packages/shared/
 
 # Install all dependencies (including dev dependencies for building)
 RUN pnpm install --no-frozen-lockfile
@@ -34,7 +35,8 @@ COPY tsconfig.base.json ./
 RUN pnpm run build:shared && pnpm run build:backend
 
 # Clean up: remove source files and dev dependencies, keep only built artifacts and prod deps
-RUN rm -rf apps/backend/src packages/shared/src *.tsbuildinfo apps/*/tsconfig.json packages/*/tsconfig.json tsconfig.base.json && \
+RUN rm -rf apps/backend/src packages/shared/src *.tsbuildinfo && \
+    rm -rf apps/*/tsconfig.json packages/*/tsconfig.json tsconfig.base.json && \
     pnpm prune --prod
 
 # Change ownership to non-root user
