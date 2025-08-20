@@ -230,7 +230,16 @@ setup_database() {
         sleep 20
     }
     
-    # Run database initialization scripts
+    # Run schema SQL if present
+    if [ -f "./postgres/initdb/100_app_schema.sql" ]; then
+        log "Applying schema from 100_app_schema.sql..."
+        docker-compose -f "$COMPOSE_FILE" exec -T postgres \
+          sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/100_app_schema.sql' || warn "Schema apply failed"
+    else
+        warn "./postgres/initdb/100_app_schema.sql not found, skipping schema import"
+    fi
+
+    # Run database initialization scripts (TypeScript compiled JS)
     log "Running database initialization scripts..."
     
     # Initialize database tables
@@ -251,11 +260,14 @@ setup_database() {
         warn "Admin user creation failed, will retry after container restart"
     }
     
-    # Insert AI pricing data
-    log "Inserting AI pricing data..."
-    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend node apps/backend/dist/scripts/seedAiPricing.js || {
-        warn "AI pricing insertion failed, will retry after container restart"
-    }
+    # Seed core data from SQL if present
+    if [ -f "./postgres/initdb/110_seed_core_data.sql" ]; then
+        log "Seeding core data (tenants, users, ai_pricing) from 110_seed_core_data.sql..."
+        docker-compose -f "$COMPOSE_FILE" exec -T postgres \
+          sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/110_seed_core_data.sql' || warn "Core seed failed"
+    else
+        warn "./postgres/initdb/110_seed_core_data.sql not found, skipping data seed"
+    fi
     
     log "Database setup completed"
 }
