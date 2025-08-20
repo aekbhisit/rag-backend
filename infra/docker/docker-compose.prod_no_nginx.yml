@@ -84,7 +84,9 @@ services:
 
   # PostgreSQL Database
   postgres:
-    build: ./postgres
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile.postgis
     container_name: rag-postgres
     restart: unless-stopped
     environment:
