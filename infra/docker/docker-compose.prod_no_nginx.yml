@@ -96,6 +96,8 @@ services:
       - ./data/postgres:/var/lib/postgresql/data
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
       - ./data/backups:/backups
+    ports:
+      - "5432:5432"  # Expose PostgreSQL to external connections
     networks:
       - rag-network
     healthcheck:
@@ -112,6 +114,8 @@ services:
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - ./data/redis:/data
+    ports:
+      - "6379:6379"  # Expose Redis to external connections
     networks:
       - rag-network
     healthcheck:
@@ -133,8 +137,8 @@ services:
     volumes:
       - ./data/minio:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console (Web UI)
     networks:
       - rag-network
     healthcheck:
