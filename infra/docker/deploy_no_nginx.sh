@@ -235,25 +235,25 @@ setup_database() {
     
     # Initialize database tables
     log "Creating database tables..."
-    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run setup:db || {
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend node apps/backend/dist/scripts/setupDatabase.js || {
         warn "Database initialization failed, will retry after container restart"
     }
     
     # Ensure tenant exists
     log "Creating default tenant..."
-    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run ensure:tenant || {
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend node apps/backend/dist/scripts/ensureTenant.js || {
         warn "Tenant creation failed, will retry after container restart"
     }
     
     # Ensure admin user exists
     log "Creating default admin user..."
-    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run ensure:admin-user || {
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend node apps/backend/dist/scripts/ensureAdminUser.js || {
         warn "Admin user creation failed, will retry after container restart"
     }
     
     # Insert AI pricing data
     log "Inserting AI pricing data..."
-    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run seed:ai-pricing || {
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend node apps/backend/dist/scripts/seedAiPricing.js || {
         warn "AI pricing insertion failed, will retry after container restart"
     }
     
