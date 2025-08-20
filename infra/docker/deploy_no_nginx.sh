@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-COMPOSE_FILE="docker-compose.prod.yml"
+COMPOSE_FILE="docker-compose.prod_no_nginx.yml"
 ENV_FILE=".env"
 DATA_DIR="./data"
 BACKUP_DIR="./data/backups"
