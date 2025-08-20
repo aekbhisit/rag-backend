@@ -235,7 +235,7 @@ setup_database() {
     
     # Initialize database tables
     log "Creating database tables..."
-    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run init:db || {
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run setup:db || {
         warn "Database initialization failed, will retry after container restart"
     }
     

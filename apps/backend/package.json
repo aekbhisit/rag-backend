@@ -21,7 +21,9 @@
     "ensure:user-columns": "tsx src/scripts/ensureUserColumns.ts",
     "ensure:admin-user": "TENANT_ID=acc44cdb-8da5-4226-9569-1233a39f564f ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=password tsx src/scripts/ensureAdminUser.ts",
     "ensure:tenant": "TENANT_ID=acc44cdb-8da5-4226-9569-1233a39f564f TENANT_NAME='Default Tenant' tsx src/scripts/ensureTenant.ts",
-    "init:db": "tsx src/scripts/initDatabase.ts"
+    "init:db": "tsx src/scripts/initDatabase.ts",
+    "setup:db": "tsx src/scripts/setupDatabase.ts",
+    "test:db": "tsx src/scripts/testDatabase.ts"
   },
   "dependencies": {
     "@rag/shared": "workspace:*",
@@ -32,7 +34,7 @@
     "helmet": "^7.1.0",
     "langfuse": "^3.38.4",
     "mammoth": "^1.10.0",
-    "minio": "^8.0.1",
+    "minio": "^1.0.0",
     "morgan": "^1.10.0",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^4.10.38",
