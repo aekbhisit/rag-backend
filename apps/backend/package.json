@@ -20,7 +20,8 @@
     "reindex:contexts": "tsx src/scripts/recreateContextIndex.ts",
     "ensure:user-columns": "tsx src/scripts/ensureUserColumns.ts",
     "ensure:admin-user": "TENANT_ID=acc44cdb-8da5-4226-9569-1233a39f564f ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=password tsx src/scripts/ensureAdminUser.ts",
-    "ensure:tenant": "TENANT_ID=acc44cdb-8da5-4226-9569-1233a39f564f TENANT_NAME='Default Tenant' tsx src/scripts/ensureTenant.ts"
+    "ensure:tenant": "TENANT_ID=acc44cdb-8da5-4226-9569-1233a39f564f TENANT_NAME='Default Tenant' tsx src/scripts/ensureTenant.ts",
+    "init:db": "tsx src/scripts/initDatabase.ts"
   },
   "dependencies": {
     "@rag/shared": "workspace:*",

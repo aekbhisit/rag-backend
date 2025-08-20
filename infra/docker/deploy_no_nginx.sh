@@ -51,6 +51,7 @@ show_usage() {
     echo "  restore     - Restore from backup"
     echo "  clean       - Clean up old data and logs"
     echo "  setup       - Initial setup and configuration"
+    echo "  db-setup    - Setup database and insert default data"
     echo ""
     echo "Examples:"
     echo "  $0 start        - Start the stack"
@@ -107,6 +108,9 @@ start_stack() {
     # Wait for services to be healthy
     log "Waiting for services to be healthy..."
     sleep 30
+    
+    # Setup database and insert default data
+    setup_database
     
     # Check service status
     docker-compose -f "$COMPOSE_FILE" ps
@@ -211,6 +215,51 @@ initial_setup() {
     log "Then run: $0 start"
 }
 
+# Setup database and insert default data
+setup_database() {
+    log "Setting up database and inserting default data..."
+    
+    # Wait for PostgreSQL to be ready
+    log "Waiting for PostgreSQL to be ready..."
+    sleep 10
+    
+    # Check if database exists and create if needed
+    log "Checking database connection..."
+    docker-compose -f "$COMPOSE_FILE" exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" >/dev/null 2>&1 || {
+        log "Database connection failed, waiting longer..."
+        sleep 20
+    }
+    
+    # Run database initialization scripts
+    log "Running database initialization scripts..."
+    
+    # Initialize database tables
+    log "Creating database tables..."
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run init:db || {
+        warn "Database initialization failed, will retry after container restart"
+    }
+    
+    # Ensure tenant exists
+    log "Creating default tenant..."
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run ensure:tenant || {
+        warn "Tenant creation failed, will retry after container restart"
+    }
+    
+    # Ensure admin user exists
+    log "Creating default admin user..."
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run ensure:admin-user || {
+        warn "Admin user creation failed, will retry after container restart"
+    }
+    
+    # Insert AI pricing data
+    log "Inserting AI pricing data..."
+    docker-compose -f "$COMPOSE_FILE" exec -T rag-backend npm run seed:ai-pricing || {
+        warn "AI pricing insertion failed, will retry after container restart"
+    }
+    
+    log "Database setup completed"
+}
+
 # Main execution
 main() {
     case "${1:-help}" in
@@ -254,6 +303,11 @@ main() {
             ;;
         "setup")
             initial_setup
+            ;;
+        "db-setup")
+            check_directory
+            check_env
+            setup_database
             ;;
         "help"|"-h"|"--help")
             show_usage
