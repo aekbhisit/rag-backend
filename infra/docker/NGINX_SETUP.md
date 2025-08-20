@@ -34,15 +34,30 @@ sudo certbot --nginx -d YOUR_DOMAIN.com -d www.YOUR_DOMAIN.com
 
 ### **3. Copy and Configure Site**
 
+**Option A: Simple Configuration (No Rate Limiting)**
 ```bash
-# Copy the site configuration
-sudo cp /path/to/rag-backend/infra/docker/nginx/sites-available/rag-assistant /etc/nginx/sites-available/
+# Copy the simple site configuration
+sudo cp /path/to/rag-backend/infra/docker/nginx/sites-available/rag-assistant-simple.conf /etc/nginx/sites-available/rag-assistant
 
-# Edit the configuration with your domain
-sudo nano /etc/nginx/sites-available/rag-assistant
+# Enable the site
+sudo ln -s /etc/nginx/sites-available/rag-assistant /etc/nginx/sites-enabled/
 
-# Replace all instances of "YOUR_DOMAIN.com" with your actual domain
-sudo sed -i 's/YOUR_DOMAIN.com/yourdomain.com/g' /etc/nginx/sites-available/rag-assistant
+# Remove default site (optional)
+sudo rm /etc/nginx/sites-enabled/default
+```
+
+**Option B: With Rate Limiting (Recommended for Production)**
+```bash
+# First, add rate limiting zones to main nginx.conf
+sudo nano /etc/nginx/nginx.conf
+
+# Add these lines inside the 'http' block:
+# limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+# limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/m;
+# limit_req_zone $binary_remote_addr zone=upload:10m rate=2r/s;
+
+# Then copy the configuration with rate limiting
+sudo cp /path/to/rag-backend/infra/docker/nginx/sites-available/rag-assistant-with-rate-limiting.conf /etc/nginx/sites-available/rag-assistant
 
 # Enable the site
 sudo ln -s /etc/nginx/sites-available/rag-assistant /etc/nginx/sites-enabled/
