@@ -67,3 +67,10 @@ ssl-data/
 logs-data/
 temp-data/
 uploads-data/
+
+# Database backups and dumps (contain sensitive data)
+infra/db/backups/
+**/backups/
+*.sql
+*.dump
+*.backup
