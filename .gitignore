@@ -48,6 +48,6 @@ out/
 tmp/
 temp/
 
-*.sql
+# *.sql
 
 infra/docker/data/*
