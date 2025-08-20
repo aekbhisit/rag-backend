@@ -65,9 +65,9 @@ services:
       NODE_ENV: production
       PORT: 3000
       # Frontend will call the backend via your external Nginx on the same domain
-      NEXT_PUBLIC_API_URL: /api
-      NEXT_PUBLIC_BACKEND_URL: http://rag-backend:3001
-      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+      NEXT_TELEMETRY_DISABLED: ${NEXT_TELEMETRY_DISABLED}
     ports:
       - "3000:3000"
     depends_on:
