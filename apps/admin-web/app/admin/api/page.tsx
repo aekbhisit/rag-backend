@@ -502,7 +502,7 @@ function openapiToPostman(openapi: any) {
     },
     item: items,
     variable: [
-      { key: 'BASE_URL', value: window?.location?.origin || 'http://localhost:3001' },
+      { key: 'BASE_URL', value: window?.location?.origin || '' },
       { key: 'X_TENANT_ID', value: (typeof window !== 'undefined' ? (localStorage.getItem('tenantId') || DEFAULT_TENANT_ID) : DEFAULT_TENANT_ID) }
     ]
   };

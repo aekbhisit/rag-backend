@@ -1,4 +1,4 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 export const DEFAULT_TENANT_ID = process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'acc44cdb-8da5-4226-9569-1233a39f564f';
 
 export function getTenantId(): string {
