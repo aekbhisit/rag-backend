@@ -1,25 +1,109 @@
-# Exclude local dependencies and builds
-node_modules
-**/node_modules
-**/dist
+# Dependencies
+node_modules/
+**/node_modules/
+.pnpm-store/
 
-# VCS
-.git
+# Build outputs
+dist/
+build/
+.next/
+**/.next/
+.nuxt/
+**/.nuxt/
+out/
+**/out/
+
+# Environment files
+.env
+.env.*
+!.env.example
+apps/**/.env
+apps/**/.env.*
+!apps/**/.env.example
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
 .gitignore
 
-# Docker local data
-infra/docker/data
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+infra/docker/data/
 infra/docker/data/**
 
-# Logs and temp
-**/*.log
-infra/docker/nginx/logs
-**/.DS_Store
+# Logs
+logs/
+*.log
+**/logs/
 
-# Env files
-.env
-**/.env
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
 
-# Editor settings
-.vscode
-.idea
+# Coverage directory
+coverage/
+*.lcov
+.nyc_output/
+
+# Cache directories
+.cache/
+.turbo/
+.parcel-cache/
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Temporary folders
+tmp/
+temp/
+**/tmp/
+**/temp/
+
+# Local development
+.local/
+
+# Database dumps and backups
+*.sql
+*.dump
+*.backup
+
+# SSL certificates (if any)
+*.pem
+*.key
+*.crt
+*.csr
+
+# Uploads and user content
+uploads/
+**/uploads/
+uploads-data/
+**/uploads-data/
+
+# Persistent Docker data
+postgres-data/
+redis-data/
+minio-data/
+backup-data/
+ssl-data/
+logs-data/
+temp-data/

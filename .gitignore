@@ -50,4 +50,20 @@ temp/
 
 # *.sql
 
-infra/docker/data/*
+# Docker data and persistent storage
+infra/docker/data/
+infra/docker/data/**
+docker/data/
+docker/data/**
+data/
+data/**
+
+# Docker volumes and persistent data
+postgres-data/
+redis-data/
+minio-data/
+backup-data/
+ssl-data/
+logs-data/
+temp-data/
+uploads-data/
