@@ -2,19 +2,32 @@
 -- Seed data for core tables: tenants, users, ai_pricing
 -- This file contains sample data that will be inserted during database setup
 
--- -- Insert default admin user
--- INSERT INTO users (id, tenant_id, email, role, name, status, timezone, password_hash, created_at)
--- VALUES (
---   '11111111-1111-1111-1111-111111111111',
---   'acc44cdb-8da5-4226-9569-1233a39f564f',
---   'admin@example.com',
---   'admin',
---   'Admin',
---   'active',
---   'UTC',
---   '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- password: 'password'
---   now()
--- ) ON CONFLICT (tenant_id, email) DO NOTHING;
+-- Insert default tenant (using environment variable or default)
+INSERT INTO tenants (id, name, code, slug, contact_email, is_active, settings, created_at)
+VALUES (
+  'acc44cdb-8da5-4226-9569-1233a39f564f',
+  'Default Tenant',
+  'DEFAULT',
+  'default',
+  'admin@example.com',
+  true,
+  '{}',
+  now()
+);
+
+-- Insert default admin user
+INSERT INTO users (id, tenant_id, email, role, name, status, timezone, password_hash, created_at)
+VALUES (
+  '11111111-1111-1111-1111-111111111111',
+  'acc44cdb-8da5-4226-9569-1233a39f564f',
+  'admin@example.com',
+  'admin',
+  'Admin',
+  'active',
+  'UTC',
+  '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- password: 'password'
+  now()
+);
 
 -- Insert AI pricing data for OpenAI models
 INSERT INTO ai_pricing (id, tenant_id, provider, model, input_per_1k, cached_input_per_1k, output_per_1k, embedding_per_1k, currency, version, is_active, created_at)
@@ -40,21 +53,18 @@ VALUES
   (gen_random_uuid(), 'acc44cdb-8da5-4226-9569-1233a39f564f', 'openai', 'gpt-4o-mini-realtime-preview', 0.0006, 0.0003, 0.0024, null, 'USD', '2025-08-16', true, now()),
   
   -- Embedding model
-  (gen_random_uuid(), 'acc44cdb-8da5-4226-9569-1233a39f564f', 'openai', 'text-embedding-3-small', null, null, null, 0.00002, 'USD', '2025-08-16', true, now())
-ON CONFLICT (tenant_id, provider, model) DO NOTHING;
+  (gen_random_uuid(), 'acc44cdb-8da5-4226-9569-1233a39f564f', 'openai', 'text-embedding-3-small', null, null, null, 0.00002, 'USD', '2025-08-16', true, now());
 
 -- Insert some basic categories
 INSERT INTO categories (id, tenant_id, name, description, created_at)
 VALUES 
   (gen_random_uuid(), 'acc44cdb-8da5-4226-9569-1233a39f564f', 'General', 'General information and documents', now()),
   (gen_random_uuid(), 'acc44cdb-8da5-4226-9569-1233a39f564f', 'Technical', 'Technical documentation and guides', now()),
-  (gen_random_uuid(), 'acc44cdb-8da5-4226-9569-1233a39f564f', 'Support', 'Customer support and FAQ content', now())
-ON CONFLICT DO NOTHING;
+  (gen_random_uuid(), 'acc44cdb-8da5-4226-9569-1233a39f564f', 'Support', 'Customer support and FAQ content', now());
 
 -- Insert some basic prompts
 INSERT INTO prompts (id, key, name, template, description, is_default, created_at)
 VALUES 
   (gen_random_uuid(), 'general_qa', 'General Q&A', 'You are a helpful assistant. Answer the following question based on the provided context: {{question}}', 'Default prompt for general questions', true, now()),
   (gen_random_uuid(), 'technical_support', 'Technical Support', 'You are a technical support specialist. Help the user with their technical issue: {{issue}}', 'Prompt for technical support questions', false, now()),
-  (gen_random_uuid(), 'summarize', 'Document Summary', 'Please provide a concise summary of the following document: {{document}}', 'Prompt for document summarization', false, now())
-ON CONFLICT (key) DO NOTHING;
+  (gen_random_uuid(), 'summarize', 'Document Summary', 'Please provide a concise summary of the following document: {{document}}', 'Prompt for document summarization', false, now());
