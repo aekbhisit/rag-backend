@@ -258,8 +258,7 @@ CREATE TABLE IF NOT EXISTS profile_targets (
   intent_action text,
   channel text NOT NULL DEFAULT '',
   user_segment text NOT NULL DEFAULT '',
-  priority integer DEFAULT 0,
-  PRIMARY KEY (profile_id, tenant_id, coalesce(intent_scope,''), coalesce(intent_action,''), channel, user_segment)
+  priority integer DEFAULT 0
 );
 
 -- Context Profile Overrides table
@@ -358,6 +357,8 @@ CREATE INDEX IF NOT EXISTS idx_query_logs_tenant ON query_logs(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_query_logs_created ON query_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_instruction_profiles_tenant ON instruction_profiles(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_profile_targets_tenant ON profile_targets(tenant_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_targets_unique ON profile_targets 
+  (profile_id, tenant_id, COALESCE(intent_scope, ''), COALESCE(intent_action, ''), channel, user_segment);
 CREATE INDEX IF NOT EXISTS idx_tenant_settings_tenant_key ON tenant_settings(tenant_id, key);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_token ON user_sessions(user_id, session_token);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_user ON audit_logs(tenant_id, user_id);
