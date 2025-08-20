@@ -65,5 +65,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Start the Next.js application using pnpm from workspace root
-CMD ["dumb-init", "sh", "-c", "pnpm --filter @rag/admin-web run start -- -p 3000"]
+# Start the Next.js application using pnpm from workspace root  
+CMD ["dumb-init", "sh", "-c", "cd /app && pnpm --filter @rag/admin-web run start"]

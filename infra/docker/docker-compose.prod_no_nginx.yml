@@ -161,8 +161,9 @@ services:
     command: >
       sh -c "
         apk add --no-cache postgresql-client bash &&
-        chmod +x /scripts/backup.sh &&
-        echo '0 2 * * * /scripts/backup.sh' | crontab - &&
+        cp /scripts/backup.sh /usr/local/bin/backup.sh &&
+        chmod +x /usr/local/bin/backup.sh &&
+        echo '0 2 * * * /usr/local/bin/backup.sh' | crontab - &&
         crond -f
       "
     depends_on:
