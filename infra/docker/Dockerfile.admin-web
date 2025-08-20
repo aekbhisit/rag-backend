@@ -1,35 +1,10 @@
-# Dockerfile for Admin Web UI
-FROM node:20-alpine AS base
+# Single-stage build for Admin Web UI
+FROM node:20-alpine
 
-# Install pnpm and build dependencies
-RUN npm install -g pnpm && \
-    apk add --no-cache python3 make g++
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files and workspace manifest (include packages for @rag/shared)
-COPY package*.json ./
-COPY pnpm-lock.yaml ./
-COPY pnpm-workspace.yaml ./
-COPY apps/*/package*.json ./apps/
-COPY packages/*/package*.json ./packages/
-
-# Install all dependencies
-RUN pnpm install --no-frozen-lockfile
-
-# Copy source code
-COPY . .
-
-# Build the admin-web application with explicit node_modules setup
-RUN cd apps/admin-web && pnpm install --no-frozen-lockfile && pnpm run build
-
-# Production stage
-FROM node:20-alpine AS production
-
-# Install pnpm and dumb-init for proper signal handling
-RUN npm install -g pnpm && \
-    apk add --no-cache dumb-init
+# Install pnpm and build dependencies (combine in one layer for efficiency)
+RUN npm install -g pnpm@10.14.0 && \
+    apk add --no-cache dumb-init python3 make g++ && \
+    apk cache clean
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -38,21 +13,43 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files for production dependencies
+# Copy package files and workspace manifest for dependency installation
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 COPY pnpm-workspace.yaml ./
 COPY apps/*/package*.json ./apps/
+COPY packages/*/package*.json ./packages/
 
-# Install all dependencies (including dev dependencies for now)
+# Install all dependencies (including dev dependencies for building)
 RUN pnpm install --no-frozen-lockfile
 
-# Copy pre-built admin web application and all dependencies from base stage
-COPY --from=base /app/apps/admin-web/.next ./apps/admin-web/.next
-COPY --from=base /app/apps/admin-web/public ./apps/admin-web/public
-COPY --from=base /app/apps/admin-web/package*.json ./apps/admin-web/
-COPY --from=base /app/packages ./packages
-COPY --from=base /app/node_modules ./node_modules
+# Copy only source code and config files needed for building
+COPY apps/admin-web/app ./apps/admin-web/app
+COPY apps/admin-web/components ./apps/admin-web/components
+COPY apps/admin-web/hooks ./apps/admin-web/hooks
+COPY apps/admin-web/lib ./apps/admin-web/lib
+COPY apps/admin-web/styles ./apps/admin-web/styles
+COPY apps/admin-web/utils ./apps/admin-web/utils
+COPY apps/admin-web/public ./apps/admin-web/public
+COPY apps/admin-web/next.config.mjs ./apps/admin-web/
+COPY apps/admin-web/tailwind.config.js ./apps/admin-web/
+COPY apps/admin-web/postcss.config.js ./apps/admin-web/
+COPY apps/admin-web/tsconfig.json ./apps/admin-web/
+COPY apps/admin-web/next-env.d.ts ./apps/admin-web/
+COPY packages/shared/src ./packages/shared/src
+COPY packages/shared/tsconfig.json ./packages/shared/
+COPY tsconfig.base.json ./
+
+# Build shared package first, then admin-web
+RUN pnpm run build:shared && pnpm run build:admin
+
+# Clean up: remove source files and dev dependencies, keep only built artifacts and prod deps
+RUN rm -rf apps/admin-web/app apps/admin-web/components apps/admin-web/hooks \
+           apps/admin-web/lib apps/admin-web/styles apps/admin-web/utils \
+           packages/shared/src *.tsbuildinfo apps/*/tsconfig.json \
+           packages/*/tsconfig.json tsconfig.base.json \
+           apps/admin-web/tailwind.config.js apps/admin-web/postcss.config.js && \
+    pnpm prune --prod
 
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app
@@ -68,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start the Next.js application using pnpm from workspace root
-CMD ["dumb-init", "sh", "-c", "cd /app && pnpm --filter @rag/admin-web run start -- -p 3000"]
+CMD ["dumb-init", "sh", "-c", "pnpm --filter @rag/admin-web run start -- -p 3000"]
