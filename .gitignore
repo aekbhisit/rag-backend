@@ -74,3 +74,6 @@ infra/db/backups/
 *.sql
 *.dump
 *.backup
+*.md
+test_table_structure.ts
+deploy-production.sh
