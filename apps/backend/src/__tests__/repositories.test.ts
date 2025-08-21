@@ -31,7 +31,7 @@ describe('Repositories', () => {
         tenant_id: 'test-tenant-id',
         endpoint: '/api/test',
         method: 'POST',
-        status: 500,
+        http_status: 500,
         message: 'Test error message',
         error_code: 'TEST_ERROR',
         stack: 'Error: Test error\n    at test.js:10:5',
@@ -41,7 +41,11 @@ describe('Repositories', () => {
         headers: { 'content-type': 'application/json' },
         query: { param: 'value' },
         body: { data: 'test' },
-        request_id: 'test-request-id'
+        request_id: 'test-request-id',
+        log_status: 'open' as const,
+        notes: null,
+        fixed_by: null,
+        fixed_at: null
       };
 
       const result = await errorLogsRepo.create(errorLog);

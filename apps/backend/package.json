@@ -35,7 +35,10 @@
     "init:db": "tsx src/scripts/initDatabase.ts",
     "setup:db": "tsx src/scripts/setupDatabase.ts",
     "test:db": "tsx src/scripts/testDatabase.ts",
-    "init:error-logs": "tsx src/scripts/createErrorLogsTable.ts"
+    "init:error-logs": "tsx src/scripts/createErrorLogsTable.ts",
+    "migrate:error-logs": "tsx src/scripts/migrateErrorLogsTable.ts",
+    "run-migration": "tsx src/scripts/runMigration.ts",
+    "test:db-connection": "tsx src/scripts/testDatabaseConnection.ts"
   },
   "dependencies": {
     "@rag/shared": "workspace:*",

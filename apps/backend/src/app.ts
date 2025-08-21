@@ -50,26 +50,49 @@ export async function createApp() {
     res.on('finish', async () => {
       try {
         if (res.statusCode >= 500) {
-          const { ErrorLogsRepository } = await import('./repositories/errorLogsRepository.js');
-          const repo = new ErrorLogsRepository(getPostgresPool());
-          await repo.create({
-            tenant_id: (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString(),
-            endpoint: req.originalUrl || req.url,
-            method: req.method,
-            status: res.statusCode,
-            message: `HTTP ${res.statusCode} without thrown error`,
-            error_code: 'HTTP_ERROR',
-            stack: null,
-            file: null,
-            line: null,
-            column: null,
-            headers: req.headers,
-            query: req.query,
-            body: req.body,
-            request_id: (req as any).request_id || null,
-          } as any);
+          console.error(`HTTP ${res.statusCode} error on ${req.method} ${req.originalUrl || req.url}`);
+          
+          // Try to log to database, but don't fail if database is unavailable
+          try {
+            const { ErrorLogsRepository } = await import('./repositories/errorLogsRepository.js');
+            const repo = new ErrorLogsRepository(getPostgresPool());
+            await repo.create({
+              tenant_id: (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString(),
+              endpoint: req.originalUrl || req.url,
+              method: req.method,
+              http_status: res.statusCode,
+              message: `HTTP ${res.statusCode} without thrown error`,
+              error_code: 'HTTP_ERROR',
+              stack: null,
+              file: null,
+              line: null,
+              column_no: null,
+              headers: req.headers,
+              query: req.query,
+              body: req.body,
+              request_id: (req as any).request_id || null,
+              log_status: 'open',
+              notes: null,
+              fixed_by: null,
+              fixed_at: null,
+            } as any);
+            console.log('Error logged to database successfully');
+          } catch (dbError) {
+            console.error('Failed to log error to database:', dbError);
+            // Fallback: log to console/file
+            console.error('Error details:', {
+              tenant_id: (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString(),
+              endpoint: req.originalUrl || req.url,
+              method: req.method,
+              status: res.statusCode,
+              request_id: (req as any).request_id || null,
+              timestamp: new Date().toISOString()
+            });
+          }
         }
-      } catch {}
+      } catch (error) {
+        console.error('Error in response finish handler:', error);
+      }
     });
     next();
   });
@@ -89,14 +112,34 @@ export async function createApp() {
   });
 
   app.get('/api/health', async (_req, res) => {
-    const results = await Promise.all([
-      db.health(),
-      cache.health(),
-      storage.health(),
-    ]);
-    const [dbH, cacheH, storageH] = results as any[];
-    const overall = [dbH, cacheH, storageH].every((h: any) => h.status === 'ok') ? 'ok' : 'degraded';
-    res.json({ status: overall, db: dbH, cache: cacheH, storage: storageH });
+    try {
+      const results = await Promise.all([
+        db.health(),
+        cache.health(),
+        storage.health(),
+      ]);
+      const [dbH, cacheH, storageH] = results as any[];
+      const overall = [dbH, cacheH, storageH].every((h: any) => h.status === 'ok') ? 'ok' : 'degraded';
+      res.json({ status: overall, db: dbH, cache: cacheH, storage: storageH });
+    } catch (error) {
+      console.error('Health check failed:', error);
+      res.status(500).json({ 
+        status: 'error', 
+        message: 'Health check failed',
+        error: String(error),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Simple ping endpoint that doesn't require database access
+  app.get('/api/ping', (_req, res) => {
+    res.json({ 
+      status: 'ok', 
+      message: 'pong',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
   });
 
   app.get('/health', async (_req, res) => {
@@ -220,7 +263,7 @@ export async function createApp() {
         tenant_id: (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString(),
         endpoint: req.originalUrl || req.url,
         method: req.method,
-        status,
+        http_status: status,
         message: String(err?.message || 'unexpected'),
         error_code: isZod ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
         stack,
@@ -230,9 +273,27 @@ export async function createApp() {
         headers: req.headers,
         query: req.query,
         body: req.body,
-        request_id: undefined as any,
+        request_id: (req as any).request_id || null,
+        log_status: 'open',
+        notes: null,
+        fixed_by: null,
+        fixed_at: null,
       } as any);
-    } catch {}
+      console.log('Error logged to database successfully');
+    } catch (dbError) {
+      console.error('Failed to log error to database:', dbError);
+      // Fallback: log to console with full error details
+      console.error('Full error details (fallback logging):', {
+        error: err,
+        stack: err?.stack,
+        tenant_id: (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString(),
+        endpoint: req.originalUrl || req.url,
+        method: req.method,
+        status,
+        request_id: (req as any).request_id || null,
+        timestamp: new Date().toISOString()
+      });
+    }
     const error: ErrorResponse = {
       error_code: isZod ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
       message: isZod ? 'Invalid request' : 'Unexpected error',
