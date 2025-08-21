@@ -181,6 +181,23 @@ export class UsersRepository {
       client.release();
     }
   }
+
+  async getByEmail(tenantId: string, email: string): Promise<RagUserRow | null> {
+    await this.ensureTable();
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [tenantId]);
+      const { rows } = await client.query(`SELECT * FROM users WHERE tenant_id=$1 AND email=$2`, [tenantId, email]);
+      await client.query('COMMIT');
+      return (rows[0] as RagUserRow) || null;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 

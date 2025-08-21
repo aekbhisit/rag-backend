@@ -36,6 +36,44 @@ export async function createApp() {
   app.use(express.json({ limit: '50mb' }));
   app.use(morgan('dev'));
 
+  // Assign a request id for cross-referencing logs
+  app.use((req, res, next) => {
+    const rid = 'req_' + Math.random().toString(36).slice(2);
+    (req as any).request_id = rid;
+    try { res.setHeader('X-Request-Id', rid); } catch {}
+    next();
+  });
+
+  // Capture any 5xx responses that did not go through error handler
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on('finish', async () => {
+      try {
+        if (res.statusCode >= 500) {
+          const { ErrorLogsRepository } = await import('./repositories/errorLogsRepository.js');
+          const repo = new ErrorLogsRepository(getPostgresPool());
+          await repo.create({
+            tenant_id: (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString(),
+            endpoint: req.originalUrl || req.url,
+            method: req.method,
+            status: res.statusCode,
+            message: `HTTP ${res.statusCode} without thrown error`,
+            error_code: 'HTTP_ERROR',
+            stack: null,
+            file: null,
+            line: null,
+            column: null,
+            headers: req.headers,
+            query: req.query,
+            body: req.body,
+            request_id: (req as any).request_id || null,
+          } as any);
+        }
+      } catch {}
+    });
+    next();
+  });
+
   // Ensure admin APIs are never cached by browsers/proxies
   app.use('/api/admin', (_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -89,21 +127,23 @@ export async function createApp() {
   // Admin: contexts & intents & profiles/targets/overrides/logs/users
   app.use('/api/admin/contexts', buildContextsRouter(getPostgresPool()));
   app.use('/api/admin/intents', buildIntentsRouter(getPostgresPool()));
-  const { buildProfilesRouter } = require('./routes/admin/profiles');
-  const { buildProfileTargetsRouter } = require('./routes/admin/profileTargets');
-  const { buildOverridesRouter } = require('./routes/admin/overrides');
-  const { buildLogsRouter } = require('./routes/admin/logs');
-  const { buildUsersRouter } = require('./routes/admin/users');
-  const { buildSettingsRouter } = require('./routes/admin/settings');
+  const { buildProfilesRouter } = await import('./routes/admin/profiles');
+  const { buildProfileTargetsRouter } = await import('./routes/admin/profileTargets');
+  const { buildOverridesRouter } = await import('./routes/admin/overrides');
+  const { buildLogsRouter } = await import('./routes/admin/logs');
+  const { buildUsersRouter } = await import('./routes/admin/users');
+  const { buildSettingsRouter } = await import('./routes/admin/settings');
+  const { buildErrorLogsRouter } = await import('./routes/admin/errorLogs');
   app.use('/api/admin/profiles', buildProfilesRouter(getPostgresPool()));
   app.use('/api/admin/profile-targets', buildProfileTargetsRouter(getPostgresPool()));
   app.use('/api/admin/overrides', buildOverridesRouter(getPostgresPool()));
   app.use('/api/admin/logs', buildLogsRouter(getPostgresPool()));
   app.use('/api/admin/users', buildUsersRouter(getPostgresPool()));
   app.use('/api/admin/settings', buildSettingsRouter(getPostgresPool()));
-  const { buildAuthRouter } = require('./routes/admin/auth');
+  app.use('/api/admin/error-logs', buildErrorLogsRouter(getPostgresPool()));
+  const { buildAuthRouter } = await import('./routes/admin/auth');
   app.use('/api/admin/auth', buildAuthRouter(getPostgresPool()));
-  const { buildDashboardRouter } = require('./routes/admin/dashboard');
+  const { buildDashboardRouter } = await import('./routes/admin/dashboard');
   app.use('/api/admin/dashboard', buildDashboardRouter(getPostgresPool()));
   
   // Cache management routes
@@ -115,7 +155,7 @@ export async function createApp() {
   }
 
   // Import routes
-  const { importRoutes } = require('./routes/admin/import');
+  const { importRoutes } = await import('./routes/admin/import');
   app.use('/api/admin/import', importRoutes);
 
   // Categories and Intent System routes
@@ -159,12 +199,40 @@ export async function createApp() {
   }
 
   // Error handler
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  app.use(async (err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     // Log full error details for debugging
     // eslint-disable-next-line no-console
     console.error('API Error:', err);
     const isZod = err instanceof z.ZodError;
     const status = isZod ? 400 : 500;
+    // Persist into error_logs for production diagnostics
+    try {
+      const { ErrorLogsRepository } = await import('./repositories/errorLogsRepository.js');
+      const repo = new ErrorLogsRepository(getPostgresPool());
+      const stack: string = typeof err?.stack === 'string' ? err.stack : '';
+      let file: string | null = null; let line: number | null = null; let column_no: number | null = null;
+      try {
+        const first = stack.split('\n').find((l: string) => l.includes('.ts:') || l.includes('.js:')) || '';
+        const m = first.match(/\((.*):(\d+):(\d+)\)/) || first.match(/at\s+[^\(]*\s+(.*):(\d+):(\d+)/);
+        if (m) { file = m[1] || null; line = m[2] ? Number(m[2]) : null; column_no = m[3] ? Number(m[3]) : null; }
+      } catch {}
+      await repo.create({
+        tenant_id: (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString(),
+        endpoint: req.originalUrl || req.url,
+        method: req.method,
+        status,
+        message: String(err?.message || 'unexpected'),
+        error_code: isZod ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
+        stack,
+        file,
+        line,
+        column_no: column_no as any,
+        headers: req.headers,
+        query: req.query,
+        body: req.body,
+        request_id: undefined as any,
+      } as any);
+    } catch {}
     const error: ErrorResponse = {
       error_code: isZod ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
       message: isZod ? 'Invalid request' : 'Unexpected error',

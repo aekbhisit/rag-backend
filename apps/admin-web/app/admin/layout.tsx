@@ -161,6 +161,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v2h6v-2M9 7h6m-6 4h6M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2h-3l-2-2H10L8 5H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               {!sidebarCollapsed && <span>{translationMounted ? t('auditLog') : 'Audit Log'}</span>}
             </Link>
+            <Link prefetch={false} className={`no-underline text-[color:var(--text)] hover:bg-[color:var(--bg-muted)] rounded-md flex items-center ${sidebarCollapsed ? 'justify-center px-0 py-2' : 'px-3 py-2 gap-3'}`} href="/admin/error-logs">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 11-12.728 0M12 9v4m0 4h.01" /></svg>
+              {!sidebarCollapsed && <span>Error Logs</span>}
+            </Link>
             {/* Settings menu removed; managed per-tenant */}
           </div>
         </nav>
