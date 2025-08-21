@@ -775,14 +775,6 @@ Fields:
   }
 }`;
 
-      const { startGeneration } = await import('../adapters/telemetry/langfuseClient');
-      const gen = await startGeneration({
-        name: 'ticket-ocr',
-        traceId: `ocr_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        input: { provider: 'openai', model, image_len: imageDataUrl.length },
-        metadata: { provider: 'openai' },
-        model,
-      });
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -804,12 +796,8 @@ Fields:
           ]
         })
       });
-      if (!res.ok) {
-        try { await gen?.end(); } catch {}
-        throw new Error(`OpenAI HTTP ${res.status}`);
-      }
+      if (!res.ok) { throw new Error(`OpenAI HTTP ${res.status}`); }
       const data = await res.json();
-      try { await gen?.end(); } catch {}
       const text = data?.choices?.[0]?.message?.content || '';
       // Try to parse JSON from the response
       const jsonStart = text.indexOf('{');
@@ -836,15 +824,7 @@ Fields:
       };
     } catch (error) {
       const msg = (error as any)?.message || String(error);
-      try {
-        const { recordGeneration } = await import('../adapters/telemetry/langfuseClient');
-        await recordGeneration({
-          name: 'ticket-ocr',
-          input: { image_len: imageDataUrl?.length || 0 },
-          output: { error: msg },
-          metadata: { status: 'error' }
-        });
-      } catch {}
+      // telemetry disabled
       throw new Error(`Failed to OCR ticket: ${msg}`);
     }
   }

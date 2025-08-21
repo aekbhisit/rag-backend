@@ -389,11 +389,15 @@ ${c.body}`)
           return `- ${role}: ${text}`;
         }).join('\n')
       : '';
+    const conversationRaw = typeof conversation === 'string'
+      ? conversation
+      : (Array.isArray(conversation) ? JSON.stringify(conversation) : '');
     const replacements: Record<string, string> = {
       query,
       text_query: query,
       contexts: contextText,
       conversation: conv,
+      conversation_history: conversationRaw,
     };
     if (extraParams && typeof extraParams === 'object') {
       for (const [k, v] of Object.entries(extraParams)) {
@@ -563,13 +567,55 @@ Return a concise answer in English/Thai if applicable.`;
           const dbPrompt = await repo.getByKey(tenantId, input.prompt_key);
           const tpl = dbPrompt?.template;
           if (tpl && tpl.trim().length > 0) {
-            prompt = applyPromptTemplate(tpl, input.text_query, hits, input.conversation_history as any, { ...(input.prompt_params || {}), query: input.text_query, intent_scope: input.intent_scope, intent_action: input.intent_action, category: input.category });
+            prompt = applyPromptTemplate(
+              tpl,
+              input.text_query,
+              hits,
+              input.conversation_history as any,
+              {
+                ...(input.prompt_params || {}),
+                query: input.text_query,
+                text_query: input.text_query,
+                simantic_query: input.simantic_query,
+                intent_scope: input.intent_scope,
+                intent_action: input.intent_action,
+                category: input.category,
+                top_k: input.top_k,
+                min_score: input.min_score,
+                fulltext_weight: input.fulltext_weight,
+                semantic_weight: input.semantic_weight,
+                response_format: input.response_format,
+                prompt_key: input.prompt_key,
+                prompt_params: input.prompt_params || undefined,
+              }
+            );
             chosenPromptKey = dbPrompt?.key || input.prompt_key;
           } else {
             // Fallback to DB default prompt; if missing, use built-in
             const def = await repo.getDefault(tenantId);
             if (def?.template) {
-              prompt = applyPromptTemplate(def.template, input.text_query, hits, input.conversation_history as any, { ...(input.prompt_params || {}), query: input.text_query, intent_scope: input.intent_scope, intent_action: input.intent_action, category: input.category });
+              prompt = applyPromptTemplate(
+                def.template,
+                input.text_query,
+                hits,
+                input.conversation_history as any,
+                {
+                  ...(input.prompt_params || {}),
+                  query: input.text_query,
+                  text_query: input.text_query,
+                  simantic_query: input.simantic_query,
+                  intent_scope: input.intent_scope,
+                  intent_action: input.intent_action,
+                  category: input.category,
+                  top_k: input.top_k,
+                  min_score: input.min_score,
+                  fulltext_weight: input.fulltext_weight,
+                  semantic_weight: input.semantic_weight,
+                  response_format: input.response_format,
+                  prompt_key: input.prompt_key,
+                  prompt_params: input.prompt_params || undefined,
+                }
+              );
               chosenPromptKey = def.key;
             } else {
               prompt = buildPromptDefault(input.text_query, hits, input.conversation_history as any);
@@ -586,7 +632,28 @@ Return a concise answer in English/Thai if applicable.`;
           const repo = new PromptsRepository(getPostgresPool());
           const def = await repo.getDefault(tenantId);
           if (def?.template) {
-            prompt = applyPromptTemplate(def.template, input.text_query, hits, input.conversation_history as any, { ...(input.prompt_params || {}), query: input.text_query, intent_scope: input.intent_scope, intent_action: input.intent_action, category: input.category });
+            prompt = applyPromptTemplate(
+              def.template,
+              input.text_query,
+              hits,
+              input.conversation_history as any,
+              {
+                ...(input.prompt_params || {}),
+                query: input.text_query,
+                text_query: input.text_query,
+                simantic_query: input.simantic_query,
+                intent_scope: input.intent_scope,
+                intent_action: input.intent_action,
+                category: input.category,
+                top_k: input.top_k,
+                min_score: input.min_score,
+                fulltext_weight: input.fulltext_weight,
+                semantic_weight: input.semantic_weight,
+                response_format: input.response_format,
+                prompt_key: input.prompt_key,
+                prompt_params: input.prompt_params || undefined,
+              }
+            );
             chosenPromptKey = def.key;
           } else {
             prompt = buildPromptDefault(input.text_query, hits, input.conversation_history as any);
@@ -788,13 +855,55 @@ Return a concise answer in English/Thai if applicable.`;
           const dbPrompt = await repo.getByKey(tenantId, input.prompt_key);
           const tpl = dbPrompt?.template;
           if (tpl && tpl.trim().length > 0) {
-              prompt = applyPromptTemplate(tpl, input.text_query, hits, input.conversation_history as any, { ...(input.prompt_params || {}), query: input.text_query, intent_scope: input.intent_scope, intent_action: input.intent_action, category: input.category });
+              prompt = applyPromptTemplate(
+                tpl,
+                input.text_query,
+                hits,
+                input.conversation_history as any,
+                {
+                  ...(input.prompt_params || {}),
+                  query: input.text_query,
+                  text_query: input.text_query,
+                  simantic_query: input.simantic_query,
+                  intent_scope: input.intent_scope,
+                  intent_action: input.intent_action,
+                  category: input.category,
+                  top_k: input.top_k,
+                  min_score: input.min_score,
+                  fulltext_weight: input.fulltext_weight,
+                  semantic_weight: input.semantic_weight,
+                  response_format: input.response_format,
+                  prompt_key: input.prompt_key,
+                  prompt_params: input.prompt_params || undefined,
+                }
+              );
           } else {
               let tenant: any = null; try { tenant = await tenantsRepo.get(tenantId); } catch { tenant = null; }
             const map = (tenant?.settings?.prompts || {}) as Record<string, string>;
             const stpl = map[input.prompt_key];
             prompt = (typeof stpl === 'string' && stpl.trim().length > 0)
-                ? applyPromptTemplate(stpl, input.text_query, hits, input.conversation_history as any, input.prompt_params || {})
+                ? applyPromptTemplate(
+                    stpl,
+                    input.text_query,
+                    hits,
+                    input.conversation_history as any,
+                    {
+                      ...(input.prompt_params || {}),
+                      query: input.text_query,
+                      text_query: input.text_query,
+                      simantic_query: input.simantic_query,
+                      intent_scope: input.intent_scope,
+                      intent_action: input.intent_action,
+                      category: input.category,
+                      top_k: input.top_k,
+                      min_score: input.min_score,
+                      fulltext_weight: input.fulltext_weight,
+                      semantic_weight: input.semantic_weight,
+                      response_format: input.response_format,
+                      prompt_key: input.prompt_key,
+                      prompt_params: input.prompt_params || undefined,
+                    }
+                  )
                 : buildPromptDefault(input.text_query, hits, input.conversation_history as any);
           }
         } catch {
@@ -806,7 +915,28 @@ Return a concise answer in English/Thai if applicable.`;
           const repo = new PromptsRepository(getPostgresPool());
           const def = await repo.getDefault(tenantId);
           if (def?.template) {
-              prompt = applyPromptTemplate(def.template, input.text_query, hits, input.conversation_history as any, { ...(input.prompt_params || {}), query: input.text_query, intent_scope: input.intent_scope, intent_action: input.intent_action, category: input.category });
+              prompt = applyPromptTemplate(
+                def.template,
+                input.text_query,
+                hits,
+                input.conversation_history as any,
+                {
+                  ...(input.prompt_params || {}),
+                  query: input.text_query,
+                  text_query: input.text_query,
+                  simantic_query: input.simantic_query,
+                  intent_scope: input.intent_scope,
+                  intent_action: input.intent_action,
+                  category: input.category,
+                  top_k: input.top_k,
+                  min_score: input.min_score,
+                  fulltext_weight: input.fulltext_weight,
+                  semantic_weight: input.semantic_weight,
+                  response_format: input.response_format,
+                  prompt_key: input.prompt_key,
+                  prompt_params: input.prompt_params || undefined,
+                }
+              );
           } else {
               prompt = buildPromptDefault(input.text_query, hits, input.conversation_history as any);
           }
@@ -1035,30 +1165,16 @@ Return a concise answer in English/Thai if applicable.`;
               const dbPrompt = await repo.getByKey(tenantId, input.prompt_key);
               const tpl = dbPrompt?.template;
               if (tpl && tpl.trim().length > 0) {
-                promptText = applyPromptTemplate(tpl, input.text_query, hits, input.conversation_history as any, {
-                  ...(input.prompt_params || {}),
-                  query: input.text_query,
-                  text_query: input.text_query,
-                  intent_scope: input.intent_scope,
-                  intent_action: input.intent_action,
-                  category: input.category,
-                  lat: input.lat,
-                  long: input.long,
-                  max_distance_km: input.max_distance_km,
-                  distance_weight: input.distance_weight,
-                  top_k: input.top_k,
-                  min_score: input.min_score,
-                  fulltext_weight: input.fulltext_weight,
-                  semantic_weight: input.semantic_weight,
-                });
-                chosenPromptKey = dbPrompt?.key || input.prompt_key;
-              } else {
-                const def = await repo.getDefault(tenantId);
-                if (def?.template) {
-                  promptText = applyPromptTemplate(def.template, input.text_query, hits, input.conversation_history as any, {
+                promptText = applyPromptTemplate(
+                  tpl,
+                  input.text_query,
+                  hits,
+                  input.conversation_history as any,
+                  {
                     ...(input.prompt_params || {}),
                     query: input.text_query,
                     text_query: input.text_query,
+                    simantic_query: input.simantic_query,
                     intent_scope: input.intent_scope,
                     intent_action: input.intent_action,
                     category: input.category,
@@ -1070,29 +1186,73 @@ Return a concise answer in English/Thai if applicable.`;
                     min_score: input.min_score,
                     fulltext_weight: input.fulltext_weight,
                     semantic_weight: input.semantic_weight,
-                  });
+                    response_format: input.response_format,
+                    prompt_key: input.prompt_key,
+                    prompt_params: input.prompt_params || undefined,
+                  }
+                );
+                chosenPromptKey = dbPrompt?.key || input.prompt_key;
+              } else {
+                const def = await repo.getDefault(tenantId);
+                if (def?.template) {
+                  promptText = applyPromptTemplate(
+                    def.template,
+                    input.text_query,
+                    hits,
+                    input.conversation_history as any,
+                    {
+                      ...(input.prompt_params || {}),
+                      query: input.text_query,
+                      text_query: input.text_query,
+                      simantic_query: input.simantic_query,
+                      intent_scope: input.intent_scope,
+                      intent_action: input.intent_action,
+                      category: input.category,
+                      lat: input.lat,
+                      long: input.long,
+                      max_distance_km: input.max_distance_km,
+                      distance_weight: input.distance_weight,
+                      top_k: input.top_k,
+                      min_score: input.min_score,
+                      fulltext_weight: input.fulltext_weight,
+                      semantic_weight: input.semantic_weight,
+                      response_format: input.response_format,
+                      prompt_key: input.prompt_key,
+                      prompt_params: input.prompt_params || undefined,
+                    }
+                  );
                   chosenPromptKey = def.key;
                 }
               }
             } else {
               const def = await repo.getDefault(tenantId);
               if (def?.template) {
-                promptText = applyPromptTemplate(def.template, input.text_query, hits, input.conversation_history as any, {
-                  ...(input.prompt_params || {}),
-                  query: input.text_query,
-                  text_query: input.text_query,
-                  intent_scope: input.intent_scope,
-                  intent_action: input.intent_action,
-                  category: input.category,
-                  lat: input.lat,
-                  long: input.long,
-                  max_distance_km: input.max_distance_km,
-                  distance_weight: input.distance_weight,
-                  top_k: input.top_k,
-                  min_score: input.min_score,
-                  fulltext_weight: input.fulltext_weight,
-                  semantic_weight: input.semantic_weight,
-                });
+                promptText = applyPromptTemplate(
+                  def.template,
+                  input.text_query,
+                  hits,
+                  input.conversation_history as any,
+                  {
+                    ...(input.prompt_params || {}),
+                    query: input.text_query,
+                    text_query: input.text_query,
+                    simantic_query: input.simantic_query,
+                    intent_scope: input.intent_scope,
+                    intent_action: input.intent_action,
+                    category: input.category,
+                    lat: input.lat,
+                    long: input.long,
+                    max_distance_km: input.max_distance_km,
+                    distance_weight: input.distance_weight,
+                    top_k: input.top_k,
+                    min_score: input.min_score,
+                    fulltext_weight: input.fulltext_weight,
+                    semantic_weight: input.semantic_weight,
+                    response_format: input.response_format,
+                    prompt_key: input.prompt_key,
+                    prompt_params: input.prompt_params || undefined,
+                  }
+                );
                 chosenPromptKey = def.key;
               }
             }

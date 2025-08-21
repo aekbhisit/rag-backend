@@ -11,6 +11,7 @@ import { getPostgresPool } from './adapters/db/postgresClient';
 import { buildContextsRouter } from './routes/admin/contexts';
 import type { ErrorResponse } from './types/error';
 import { buildIntentsRouter } from './routes/admin/intents';
+import { tenantSettingsRateLimiter } from './middleware/rateLimiter';
 
 export async function createApp() {
   const app = express();
@@ -64,6 +65,9 @@ export async function createApp() {
     const dbH = await db.health();
     res.status(dbH.status === 'ok' ? 200 : 503).json({ status: dbH.status });
   });
+
+  // Apply tenant-aware rate limiting to public API endpoints
+  app.use('/api', tenantSettingsRateLimiter());
 
   app.post('/api/retrieve', (req, res, next) => {
     try {
