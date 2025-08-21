@@ -177,8 +177,8 @@ describe('Rate Limiting Middleware', () => {
     });
 
     it('should handle missing IP gracefully', async () => {
-      mockReq.ip = undefined;
-      mockReq.connection = undefined;
+      (mockReq as any).ip = undefined;
+      (mockReq as any).connection = undefined;
 
       const rateLimiter = createRateLimiter({
         windowMs: 60000,

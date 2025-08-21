@@ -1,6 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
 import { createClient } from 'redis';
+import { vi } from 'vitest';
 
 // Mock Redis client
 export const mockRedisClient = {

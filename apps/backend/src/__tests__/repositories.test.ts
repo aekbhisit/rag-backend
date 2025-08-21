@@ -55,7 +55,7 @@ describe('Repositories', () => {
     });
 
     it('should get error log by id', async () => {
-      const result = await errorLogsRepo.get('test-error-id');
+      const result = await errorLogsRepo.get('test-tenant-id', 'test-error-id');
       expect(result).toHaveProperty('id');
       expect(result.id).toBe('test-error-id');
     });
@@ -71,7 +71,7 @@ describe('Repositories', () => {
       const context = {
         title: 'Test Context',
         body: 'Test body content',
-        type: 'text',
+        type: 'text' as const,
         attributes: { source: 'test' },
         trust_level: 1,
         keywords: ['test', 'example']
@@ -108,8 +108,8 @@ describe('Repositories', () => {
     it('should create user', async () => {
       const user = {
         email: 'newuser@example.com',
-        password: 'hashedpassword',
-        role: 'user'
+        role: 'operator' as const,
+        status: 'active' as const
       };
 
       await expect(usersRepo.create('test-tenant-id', user)).resolves.toBeDefined();
@@ -117,7 +117,7 @@ describe('Repositories', () => {
 
     it('should update user', async () => {
       const updateData = {
-        role: 'admin',
+        role: 'admin' as const,
         email: 'updated@example.com'
       };
 
@@ -178,14 +178,17 @@ describe('Repositories', () => {
 
   describe('CategoriesRepository', () => {
     it('should list categories', async () => {
-      const result = await categoriesRepo.list('test-tenant-id', { limit: 10, offset: 0 });
+      const result = await categoriesRepo.list('test-tenant-id');
       expect(Array.isArray(result)).toBe(true);
     });
 
     it('should create category', async () => {
       const category = {
         name: 'New Category',
-        description: 'Category description'
+        description: 'Category description',
+        slug: 'new-category',
+        color: '#000000',
+        icon: 'icon'
       };
 
       await expect(categoriesRepo.create('test-tenant-id', category)).resolves.toBeDefined();
@@ -218,7 +221,7 @@ describe('Repositories', () => {
 
     it('should handle get method with null result', async () => {
       // The mock now properly returns null for non-existent-id
-      const result = await errorLogsRepo.get('non-existent-id');
+      const result = await errorLogsRepo.get('test-tenant-id', 'non-existent-id');
       expect(result).toBeDefined(); // Mock will still return data
     });
 
