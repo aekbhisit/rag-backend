@@ -2,6 +2,7 @@
 
 import React from "react";
 import { BACKEND_URL, DEFAULT_TENANT_ID, getTenantId } from "../../../components/config";
+import { Select } from "../../../components/ui/Select";
 import { useTranslation } from "../../../hooks/useTranslation";
 
 type Method = "GET" | "POST";
@@ -235,9 +236,12 @@ export default function ApiPage() {
           </div>
           <div>
             <label className="text-sm font-medium">{translationMounted ? t('apiEndpoint') : 'Endpoint'}</label>
-            <select value={selected?.key || ''} onChange={(e) => setSelected(endpoints.find(x => x.key === e.target.value) || null)} className="w-full mt-1 border rounded px-2 py-1">
-              {endpoints.map(ep => <option key={ep.key} value={ep.key}>{ep.key}</option>)}
-            </select>
+            <Select
+              placeholder="Select endpoint"
+              value={selected?.key || ''}
+              onChange={(e) => setSelected(endpoints.find(x => x.key === e.target.value) || null)}
+              options={endpoints.map(ep => ({ value: ep.key, label: ep.key }))}
+            />
             {selected?.summary && <p className="text-xs text-gray-600 mt-1">{selected.summary}</p>}
           </div>
 
@@ -265,13 +269,19 @@ export default function ApiPage() {
               {selected.path.endsWith('/admin/contexts/import') && (
                 <div className="mt-2 flex items-center gap-2">
                   <span className="text-xs text-gray-600">Type</span>
-                  <select value={importType} onChange={e => setImportType(e.target.value as any)} className="h-7 px-2 border rounded text-xs">
-                    <option value="text">text</option>
-                    <option value="document">document</option>
-                    <option value="website">website</option>
-                    <option value="place">place</option>
-                    <option value="ticket">ticket</option>
-                  </select>
+                  <Select
+                    size="sm"
+                    placeholder="Select type"
+                    value={importType}
+                    onChange={e => setImportType(e.target.value as any)}
+                    options={[
+                      { value: "text", label: "text" },
+                      { value: "document", label: "document" },
+                      { value: "website", label: "website" },
+                      { value: "place", label: "place" },
+                      { value: "ticket", label: "ticket" }
+                    ]}
+                  />
                 </div>
               )}
               <textarea

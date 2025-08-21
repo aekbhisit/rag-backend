@@ -1,5 +1,6 @@
 import React from 'react';
 import { SUPPORTED_LANGUAGES, getLanguage, setLanguage } from '../../lib/i18n';
+import { Select } from './Select';
 
 export function LanguageSwitcher() {
   const currentLang = getLanguage();
@@ -11,17 +12,16 @@ export function LanguageSwitcher() {
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm text-gray-600">🌐</span>
-      <select
+      <Select
+        size="sm"
+        placeholder="Select language"
         value={currentLang}
         onChange={(e) => handleLanguageChange(e.target.value)}
-        className="border rounded px-2 py-1 text-sm bg-white"
-      >
-        {SUPPORTED_LANGUAGES.map((lang) => (
-          <option key={lang.code} value={lang.code}>
-            {lang.flag} {lang.nativeName}
-          </option>
-        ))}
-      </select>
+        options={SUPPORTED_LANGUAGES.map((lang) => ({
+          value: lang.code,
+          label: `${lang.flag} ${lang.nativeName}`
+        }))}
+      />
     </div>
   );
 }

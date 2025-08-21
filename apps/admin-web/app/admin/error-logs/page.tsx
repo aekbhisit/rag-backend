@@ -5,6 +5,8 @@ import Link from "next/link";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Table } from "../../../components/ui/Table";
 import { Button } from "../../../components/Button";
+import { Pagination } from "../../../components/ui/Pagination";
+import { Select } from "../../../components/ui/Select";
 
 export default function ErrorLogsPage() {
   const [items, setItems] = React.useState<any[]>([]);
@@ -31,14 +33,31 @@ export default function ErrorLogsPage() {
         ...(filters.dateTo && { dateTo: filters.dateTo })
       });
 
-      const r = await fetch(`${BACKEND_URL}/api/admin/error-logs?${queryParams}`, { 
-        headers: { 'X-Tenant-ID': getTenantId() } 
+      const tenantId = getTenantId();
+      const url = `${BACKEND_URL}/api/admin/error-logs?${queryParams}`;
+      
+      console.log('🔍 Debug: Making API call to:', url);
+      console.log('🔍 Debug: Tenant ID:', tenantId);
+      console.log('🔍 Debug: BACKEND_URL:', BACKEND_URL);
+
+      const r = await fetch(url, { 
+        headers: { 'X-Tenant-ID': tenantId } 
       });
+      
+      console.log('🔍 Debug: Response status:', r.status);
+      console.log('🔍 Debug: Response headers:', Object.fromEntries(r.headers.entries()));
+      
       const data = await r.json();
+      console.log('🔍 Debug: Response data:', data);
+      
       setItems(Array.isArray(data?.items) ? data.items : []);
       setTotal(Number(data?.total || 0));
       setPage(Number(data?.page || p));
-    } finally { setLoading(false); }
+    } catch (error) {
+      console.error('🔍 Debug: Error in load function:', error);
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleExport = async () => {
@@ -119,70 +138,144 @@ export default function ErrorLogsPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-            >
-              <option value="">All Statuses</option>
-              <option value="open">Open</option>
-              <option value="fixed">Fixed</option>
-              <option value="ignored">Ignored</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Error Code</label>
-            <input
-              type="text"
-              value={filters.errorCode}
-              onChange={(e) => setFilters(prev => ({ ...prev, errorCode: e.target.value }))}
-              placeholder="e.g., INTERNAL_ERROR"
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-            />
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Select
+          label="Status"
+          placeholder="All Statuses"
+          value={filters.status}
+          onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+          options={[
+            { value: "", label: "All Statuses" },
+            { value: "open", label: "Open" },
+            { value: "fixed", label: "Fixed" },
+            { value: "ignored", label: "Ignored" }
+          ]}
+        />
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-[color:var(--text)]">Error Code</label>
+          <input
+            type="text"
+            value={filters.errorCode}
+            onChange={(e) => setFilters(prev => ({ ...prev, errorCode: e.target.value }))}
+            placeholder="e.g., INTERNAL_ERROR"
+            className="w-full px-3 py-2 border border-[color:var(--border)] rounded-lg bg-[color:var(--surface)] text-[color:var(--text)] shadow-sm transition-all duration-200 hover:border-[color:var(--border-hover)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)] focus:ring-opacity-20 focus:border-[color:var(--primary)] focus:shadow-md"
+          />
         </div>
-        <div className="mt-4 flex justify-end">
-          <Button 
-            onClick={() => setFilters({ status: '', errorCode: '', dateFrom: '', dateTo: '' })}
-            variant="outline"
-          >
-            Clear Filters
-          </Button>
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-[color:var(--text)]">From Date</label>
+          <input
+            type="date"
+            value={filters.dateFrom}
+            onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+            className="w-full px-3 py-2 border border-[color:var(--border)] rounded-lg bg-[color:var(--surface)] text-[color:var(--text)] shadow-sm transition-all duration-200 hover:border-[color:var(--border-hover)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)] focus:ring-opacity-20 focus:border-[color:var(--primary)] focus:shadow-md"
+          />
         </div>
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-[color:var(--text)]">To Date</label>
+          <input
+            type="date"
+            value={filters.dateTo}
+            onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+            className="w-full px-3 py-2 border border-[color:var(--border)] rounded-lg bg-[color:var(--surface)] text-[color:var(--text)] shadow-sm transition-all duration-200 hover:border-[color:var(--border-hover)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)] focus:ring-opacity-20 focus:border-[color:var(--primary)] focus:shadow-md"
+          />
+        </div>
+      </div>
+      
+      <div className="flex justify-end">
+        <Button 
+          onClick={() => setFilters({ status: '', errorCode: '', dateFrom: '', dateTo: '' })}
+          variant="outline"
+        >
+          Clear Filters
+        </Button>
       </div>
 
       <Table
         columns={[
           { key: 'created_at', title: 'Time' },
-          { key: 'endpoint', title: 'Endpoint' },
-          { key: 'method', title: 'Method' },
-          { key: 'http_status', title: 'HTTP Status' },
-          { key: 'log_status', title: 'Status' },
+          { 
+            key: 'endpoint', 
+            title: 'Endpoint',
+            render: (_, row: any) => (
+              <span className="font-mono text-sm max-w-xs truncate block" title={row.endpoint || 'N/A'}>
+                {row.endpoint || 'N/A'}
+              </span>
+            )
+          },
+          { 
+            key: 'method', 
+            title: 'Method',
+            render: (_, row: any) => (
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                row.method === 'GET' ? 'bg-blue-100 text-blue-800' :
+                row.method === 'POST' ? 'bg-green-100 text-green-800' :
+                row.method === 'PUT' ? 'bg-yellow-100 text-yellow-800' :
+                row.method === 'DELETE' ? 'bg-red-100 text-red-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {row.method || 'N/A'}
+              </span>
+            )
+          },
+          { 
+            key: 'http_status', 
+            title: 'HTTP Status',
+            render: (_, row: any) => (
+              <span className={`font-semibold ${
+                row.http_status >= 500 ? 'text-red-600' :
+                row.http_status >= 400 ? 'text-orange-600' :
+                'text-gray-600'
+              }`}>
+                {row.http_status || 'N/A'}
+              </span>
+            )
+          },
+          { 
+            key: 'log_status', 
+            title: 'Status',
+            render: (_, row: any) => (
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                row.log_status === 'open' ? 'bg-yellow-100 text-yellow-800' :
+                row.log_status === 'fixed' ? 'bg-green-100 text-green-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {row.log_status || 'open'}
+              </span>
+            )
+          },
           { key: 'message', title: 'Message' },
           { key: 'file', title: 'File:Line' },
-          { key: 'actions', title: 'Actions' },
+          { 
+            key: 'actions', 
+            title: 'Actions',
+            render: (_, row: any) => (
+              <div className="flex space-x-2">
+                <Link 
+                  href={`/admin/error-logs/${row.id}`}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  View
+                </Link>
+                <Select
+                  size="sm"
+                  placeholder="Status"
+                  value={row.log_status || 'open'}
+                  onChange={(e) => updateStatus(row.id, e.target.value as 'open' | 'fixed' | 'ignored')}
+                  options={[
+                    { value: 'open', label: 'Open' },
+                    { value: 'fixed', label: 'Fixed' },
+                    { value: 'ignored', label: 'Ignored' }
+                  ]}
+                />
+                <button
+                  onClick={() => deleteErrorLog(row.id)}
+                  className="text-red-600 hover:text-red-800 text-sm"
+                >
+                  Delete
+                </button>
+              </div>
+            )
+          },
         ]}
         data={items.map((it: any) => ({
           ...it,
@@ -190,37 +283,19 @@ export default function ErrorLogsPage() {
           message: (it.message || '').slice(0, 120),
           file: it.file ? `${it.file}:${it.line || ''}` : '-',
           log_status: it.log_status || 'open',
-          actions: (
-            <div className="flex space-x-2">
-              <Link key={it.id} href={`/admin/error-logs/${it.id}`}>View</Link>
-              <select
-                value={it.log_status || 'open'}
-                onChange={(e) => updateStatus(it.id, e.target.value as 'open' | 'fixed' | 'ignored')}
-                className="text-xs border rounded px-1 py-0.5"
-              >
-                <option value="open">Open</option>
-                <option value="fixed">Fixed</option>
-                <option value="ignored">Ignored</option>
-              </select>
-              <button
-                onClick={() => deleteErrorLog(it.id)}
-                className="text-red-600 hover:text-red-800 text-sm"
-              >
-                Delete
-              </button>
-            </div>
-          )
         }))}
       />
 
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-[color:var(--text-muted)]">Total: {total}</div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => load(Math.max(1, page - 1))} disabled={page <= 1}>Prev</Button>
-          <span className="text-sm">Page {page}</span>
-          <Button onClick={() => load(page + 1)} disabled={(page * size) >= total}>Next</Button>
-        </div>
-      </div>
+      <Pagination
+        page={page}
+        size={size}
+        total={total}
+        onPageChange={(p) => load(p)}
+        onSizeChange={(s) => {
+          // Note: size is currently fixed at 20, but we could make it configurable
+          console.log('Size changed to:', s);
+        }}
+      />
     </main>
   );
 }

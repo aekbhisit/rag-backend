@@ -3,6 +3,7 @@
 import React from "react";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
+import { Select } from "../../../components/ui/Select";
 import { useDialog } from "../../../components/ui/DialogProvider";
 import { useTranslation } from "../../../hooks/useTranslation";
 
@@ -147,15 +148,22 @@ export default function CategoriesPage() {
           <div className="grid gap-2">
             <label className="text-sm">{translationMounted ? t('name') : 'Name'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></label>
             <label className="text-sm">{translationMounted ? t('slug') : 'Slug'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} /></label>
-            <label className="text-sm">{translationMounted ? t('parentCategory') : 'Parent Category'}
-              <select className="mt-1 w-full border rounded px-2 py-1" value={form.parent_id} onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}>
-                <option value="">{translationMounted ? t('noneLevel1') : '— None (Level 1) —'}</option>
-                {items.filter(i => !i.parent_id).map(i => (
-                  <option key={i.id} value={i.id}>{i.name}</option>
-                ))}
-              </select>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('parentCategory') : 'Parent Category'}</label>
+              <Select
+                placeholder={translationMounted ? t('noneLevel1') : '— None (Level 1) —'}
+                value={form.parent_id}
+                onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}
+                options={[
+                  { value: "", label: translationMounted ? t('noneLevel1') : '— None (Level 1) —' },
+                  ...items.filter(i => !i.parent_id).map(i => ({
+                    value: i.id,
+                    label: i.name
+                  }))
+                ]}
+              />
               <div className="text-xs text-gray-600 mt-1">{translationMounted ? t('level1Info') : 'Leave empty to create Level 1. Select a Level 1 category to create Level 2 under it.'}</div>
-            </label>
+            </div>
           </div>
           <div className="mt-3 flex gap-2">
             <button onClick={save} className="h-9 px-4 rounded bg-black text-white">{translationMounted ? t('save') : 'Save'}</button>

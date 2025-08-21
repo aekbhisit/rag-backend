@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Select } from "./Select";
 
 type Props = {
   page: number;
@@ -52,11 +53,16 @@ export function Pagination({ page, size, total, onPageChange, onSizeChange, size
         <button className="h-8 px-3 border rounded disabled:opacity-50" disabled={current >= totalPages} onClick={() => goto(current + 1)} title="Next">&raquo;</button>
         <button className="h-8 px-3 border rounded disabled:opacity-50" disabled={current >= totalPages} onClick={() => goto(totalPages)} title="Last">&gt;|</button>
         {onSizeChange && (
-          <select className="h-8 px-2 border rounded ml-2" value={size} onChange={(e) => onSizeChange(Number(e.target.value))}>
-            {sizeOptions.map(n => (
-              <option key={n} value={n}>{n}/page</option>
-            ))}
-          </select>
+          <Select
+            size="sm"
+            placeholder="Page size"
+            value={size.toString()}
+            onChange={(e) => onSizeChange(Number(e.target.value))}
+            options={sizeOptions.map(n => ({
+              value: n.toString(),
+              label: `${n}/page`
+            }))}
+          />
         )}
       </div>
     </div>

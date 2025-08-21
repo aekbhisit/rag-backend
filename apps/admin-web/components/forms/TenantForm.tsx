@@ -3,6 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { BACKEND_URL, getTenantId } from "../config";
+import { Select } from "../ui/Select";
 import { useTranslation } from "../../hooks/useTranslation";
 
 type TenantFormProps = {
@@ -115,19 +116,31 @@ export default function TenantForm({ tenantId }: TenantFormProps) {
             </label>
           </div>
           <div className="space-y-3">
-            <label className="text-sm">{translationMounted ? t('defaultLanguage') : 'Default Language'}
-              <select className="mt-1 w-full border rounded px-2 py-1" value={settings.profile?.defaultLanguage || 'en'} onChange={e => setSettings((s: any) => ({ ...s, profile: { ...(s.profile || {}), defaultLanguage: e.target.value } }))}>
-                <option value="en">{translationMounted ? t('english') : 'English'}</option>
-                <option value="th">{translationMounted ? t('thai') : 'Thai'}</option>
-              </select>
-            </label>
-            <label className="text-sm">{translationMounted ? t('theme') : 'Theme'}
-              <select className="mt-1 w-full border rounded px-2 py-1" value={settings.profile?.theme || 'auto'} onChange={e => setSettings((s: any) => ({ ...s, profile: { ...(s.profile || {}), theme: e.target.value } }))}>
-                <option value="light">{translationMounted ? t('light') : 'Light'}</option>
-                <option value="dark">{translationMounted ? t('dark') : 'Dark'}</option>
-                <option value="auto">{translationMounted ? t('auto') : 'Auto'}</option>
-              </select>
-            </label>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('defaultLanguage') : 'Default Language'}</label>
+              <Select
+                placeholder="Select language"
+                value={settings.profile?.defaultLanguage || 'en'}
+                onChange={e => setSettings((s: any) => ({ ...s, profile: { ...(s.profile || {}), defaultLanguage: e.target.value } }))}
+                options={[
+                  { value: "en", label: translationMounted ? t('english') : 'English' },
+                  { value: "th", label: translationMounted ? t('thai') : 'Thai' }
+                ]}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('theme') : 'Theme'}</label>
+              <Select
+                placeholder="Select theme"
+                value={settings.profile?.theme || 'auto'}
+                onChange={e => setSettings((s: any) => ({ ...s, profile: { ...(s.profile || {}), theme: e.target.value } }))}
+                options={[
+                  { value: "light", label: translationMounted ? t('light') : 'Light' },
+                  { value: "dark", label: translationMounted ? t('dark') : 'Dark' },
+                  { value: "auto", label: translationMounted ? t('auto') : 'Auto' }
+                ]}
+              />
+            </div>
             <label className="text-sm flex items-center gap-2">{translationMounted ? t('status') : 'Status'} ({translationMounted ? t('active') : 'Active'})
               <input type="checkbox" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />
             </label>
@@ -153,36 +166,52 @@ export default function TenantForm({ tenantId }: TenantFormProps) {
 
           <div className="space-y-3">
             <div className="text-sm font-medium">{translationMounted ? t('embedding') : 'Embedding'}</div>
-            <label className="text-sm">{translationMounted ? t('provider') : 'Provider'}
-              <select className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.embedding?.provider || ''} onChange={e => {
-                const newProvider = e.target.value;
-                const firstModel = embeddingOptions.find(o => o.provider === newProvider)?.model || '';
-                setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), embedding: { ...(s.ai?.embedding || {}), provider: newProvider, model: firstModel } } }));
-              }}>
-                {[...new Set(embeddingOptions.map(o => o.provider))].map(p => (<option key={p} value={p}>{p}</option>))}
-              </select>
-            </label>
-            <label className="text-sm">{translationMounted ? t('model') : 'Model'}
-              <select className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.embedding?.model || ''} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), embedding: { ...(s.ai?.embedding || {}), model: e.target.value } } }))}>
-                {embeddingOptions.filter(o => o.provider === settings.ai?.embedding?.provider).map(o => (<option key={`${o.provider}:${o.model}`} value={o.model}>{o.model}</option>))}
-              </select>
-            </label>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('provider') : 'Provider'}</label>
+              <Select
+                placeholder="Select provider"
+                value={settings.ai?.embedding?.provider || ''}
+                onChange={e => {
+                  const newProvider = e.target.value;
+                  const firstModel = embeddingOptions.find(o => o.provider === newProvider)?.model || '';
+                  setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), embedding: { ...(s.ai?.embedding || {}), provider: newProvider, model: firstModel } } }));
+                }}
+                options={[...new Set(embeddingOptions.map(o => o.provider))].map(p => ({ value: p, label: p }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('model') : 'Model'}</label>
+              <Select
+                placeholder="Select model"
+                value={settings.ai?.embedding?.model || ''}
+                onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), embedding: { ...(s.ai?.embedding || {}), model: e.target.value } } }))}
+                options={embeddingOptions.filter(o => o.provider === settings.ai?.embedding?.provider).map(o => ({ value: o.model, label: o.model }))}
+              />
+            </div>
 
             <div className="text-sm font-medium pt-2">{translationMounted ? t('generating') : 'Generating'}</div>
-            <label className="text-sm">{translationMounted ? t('provider') : 'Provider'}
-              <select className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.generating?.provider || ''} onChange={e => {
-                const newProvider = e.target.value;
-                const firstModel = generatingOptions.find(o => o.provider === newProvider)?.model || '';
-                setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), generating: { ...(s.ai?.generating || {}), provider: newProvider, model: firstModel } } }));
-              }}>
-                {[...new Set(generatingOptions.map(o => o.provider))].map(p => (<option key={p} value={p}>{p}</option>))}
-              </select>
-            </label>
-            <label className="text-sm">{translationMounted ? t('model') : 'Model'}
-              <select className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.generating?.model || ''} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), generating: { ...(s.ai?.generating || {}), model: e.target.value } } }))}>
-                {generatingOptions.filter(o => o.provider === settings.ai?.generating?.provider).map(o => (<option key={`${o.provider}:${o.model}`} value={o.model}>{o.model}</option>))}
-              </select>
-            </label>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('provider') : 'Provider'}</label>
+              <Select
+                placeholder="Select provider"
+                value={settings.ai?.generating?.provider || ''}
+                onChange={e => {
+                  const newProvider = e.target.value;
+                  const firstModel = generatingOptions.find(o => o.provider === newProvider)?.model || '';
+                  setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), generating: { ...(s.ai?.generating || {}), provider: newProvider, model: firstModel } } }));
+                }}
+                options={[...new Set(generatingOptions.map(o => o.provider))].map(p => ({ value: p, label: p }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('model') : 'Model'}</label>
+              <Select
+                placeholder="Select model"
+                value={settings.ai?.generating?.model || ''}
+                onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), generating: { ...(s.ai?.generating || {}), model: e.target.value } } }))}
+                options={generatingOptions.filter(o => o.provider === settings.ai?.generating?.provider).map(o => ({ value: o.model, label: o.model }))}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="text-sm">{translationMounted ? t('maxTokens') : 'Max Tokens'}
                 <input type="number" className="mt-1 w-full border rounded px-2 py-1" value={settings.ai?.generating?.maxTokens || 0} onChange={e => setSettings((s: any) => ({ ...s, ai: { ...(s.ai || {}), generating: { ...(s.ai?.generating || {}), maxTokens: parseInt(e.target.value) || 0 } } }))} />

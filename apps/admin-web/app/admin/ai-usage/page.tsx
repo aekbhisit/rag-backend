@@ -3,6 +3,7 @@
 import React from "react";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
+import { Select } from "../../../components/ui/Select";
 import { formatDateForTable } from "../../../utils/timezone";
 import { useAuth } from "../../../components/AuthProvider";
 import { useTranslation } from "../../../hooks/useTranslation";
@@ -60,12 +61,17 @@ export default function AiUsagePage() {
         </button>
       </div>
       <div className="grid gap-3 md:grid-cols-5">
-        <select className="border rounded px-2 py-1" value={range} onChange={e => setRange(e.target.value)}>
-          <option value="7d">{translationMounted ? t('last7Days') : 'Last 7 days'}</option>
-          <option value="30d">{translationMounted ? t('last30Days') : 'Last 30 days'}</option>
-          <option value="90d">{translationMounted ? t('last90Days') : 'Last 90 days'}</option>
-          <option value="1y">{translationMounted ? t('lastYear') : 'Last year'}</option>
-        </select>
+        <Select
+          placeholder="Select range"
+          value={range}
+          onChange={e => setRange(e.target.value)}
+          options={[
+            { value: "7d", label: translationMounted ? t('last7Days') : 'Last 7 days' },
+            { value: "30d", label: translationMounted ? t('last30Days') : 'Last 30 days' },
+            { value: "90d", label: translationMounted ? t('last90Days') : 'Last 90 days' },
+            { value: "1y", label: translationMounted ? t('lastYear') : 'Last year' }
+          ]}
+        />
         <input className="border rounded px-2 py-1" placeholder={translationMounted ? t('model') : "Model"} value={model} onChange={e => setModel(e.target.value)} />
         <input className="border rounded px-2 py-1" placeholder={translationMounted ? t('provider') : "Provider"} value={provider} onChange={e => setProvider(e.target.value)} />
         <input className="border rounded px-2 py-1" placeholder={translationMounted ? t('operationPlaceholder') : "Operation (generate/embedding)"} value={operation} onChange={e => setOperation(e.target.value)} />

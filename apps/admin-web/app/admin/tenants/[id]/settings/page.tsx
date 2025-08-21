@@ -3,6 +3,7 @@
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { BACKEND_URL, DEFAULT_TENANT_ID } from "../../../../../components/config";
+import { Select } from "../../../../../components/ui/Select";
 
 export default function TenantSettingsPage() {
   const params = useParams();
@@ -88,19 +89,31 @@ export default function TenantSettingsPage() {
               <input className="mt-1 w-full border rounded px-2 py-1" value={String((form as any)?.contact_email || '')} onChange={e => setForm((f: any) => ({ ...f, contact_email: e.target.value }))} />
             </label>
           </div>
-          <label className="text-sm">Default Language
-            <select className="mt-1 w-full border rounded px-2 py-1" value={form.profile?.defaultLanguage || 'en'} onChange={e => setForm((f: any) => ({ ...f, profile: { ...(f.profile || {}), defaultLanguage: e.target.value } }))}>
-              <option value="en">English</option>
-              <option value="th">Thai</option>
-            </select>
-          </label>
-          <label className="text-sm">Theme
-            <select className="mt-1 w-full border rounded px-2 py-1" value={form.profile?.theme || 'auto'} onChange={e => setForm((f: any) => ({ ...f, profile: { ...(f.profile || {}), theme: e.target.value } }))}>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-              <option value="auto">Auto</option>
-            </select>
-          </label>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-[color:var(--text)]">Default Language</label>
+            <Select
+              placeholder="Select language"
+              value={form.profile?.defaultLanguage || 'en'}
+              onChange={e => setForm((f: any) => ({ ...f, profile: { ...(f.profile || {}), defaultLanguage: e.target.value } }))}
+              options={[
+                { value: "en", label: "English" },
+                { value: "th", label: "Thai" }
+              ]}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-[color:var(--text)]">Theme</label>
+            <Select
+              placeholder="Select theme"
+              value={form.profile?.theme || 'auto'}
+              onChange={e => setForm((f: any) => ({ ...f, profile: { ...(f.profile || {}), theme: e.target.value } }))}
+              options={[
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
+                { value: "auto", label: "Auto" }
+              ]}
+            />
+          </div>
         </section>
 
         <section className="border rounded p-4 space-y-3">
@@ -120,30 +133,46 @@ export default function TenantSettingsPage() {
 
           <div className="pt-2 space-y-2">
             <div className="text-sm font-medium">Embedding</div>
-            <label className="text-sm">Provider
-              <select className="mt-1 w-full border rounded px-2 py-1" value={form.ai?.embedding?.provider || ''} onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), embedding: { ...(f.ai?.embedding || {}), provider: e.target.value, model: '' } } }))}>
-                {[...new Set(embeddingOptions.map(o => o.provider))].map(p => (<option key={p} value={p}>{p}</option>))}
-              </select>
-            </label>
-            <label className="text-sm">Model
-              <select className="mt-1 w-full border rounded px-2 py-1" value={form.ai?.embedding?.model || ''} onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), embedding: { ...(f.ai?.embedding || {}), model: e.target.value } } }))}>
-                {embeddingOptions.filter(o => o.provider === form.ai?.embedding?.provider).map(o => (<option key={`${o.provider}:${o.model}`} value={o.model}>{o.model}</option>))}
-              </select>
-            </label>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">Provider</label>
+              <Select
+                placeholder="Select provider"
+                value={form.ai?.embedding?.provider || ''}
+                onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), embedding: { ...(f.ai?.embedding || {}), provider: e.target.value, model: '' } } }))}
+                options={[...new Set(embeddingOptions.map(o => o.provider))].map(p => ({ value: p, label: p }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">Model</label>
+              <Select
+                placeholder="Select model"
+                value={form.ai?.embedding?.model || ''}
+                onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), embedding: { ...(f.ai?.embedding || {}), model: e.target.value } } }))}
+                options={embeddingOptions.filter(o => o.provider === form.ai?.embedding?.provider).map(o => ({ value: o.model, label: o.model }))}
+              />
+            </div>
           </div>
 
           <div className="pt-2 space-y-2">
             <div className="text-sm font-medium">Generating</div>
-            <label className="text-sm">Provider
-              <select className="mt-1 w-full border rounded px-2 py-1" value={form.ai?.generating?.provider || ''} onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), generating: { ...(f.ai?.generating || {}), provider: e.target.value, model: '' } } }))}>
-                {[...new Set(generatingOptions.map(o => o.provider))].map(p => (<option key={p} value={p}>{p}</option>))}
-              </select>
-            </label>
-            <label className="text-sm">Model
-              <select className="mt-1 w-full border rounded px-2 py-1" value={form.ai?.generating?.model || ''} onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), generating: { ...(f.ai?.generating || {}), model: e.target.value } } }))}>
-                {generatingOptions.filter(o => o.provider === form.ai?.generating?.provider).map(o => (<option key={`${o.provider}:${o.model}`} value={o.model}>{o.model}</option>))}
-              </select>
-            </label>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">Provider</label>
+              <Select
+                placeholder="Select provider"
+                value={form.ai?.generating?.provider || ''}
+                onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), generating: { ...(f.ai?.generating || {}), provider: e.target.value, model: '' } } }))}
+                options={[...new Set(generatingOptions.map(o => o.provider))].map(p => ({ value: p, label: p }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">Model</label>
+              <Select
+                placeholder="Select model"
+                value={form.ai?.generating?.model || ''}
+                onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), generating: { ...(f.ai?.generating || {}), model: e.target.value } } }))}
+                options={generatingOptions.filter(o => o.provider === form.ai?.generating?.provider).map(o => ({ value: o.model, label: o.model }))}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="text-sm">Max Tokens
                 <input type="number" className="mt-1 w-full border rounded px-2 py-1" value={form.ai?.generating?.maxTokens || 0} onChange={e => setForm((f: any) => ({ ...f, ai: { ...(f.ai || {}), generating: { ...(f.ai?.generating || {}), maxTokens: parseInt(e.target.value) || 0 } } }))} />

@@ -3,6 +3,7 @@
 import React from "react";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Pagination } from "../../../components/ui/Pagination";
+import { Select } from "../../../components/ui/Select";
 import { useDialog } from "../../../components/ui/DialogProvider";
 import { useTranslation } from "../../../hooks/useTranslation";
 
@@ -163,15 +164,22 @@ export default function IntentPage() {
             <label className="text-sm">{translationMounted ? t('name') : 'Name'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></label>
             <label className="text-sm">{translationMounted ? t('slug') : 'Slug'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder={translationMounted ? t('autoFromName') : "auto from name if empty"} /></label>
             <label className="text-sm">{translationMounted ? t('description') : 'Description'}<input className="mt-1 w-full border rounded px-2 py-1" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></label>
-            <label className="text-sm">{translationMounted ? t('parentScope') : 'Parent Scope'}
-              <select className="mt-1 w-full border rounded px-2 py-1" value={form.parent_scope_id} onChange={e => setForm(f => ({ ...f, parent_scope_id: e.target.value }))}>
-                <option value="">{translationMounted ? t('noneScopeLevel1') : '— None (Scope / Level 1) —'}</option>
-                {scopes.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">{translationMounted ? t('parentScope') : 'Parent Scope'}</label>
+              <Select
+                placeholder={translationMounted ? t('noneScopeLevel1') : '— None (Scope / Level 1) —'}
+                value={form.parent_scope_id}
+                onChange={e => setForm(f => ({ ...f, parent_scope_id: e.target.value }))}
+                options={[
+                  { value: "", label: translationMounted ? t('noneScopeLevel1') : '— None (Scope / Level 1) —' },
+                  ...scopes.map(s => ({
+                    value: s.id,
+                    label: s.name
+                  }))
+                ]}
+              />
               <div className="text-xs text-gray-600 mt-1">{translationMounted ? t('scopeInfo') : 'Leave empty to create a Scope (level 1). Select a Scope to create an Action (level 2) under it.'}</div>
-            </label>
+            </div>
           </div>
           <div className="mt-3 flex gap-2">
             <button onClick={save} className="h-9 px-4 rounded bg-black text-white">Save</button>

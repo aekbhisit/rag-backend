@@ -4,6 +4,7 @@ import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { BACKEND_URL, getTenantId } from "../../../../components/config";
 import { Button } from "../../../../components/Button";
+import { Select } from "../../../../components/ui/Select";
 
 export default function ErrorLogDetailPage() {
   const { id } = useParams() as { id?: string };
@@ -140,17 +141,18 @@ export default function ErrorLogDetailPage() {
         <section className="border rounded p-4 space-y-4">
           <div className="font-medium">Edit Error Log</div>
           <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-[color:var(--text)]">Status</label>
+              <Select
+                placeholder="Select status"
                 value={editForm.log_status}
                 onChange={(e) => setEditForm(prev => ({ ...prev, log_status: e.target.value as 'open' | 'fixed' | 'ignored' }))}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-              >
-                <option value="open">Open</option>
-                <option value="fixed">Fixed</option>
-                <option value="ignored">Ignored</option>
-              </select>
+                options={[
+                  { value: 'open', label: 'Open' },
+                  { value: 'fixed', label: 'Fixed' },
+                  { value: 'ignored', label: 'Ignored' }
+                ]}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
