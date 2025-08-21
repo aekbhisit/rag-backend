@@ -49,6 +49,16 @@ export class CategoriesRepository {
     const client = await this.pool.connect();
     try {
       await client.query("SELECT set_config('app.current_tenant', $1, true)", [tenantId]);
+      
+      // First check if there are any categories for this tenant
+      const countResult = await client.query('SELECT COUNT(*) FROM categories WHERE tenant_id = $1', [tenantId]);
+      const categoryCount = parseInt(countResult.rows[0]?.count || '0');
+      
+      if (categoryCount === 0) {
+        console.log(`No categories found for tenant ${tenantId}, returning empty array`);
+        return [];
+      }
+      
       const result = await client.query(`
       WITH RECURSIVE category_tree AS (
         -- Base case: root categories (level 0)
@@ -76,6 +86,14 @@ export class CategoriesRepository {
       ORDER BY level, sort_order, name
     `, [tenantId]);
       return result.rows;
+    } catch (error) {
+      console.error('Database error in getHierarchy:', {
+        error: error,
+        stack: error instanceof Error ? error.stack : undefined,
+        tenantId,
+        query: 'getHierarchy'
+      });
+      throw error; // Re-throw to be caught by the route handler
     } finally {
       client.release();
     }

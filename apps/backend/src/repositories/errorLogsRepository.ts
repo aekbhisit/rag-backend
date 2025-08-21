@@ -121,7 +121,7 @@ export class ErrorLogsRepository {
   async list(tenantId: string, opts: { limit: number; offset: number }) {
     await this.ensureTable();
     const { rows } = await this.pool.query(
-      `SELECT id, tenant_id, endpoint, method, http_status, message, error_code, file, line, column_no, created_at
+      `SELECT id, tenant_id, endpoint, method, http_status, message, error_code, stack, file, line, column_no, log_status, notes, created_at
        FROM error_logs WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
       [tenantId, opts.limit, opts.offset]
     );

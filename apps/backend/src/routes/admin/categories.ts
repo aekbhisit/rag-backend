@@ -14,12 +14,43 @@ export function buildCategoriesRouter(pool: Pool) {
       const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
       const hierarchy = req.query.hierarchy === 'true';
       
-      const categories = hierarchy 
-        ? await repo.getHierarchy(tenantId)
-        : await repo.list(tenantId);
-        
+      console.log('Categories request:', { tenantId, hierarchy, query: req.query });
+      
+      let categories;
+      if (hierarchy) {
+        try {
+          categories = await repo.getHierarchy(tenantId);
+        } catch (hierarchyError) {
+          console.error('Hierarchy query failed:', hierarchyError);
+          // Fallback to flat list if hierarchy fails
+          console.log('Falling back to flat list due to hierarchy error');
+          try {
+            categories = await repo.list(tenantId);
+          } catch (listError) {
+            console.error('Flat list also failed:', listError);
+            throw new Error(`Both hierarchy and flat list queries failed. Hierarchy: ${hierarchyError.message}, List: ${listError.message}`);
+          }
+        }
+      } else {
+        try {
+          categories = await repo.list(tenantId);
+        } catch (listError) {
+          console.error('Flat list query failed:', listError);
+          throw new Error(`List query failed: ${listError.message}`);
+        }
+      }
+      
+      console.log(`Categories request successful: ${categories.length} categories returned`);
       res.json({ categories });
     } catch (e) { 
+      console.error('Error in categories route:', {
+        error: e,
+        stack: e instanceof Error ? e.stack : undefined,
+        tenantId: req.header('X-Tenant-ID'),
+        query: req.query,
+        method: req.method,
+        url: req.url
+      });
       next(e); 
     }
   });

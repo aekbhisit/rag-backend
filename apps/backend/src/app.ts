@@ -47,10 +47,52 @@ export async function createApp() {
   // Capture any 5xx responses that did not go through error handler
   app.use((req, res, next) => {
     const startedAt = Date.now();
+    const originalSend = res.send;
+    const originalJson = res.json;
+    const originalStatus = res.status;
+    
+    // Track if response has been sent
+    let responseSent = false;
+    let responseStatus = 200;
+    
+    // Override res.send to track response
+    res.send = function(body) {
+      if (!responseSent) {
+        responseSent = true;
+        responseStatus = res.statusCode;
+        console.log(`Response sent: ${req.method} ${req.originalUrl || req.url} -> ${responseStatus}`);
+      }
+      return originalSend.call(this, body);
+    };
+    
+    // Override res.json to track response
+    res.json = function(body) {
+      if (!responseSent) {
+        responseSent = true;
+        responseStatus = res.statusCode;
+        console.log(`Response sent: ${req.method} ${req.originalUrl || req.url} -> ${responseStatus}`);
+      }
+      return originalJson.call(this, body);
+    };
+    
+    // Override res.status to track status changes
+    res.status = function(code) {
+      responseStatus = code;
+      console.log(`Status changed: ${req.method} ${req.originalUrl || req.url} -> ${code}`);
+      return originalStatus.call(this, code);
+    };
+    
     res.on('finish', async () => {
       try {
         if (res.statusCode >= 500) {
           console.error(`HTTP ${res.statusCode} error on ${req.method} ${req.originalUrl || req.url}`);
+          console.error('Response tracking info:', {
+            responseSent,
+            responseStatus,
+            finalStatus: res.statusCode,
+            requestId: (req as any).request_id,
+            tenantId: req.header('X-Tenant-ID')
+          });
           
           // Try to log to database, but don't fail if database is unavailable
           try {
@@ -61,7 +103,7 @@ export async function createApp() {
               endpoint: req.originalUrl || req.url,
               method: req.method,
               http_status: res.statusCode,
-              message: `HTTP ${res.statusCode} without thrown error`,
+              message: `HTTP ${res.statusCode} without thrown error - Response tracking: sent=${responseSent}, trackedStatus=${responseStatus}`,
               error_code: 'HTTP_ERROR',
               stack: null,
               file: null,
@@ -72,7 +114,7 @@ export async function createApp() {
               body: req.body,
               request_id: (req as any).request_id || null,
               log_status: 'open',
-              notes: null,
+              notes: `Response tracking: sent=${responseSent}, trackedStatus=${responseStatus}, finalStatus=${res.statusCode}`,
               fixed_by: null,
               fixed_at: null,
             } as any);
@@ -86,7 +128,12 @@ export async function createApp() {
               method: req.method,
               status: res.statusCode,
               request_id: (req as any).request_id || null,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              responseTracking: {
+                responseSent,
+                responseStatus,
+                finalStatus: res.statusCode
+              }
             });
           }
         }
@@ -140,6 +187,97 @@ export async function createApp() {
       timestamp: new Date().toISOString(),
       uptime: process.uptime()
     });
+  });
+
+  // Test endpoints for debugging (placed before admin routes to ensure error handling works)
+  app.get('/api/test-categories', async (req, res) => {
+    try {
+      const tenantId = req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000';
+      console.log('Testing categories endpoint for tenant:', tenantId);
+      
+      const { getPostgresPool } = await import('./adapters/db/postgresClient.js');
+      const pool = getPostgresPool();
+      const client = await pool.connect();
+      
+      try {
+        // Test basic query
+        const countResult = await client.query('SELECT COUNT(*) FROM categories WHERE tenant_id = $1', [tenantId]);
+        const count = countResult.rows[0]?.count || '0';
+        
+        // Test hierarchy query
+        let hierarchyResult;
+        try {
+          hierarchyResult = await client.query(`
+            WITH RECURSIVE category_tree AS (
+              SELECT id, tenant_id, name, slug, level, sort_order
+              FROM categories 
+              WHERE tenant_id = $1 AND parent_id IS NULL
+              UNION ALL
+              SELECT c.id, c.tenant_id, c.name, c.slug, c.level, c.sort_order
+              FROM categories c
+              INNER JOIN category_tree ct ON c.parent_id = ct.id
+              WHERE c.tenant_id = $1
+            )
+            SELECT * FROM category_tree
+            ORDER BY level, sort_order, name
+          `, [tenantId]);
+        } catch (hierarchyError) {
+          hierarchyResult = { error: hierarchyError.message, code: hierarchyError.code };
+        }
+        
+        res.json({
+          status: 'ok',
+          tenantId,
+          categoryCount: count,
+          hierarchyQuery: hierarchyResult.error ? 'failed' : 'success',
+          hierarchyError: hierarchyResult.error || null,
+          hierarchyErrorCode: hierarchyResult.code || null,
+          hierarchyResults: hierarchyResult.rows ? hierarchyResult.rows.length : 0,
+          timestamp: new Date().toISOString()
+        });
+        
+      } finally {
+        client.release();
+      }
+      
+    } catch (error) {
+      console.error('Test categories endpoint error:', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Test failed',
+        error: String(error),
+        stack: error instanceof Error ? error.stack : null,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Test endpoint to trigger database errors and test error logging
+  app.get('/api/test-db-error', async (req, res, next) => {
+    try {
+      const tenantId = req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000';
+      console.log('Testing database error logging for tenant:', tenantId);
+      
+      const { getPostgresPool } = await import('./adapters/db/postgresClient.js');
+      const pool = getPostgresPool();
+      const client = await pool.connect();
+      
+      try {
+        // This will cause a database error
+        await client.query('SELECT * FROM non_existent_table WHERE invalid_column = $1', ['test']);
+        
+        // If we get here, something is wrong
+        res.json({ status: 'unexpected_success' });
+        
+      } finally {
+        client.release();
+      }
+      
+    } catch (error) {
+      console.error('Database error test endpoint error:', error);
+      // Pass error to next() to trigger global error handler
+      next(error);
+    }
   });
 
   app.get('/health', async (_req, res) => {

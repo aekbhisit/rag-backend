@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import { BACKEND_URL, getTenantId } from "../../../components/config";
 import { Table } from "../../../components/ui/Table";
 import { Button } from "../../../components/Button";
@@ -250,12 +249,13 @@ export default function ErrorLogsPage() {
             title: 'Actions',
             render: (_, row: any) => (
               <div className="flex space-x-2">
-                <Link 
-                  href={`/admin/error-logs/${row.id}`}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(`/admin/error-logs/${row.id}`, '_blank')}
                 >
                   View
-                </Link>
+                </Button>
                 <Select
                   size="sm"
                   placeholder="Status"

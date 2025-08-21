@@ -14,7 +14,7 @@
   "scripts": {
     "echo-name": "node -e \"console.log(require('./package.json').name)\"",
     "dev:admin": "pnpm --filter @rag/admin-web run dev",
-    "dev:backend": "pnpm --filter @rag/backend run dev",
+    "dev:backend": "NODE_ENV=development pnpm --filter @rag/backend run dev",
     "dev:backend:local": "SKIP_ADAPTERS_INIT=true pnpm --filter @rag/backend run dev",
     "build:admin": "pnpm --filter @rag/admin-web run build",
     "build:backend": "pnpm --filter @rag/backend run build",
