@@ -155,13 +155,13 @@ export default function LoginPage() {
           </form>
 
           {/* Demo Credentials */}
-          <div className="mt-6 p-3 bg-[color:var(--surface-muted)] rounded-lg">
+          {/* <div className="mt-6 p-3 bg-[color:var(--surface-muted)] rounded-lg">
             <h4 className="text-sm font-medium text-[color:var(--text)] mb-2">Demo Credentials:</h4>
             <div className="text-xs text-[color:var(--text-muted)] space-y-1">
               <div>Email: <code className="bg-[color:var(--surface)] px-1 rounded">admin@example.com</code></div>
               <div>Password: <code className="bg-[color:var(--surface)] px-1 rounded">password</code></div>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Footer */}

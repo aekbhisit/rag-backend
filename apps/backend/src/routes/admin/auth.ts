@@ -35,8 +35,19 @@ export function buildAuthRouter(pool: Pool) {
       const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
       if (!email || !password) return res.status(400).json({ message: 'Missing email or password' });
       await ensureUserColumns();
+      // First, try to find a user within the provided tenant
       const { rows } = await pool.query(`SELECT * FROM users WHERE tenant_id=$1 AND email=$2 LIMIT 1`, [tenantId, email]);
-      const user = rows[0];
+      let user = rows[0];
+
+      // If not found in tenant, allow global admin to login regardless of tenant
+      if (!user) {
+        const anyRes = await pool.query(`SELECT * FROM users WHERE email=$1 LIMIT 1`, [email]);
+        const anyUser = anyRes.rows[0];
+        if (anyUser && anyUser.role === 'admin') {
+          user = anyUser;
+        }
+      }
+
       if (!user) return res.status(401).json({ message: 'Invalid credentials' });
       if (user.status && user.status !== 'active') return res.status(403).json({ message: 'User is not active' });
       const ok = user.password_hash ? await bcrypt.compare(password, user.password_hash) : false;
@@ -60,7 +71,20 @@ export function buildAuthRouter(pool: Pool) {
          RETURNING id`,
         [tenantId, email, hash]
       );
-      if (!rows[0]) return res.status(404).json({ message: 'User not found' });
+      // If not found within tenant, allow updating global admin across tenants
+      if (!rows[0]) {
+        const anyUserRes = await pool.query(`SELECT id, role FROM users WHERE email=$1 LIMIT 1`, [email]);
+        const anyUser = anyUserRes.rows[0];
+        if (anyUser && anyUser.role === 'admin') {
+          const upd = await pool.query(
+            `UPDATE users SET password_hash=$2, status=COALESCE(status,'active') WHERE email=$1 RETURNING id`,
+            [email, hash]
+          );
+          if (!upd.rows[0]) return res.status(404).json({ message: 'User not found' });
+          return res.json({ message: 'Password updated' });
+        }
+        return res.status(404).json({ message: 'User not found' });
+      }
       return res.json({ message: 'Password updated' });
     } catch (e) { next(e); }
   });
