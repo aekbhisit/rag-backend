@@ -255,7 +255,7 @@ export function buildContextsRouter(pool?: Pool) {
         } catch {}
       }
 
-      // Index and persist embedding/geo if available
+      // Index embedding if available
       try {
         if (usedEmbedding) {
           await indexContextDocument({
@@ -266,7 +266,6 @@ export function buildContextsRouter(pool?: Pool) {
             instruction: created.instruction,
             body: created.body,
             keywords,
-            // status: (req.body as any)?.status || created.status, // Status not supported in Context type
             embedding: usedEmbedding,
             trust_level: created.trust_level,
             language: created.language,
@@ -275,15 +274,24 @@ export function buildContextsRouter(pool?: Pool) {
             updated_at: created.updated_at,
           });
           const pool = getPostgresPool();
-          const { lat, lon } = typeof latitude === 'number' && typeof longitude === 'number'
-            ? { lat: latitude, lon: longitude }
-            : extractLatLon(created.attributes as any);
           const vectorLiteral = `[${usedEmbedding.map((n: number) => Number(n)).join(',')}]`;
           await pool.query(
-            `UPDATE contexts SET embedding = $3::vector, latitude = $4, longitude = $5 WHERE tenant_id=$1 AND id=$2`,
-            [tenantId, created.id, vectorLiteral, lat, lon]
+            `UPDATE contexts SET embedding = $3::vector WHERE tenant_id=$1 AND id=$2`,
+            [tenantId, created.id, vectorLiteral]
           );
         }
+      } catch {}
+
+      // Persist geo coordinates regardless of embedding presence
+      try {
+        const pool = getPostgresPool();
+        const { lat, lon } = typeof latitude === 'number' && typeof longitude === 'number'
+          ? { lat: latitude, lon: longitude }
+          : extractLatLon(created.attributes as any);
+        await pool.query(
+          `UPDATE contexts SET latitude = $3, longitude = $4 WHERE tenant_id=$1 AND id=$2`,
+          [tenantId, created.id, lat, lon]
+        );
       } catch {}
 
       res.status(201).json(created);
