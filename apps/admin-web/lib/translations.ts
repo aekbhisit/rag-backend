@@ -19,6 +19,7 @@ export const translations = {
     
     // Navigation Items
     contexts: 'Contexts',
+    importPlaces: 'Import Places',
     categories: 'Categories',
     prompts: 'Prompts',
     ragRequests: 'RAG Requests',
@@ -173,6 +174,7 @@ export const translations = {
     
     // Actions
     noData: 'No data',
+    imported: 'Imported',
     noTrendData: 'No trend data',
     noResponseTimeData: 'No response time data',
     noIntentData: 'No intent data',
@@ -267,6 +269,7 @@ export const translations = {
     
     // Form Labels
     description: 'Description',
+    keyword: 'Keyword',
     metadata: 'Metadata',
     tags: 'Tags',
     category: 'Category',
@@ -284,6 +287,11 @@ export const translations = {
     page: 'Page',
     latitude: 'Latitude',
     longitude: 'Longitude',
+    googleMapsUrl: 'Google Maps URL',
+    importSelected: 'Import Selected',
+    useMyLocation: 'Use my location',
+    preview: 'Preview',
+    import: 'Import',
    
     onSale: 'On Sale',
     soldOut: 'Sold Out',

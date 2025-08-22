@@ -95,6 +95,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6a2 2 0 012-2h8m-6 8V7a2 2 0 012-2h4M7 7h.01M7 11h.01M7 15h.01" /></svg>
               {!sidebarCollapsed && <span>{translationMounted ? t('contexts') : 'Contexts'}</span>}
             </Link>
+            <Link prefetch={false} className={`no-underline text-[color:var(--text)] hover:bg-[color:var(--bg-muted)] rounded-md flex items-center ${sidebarCollapsed ? 'justify-center px-0 py-2' : 'px-3 py-2 gap-3'}`} href="/admin/contexts/import-places">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              {!sidebarCollapsed && <span>{translationMounted ? t('importPlaces') : 'Import Places'}</span>}
+            </Link>
             <Link prefetch={false} className={`no-underline text-[color:var(--text)] hover:bg-[color:var(--bg-muted)] rounded-md flex items-center ${sidebarCollapsed ? 'justify-center px-0 py-2' : 'px-3 py-2 gap-3'}`} href="/admin/categories">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
               {!sidebarCollapsed && <span>{translationMounted ? t('categories') : 'Categories'}</span>}
