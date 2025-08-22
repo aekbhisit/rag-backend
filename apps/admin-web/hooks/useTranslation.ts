@@ -12,9 +12,11 @@ export function useTranslation() {
   }, []);
 
   const t = useMemo(() => {
-    return (key: keyof typeof translations.en): string => {
-      return translations[currentLang][key] || translations.en[key] || key;
-    };
+    return ((key: keyof typeof translations.en) => {
+      const table = translations[currentLang] as typeof translations.en;
+      const val = table[key] as unknown as string | undefined;
+      return (val ?? (translations.en[key] as unknown as string)) ?? (key as unknown as string);
+    }) as (key: keyof typeof translations.en) => string;
   }, [currentLang]);
   
   return {

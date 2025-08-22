@@ -566,6 +566,7 @@ export const translations = {
     
     // Navigation Items
     contexts: 'ข้อมูล',
+    importPlaces: 'นำเข้าสถานที่',
     categories: 'หมวดหมู่',
     prompts: 'Prompt',
     ragRequests: 'Request RAG',
