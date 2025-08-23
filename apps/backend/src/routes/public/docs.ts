@@ -23,6 +23,7 @@ export function buildDocsRouter() {
             { name: 'type', in: 'query', schema: { type: 'string', enum: ['place','website','ticket','document','text'] } },
             { name: 'intent_scope', in: 'query', schema: { type: 'string' } },
             { name: 'intent_action', in: 'query', schema: { type: 'string' } },
+            { name: 'category', in: 'query', schema: { type: 'string' }, description: 'Category slug (exact) or name (ILIKE)' },
             { name: 'status', in: 'query', schema: { type: 'string' } },
             { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
             { name: 'page_size', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 } },
@@ -30,6 +31,49 @@ export function buildDocsRouter() {
           responses: {
             '200': { description: 'OK' }
           }
+        }
+      },
+      '/categories': {
+        get: {
+          summary: 'List categories (hierarchical)',
+          parameters: [ { name: 'X-Tenant-ID', in: 'header', required: true, schema: { type: 'string', format: 'uuid' } } ],
+          responses: { '200': { description: 'OK' } }
+        },
+        post: {
+          summary: 'Create category',
+          parameters: [ { name: 'X-Tenant-ID', in: 'header', required: true, schema: { type: 'string', format: 'uuid' } } ],
+          requestBody: { required: true, content: { 'application/json': { schema: {
+            type: 'object', properties: {
+              name: { type: 'string' }, slug: { type: 'string' }, description: { type: 'string' }, parent_id: { type: 'string', format: 'uuid' }, sort_order: { type: 'integer' }, metadata: { type: 'object', additionalProperties: true }
+            }, required: ['name','slug']
+          } } } },
+          responses: { '201': { description: 'Created' } }
+        }
+      },
+      '/intent/scopes': {
+        get: {
+          summary: 'List intent scopes',
+          parameters: [ { name: 'X-Tenant-ID', in: 'header', required: true, schema: { type: 'string', format: 'uuid' } } ],
+          responses: { '200': { description: 'OK' } }
+        },
+        post: {
+          summary: 'Create intent scope',
+          parameters: [ { name: 'X-Tenant-ID', in: 'header', required: true, schema: { type: 'string', format: 'uuid' } } ],
+          requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, slug: { type: 'string' }, description: { type: 'string' } }, required: ['name','slug'] } } } },
+          responses: { '201': { description: 'Created' } }
+        }
+      },
+      '/intent/actions': {
+        get: {
+          summary: 'List intent actions',
+          parameters: [ { name: 'X-Tenant-ID', in: 'header', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'scope_id', in: 'query', schema: { type: 'string', format: 'uuid' } } ],
+          responses: { '200': { description: 'OK' } }
+        },
+        post: {
+          summary: 'Create intent action',
+          parameters: [ { name: 'X-Tenant-ID', in: 'header', required: true, schema: { type: 'string', format: 'uuid' } } ],
+          requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { scope_id: { type: 'string', format: 'uuid' }, name: { type: 'string' }, slug: { type: 'string' }, description: { type: 'string' } }, required: ['scope_id','name','slug'] } } } },
+          responses: { '201': { description: 'Created' } }
         }
       },
       '/contexts/{id}': {
@@ -449,7 +493,8 @@ export function buildDocsRouter() {
   });
 
   router.get('/docs', (_req, res) => {
-    res.type('text/plain').send('See /api/docs/openapi.json for OpenAPI spec.');
+    const txt = `RAG Backend Public API\n\nBase URL\n- /api\n\nAuth / Tenanting\n- Include X-Tenant-ID header with your tenant UUID (or default).\n\nEndpoints\n\nGET /api/contexts\n- Headers: X-Tenant-ID\n- Query: q, type, intent_scope, intent_action, status, page, page_size\n- Use to list/search contexts.\n\nGET /api/contexts/{id}\n- Headers: X-Tenant-ID\n- Path: id (uuid)\n\nPOST /api/rag/summary\n- Headers: X-Tenant-ID\n- Body JSON: {\n  conversation_history?: string,\n  text_query: string,\n  simantic_query?: string,\n  intent_scope?: string,\n  intent_action?: string,\n  category?: string,\n  top_k?: number,\n  min_score?: number,\n  fulltext_weight?: number,\n  semantic_weight?: number,\n  prompt_key?: string,\n  prompt_params?: object\n}\n- Returns: summary answer + contexts.\n\nPOST /api/rag/place\n- Headers: X-Tenant-ID\n- Body JSON: {\n  text_query: string, lat: number, long: number,\n  conversation_history?: string, simantic_query?: string, intent_scope?: string, intent_action?: string, category?: string,\n  max_distance_km?: number, distance_weight?: number, top_k?: number, min_score?: number,\n  fulltext_weight?: number, semantic_weight?: number, prompt_key?: string, prompt_params?: object\n}\n- Returns: contexts with distance and optional generated answer.\n\nPOST /api/rag/contexts\n- Headers: X-Tenant-ID\n- Body JSON: same structure as /api/rag/summary (without lat/long)\n\nAdmin (requires backend auth if enabled)\nPOST /api/admin/contexts/import\n- Headers: X-Tenant-ID, Content-Type: application/json\n- Body: context object (type one of: text|document|website|place|ticket). See /api/docs/openapi.json for full schema and examples.\n\nNotes for Agents\n- Always send header: X-Tenant-ID\n- Respect rate limiting; exponential backoff on 429/503\n- Prefer POST /api/rag/summary for general Q&A; use /api/rag/place when location-aware.\n\nFull OpenAPI\n- GET /api/docs/openapi.json\n`;
+    res.type('text/plain').send(txt);
   });
 
   return router;

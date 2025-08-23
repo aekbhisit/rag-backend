@@ -1,0 +1,112 @@
+RAG Backend Public API — Usage Guide (plain text)
+
+Base URL
+- /api
+
+Tenant Header (required)
+- X-Tenant-ID: <tenant_uuid>
+
+Endpoints
+
+1) GET /api/contexts
+- List/search contexts
+- Headers: X-Tenant-ID
+- Query (optional): q, type, intent_scope, intent_action, category, status, page, page_size
+- Example:
+  curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \
+       "http://localhost:3001/api/contexts?q=cafe&type=place&category=food&page=1&page_size=10"
+
+2) GET /api/contexts/{id}
+- Get context by id
+- Headers: X-Tenant-ID
+- Path: id (uuid)
+- Example:
+  curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \
+       http://localhost:3001/api/contexts/<context_id>
+
+3) POST /api/rag/summary
+- General RAG retrieval + optional summarization
+- Headers: X-Tenant-ID, Content-Type: application/json
+- Body JSON (minimum: text_query):
+  {
+    "text_query": "best coffee in chiang mai",
+    "conversation_history": "optional text",
+    "simantic_query": "optional semantic hint",
+    "intent_scope": "optional",
+    "intent_action": "optional",
+    "category": "optional",
+    "top_k": 3,
+    "min_score": 0.5,
+    "fulltext_weight": 0.5,
+    "semantic_weight": 0.5,
+    "prompt_key": "optional",
+    "prompt_params": { "language": "en" }
+  }
+- Example:
+  curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \
+       -H "Content-Type: application/json" \
+       -d '{"text_query":"best coffee in bangkok","top_k":3}' \
+       http://localhost:3001/api/rag/summary
+
+4) POST /api/rag/place
+- Location-aware place retrieval (type: place) combining vector + text + distance
+- Headers: X-Tenant-ID, Content-Type: application/json
+- Body JSON (minimum: text_query, lat, long):
+  {
+    "text_query": "seafood restaurant",
+    "lat": 13.7563,
+    "long": 100.5018,
+    "max_distance_km": 5,
+    "distance_weight": 1,
+    "top_k": 3,
+    "min_score": 0.5,
+    "fulltext_weight": 0.5,
+    "semantic_weight": 0.5
+  }
+- Example:
+  curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \
+       -H "Content-Type: application/json" \
+       -d '{"text_query":"noodle","lat":13.7563,"long":100.5018}' \
+       http://localhost:3001/api/rag/place
+
+5) POST /api/rag/contexts
+- RAG retrieval of contexts only (no geo)
+- Headers: X-Tenant-ID, Content-Type: application/json
+- Body JSON: same structure as /api/rag/summary (without lat/long)
+- Example:
+  curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \
+       -H "Content-Type: application/json" \
+       -d '{"text_query":"refund policy","top_k":5}' \
+       http://localhost:3001/api/rag/contexts
+
+Admin (optional)
+- POST /api/admin/contexts/import — import a context (see OpenAPI for full schema)
+- Headers: X-Tenant-ID, Content-Type: application/json
+
+Categories & Intent API (public)
+1) GET /api/categories
+   curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" http://localhost:3001/api/categories
+
+2) POST /api/categories
+   curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" -H "Content-Type: application/json" \
+        -d '{"name":"Food","slug":"food"}' http://localhost:3001/api/categories
+
+3) GET /api/intent/scopes
+   curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" http://localhost:3001/api/intent/scopes
+
+4) POST /api/intent/scopes
+   curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" -H "Content-Type: application/json" \
+        -d '{"name":"booking","slug":"booking"}' http://localhost:3001/api/intent/scopes
+
+5) GET /api/intent/actions?scope_id=<uuid>
+   curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" "http://localhost:3001/api/intent/actions?scope_id=<uuid>"
+
+6) POST /api/intent/actions
+   curl -sS -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" -H "Content-Type: application/json" \
+        -d '{"scope_id":"<uuid>","name":"reserve","slug":"reserve"}' http://localhost:3001/api/intent/actions
+
+Notes for Agents
+- Always include X-Tenant-ID
+- Use exponential backoff on 429/503
+- Prefer POST /api/rag/summary for general Q&A; use /api/rag/place for geo queries
+- Full OpenAPI spec: GET /api/docs/openapi.json

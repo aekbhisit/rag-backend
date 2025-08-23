@@ -50,6 +50,7 @@ export function buildPublicRetrieveRouter() {
       const type = typeof req.query.type === 'string' ? req.query.type : undefined;
       const scope = typeof req.query.intent_scope === 'string' ? req.query.intent_scope : undefined;
       const action = typeof req.query.intent_action === 'string' ? req.query.intent_action : undefined;
+      const category = typeof req.query.category === 'string' ? req.query.category : undefined;
       const status = typeof req.query.status === 'string' ? req.query.status : undefined;
       const page = Number(req.query.page || 1);
       const pageSize = Math.min(Math.max(Number(req.query.page_size || 10), 1), 100);
@@ -62,6 +63,16 @@ export function buildPublicRetrieveRouter() {
       if (scope) { params.push(scope); where += ` AND $${params.length} = ANY(intent_scopes)`; }
       if (action) { params.push(action); where += ` AND $${params.length} = ANY(intent_actions)`; }
       if (q) { params.push(`%${q}%`); const i = params.length; where += ` AND (title ILIKE $${i} OR body ILIKE $${i})`; }
+      if (category) {
+        // Match by slug (exact) or name (ILIKE)
+        params.push(category); const pSlug = params.length;
+        params.push(`%${category}%`); const pName = params.length;
+        where += ` AND EXISTS (
+          SELECT 1 FROM context_categories cc
+          JOIN categories c ON c.id = cc.category_id
+          WHERE cc.context_id = contexts.id AND cc.tenant_id = $1 AND (c.slug = $${pSlug} OR c.name ILIKE $${pName})
+        )`;
+      }
       params.push(pageSize); params.push(from);
       const { rows } = await pool.query(
         `SELECT id, tenant_id, type, title, body, instruction, attributes, trust_level, status, keywords, language, created_at, updated_at
@@ -83,6 +94,78 @@ export function buildPublicRetrieveRouter() {
         }
       });
     }
+  });
+
+  // Categories: list and create (public API with tenant header)
+  router.get('/categories', async (req, res) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const { CategoriesRepository } = await import('../../repositories/categoriesRepository.js');
+      const repo = new CategoriesRepository(getPostgresPool());
+      const hierarchy = await repo.getHierarchy(tenantId);
+      res.json({ items: hierarchy });
+    } catch (e: any) {
+      res.status(200).json({ items: [], error: String(e?.message || e) });
+    }
+  });
+
+  router.post('/categories', async (req, res) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const CreateSchema = z.object({ name: z.string().min(1), slug: z.string().min(1), description: z.string().optional(), parent_id: z.string().uuid().optional(), sort_order: z.number().int().optional(), metadata: z.record(z.any()).optional() });
+      const input = CreateSchema.parse(req.body || {});
+      const { CategoriesRepository } = await import('../../repositories/categoriesRepository.js');
+      const repo = new CategoriesRepository(getPostgresPool());
+      const created = await repo.create(tenantId, input as any);
+      res.status(201).json(created);
+    } catch (e: any) {
+      res.status(400).json({ error: String(e?.message || e) });
+    }
+  });
+
+  // Intent system (scopes/actions): list and create minimal endpoints
+  router.get('/intent/scopes', async (req, res) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const pool = getPostgresPool();
+      const { rows } = await pool.query(`SELECT id, name, slug, description, created_at, updated_at FROM intent_scopes WHERE tenant_id=$1 ORDER BY name`, [tenantId]);
+      res.json({ items: rows });
+    } catch (e: any) { res.status(200).json({ items: [], error: String(e?.message || e) }); }
+  });
+
+  router.post('/intent/scopes', async (req, res) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const S = z.object({ name: z.string().min(1), slug: z.string().min(1), description: z.string().optional() });
+      const input = S.parse(req.body || {});
+      const pool = getPostgresPool();
+      const { rows } = await pool.query(`INSERT INTO intent_scopes (tenant_id, name, slug, description) VALUES ($1,$2,$3,$4) RETURNING id, name, slug, description, created_at, updated_at`, [tenantId, input.name, input.slug, input.description || null]);
+      res.status(201).json(rows[0]);
+    } catch (e: any) { res.status(400).json({ error: String(e?.message || e) }); }
+  });
+
+  router.get('/intent/actions', async (req, res) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const scopeId = typeof req.query.scope_id === 'string' ? req.query.scope_id : undefined;
+      const pool = getPostgresPool();
+      const params: any[] = [tenantId];
+      let where = 'tenant_id = $1';
+      if (scopeId) { params.push(scopeId); where += ` AND scope_id = $${params.length}`; }
+      const { rows } = await pool.query(`SELECT id, scope_id, name, slug, description, created_at, updated_at FROM intent_actions WHERE ${where} ORDER BY name`, params);
+      res.json({ items: rows });
+    } catch (e: any) { res.status(200).json({ items: [], error: String(e?.message || e) }); }
+  });
+
+  router.post('/intent/actions', async (req, res) => {
+    try {
+      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const S = z.object({ scope_id: z.string().uuid(), name: z.string().min(1), slug: z.string().min(1), description: z.string().optional() });
+      const input = S.parse(req.body || {});
+      const pool = getPostgresPool();
+      const { rows } = await pool.query(`INSERT INTO intent_actions (tenant_id, scope_id, name, slug, description) VALUES ($1,$2,$3,$4,$5) RETURNING id, scope_id, name, slug, description, created_at, updated_at`, [tenantId, input.scope_id, input.name, input.slug, input.description || null]);
+      res.status(201).json(rows[0]);
+    } catch (e: any) { res.status(400).json({ error: String(e?.message || e) }); }
   });
 
   // 1.1) Get single context by id (public)
