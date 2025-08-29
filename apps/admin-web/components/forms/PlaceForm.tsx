@@ -28,13 +28,14 @@ const DAYS = [
 export function PlaceForm({ attributes, errors, onUpdate }: PlaceFormProps) {
   const [showMap, setShowMap] = React.useState(false);
   const [hours, setHours] = React.useState<OpeningHours>(() => {
-    return attributes.hours || {};
+    return attributes.opening_hours || attributes.hours || {};
   });
+  const [tagsInput, setTagsInput] = React.useState<string>(() => (attributes.tags || []).join(', '));
 
   const updateHours = (day: string, time: string) => {
     const newHours = { ...hours, [day]: time };
     setHours(newHours);
-    onUpdate("hours", Object.keys(newHours).length > 0 ? newHours : undefined);
+    onUpdate("opening_hours", Object.keys(newHours).length > 0 ? newHours : undefined);
   };
 
   const handleCoordinatesChange = (lat: number, lng: number) => {
@@ -48,6 +49,13 @@ export function PlaceForm({ attributes, errors, onUpdate }: PlaceFormProps) {
 
   return (
     <div className="space-y-4">
+      <Input
+        label="Place Key"
+        value={attributes.place_key || ""}
+        onChange={(e) => onUpdate("place_key", e.target.value || undefined)}
+        onBlur={(e) => onUpdate("place_key", e.target.value || undefined)}
+        placeholder="stable-key-for-multilingual-linking"
+      />
       <Input
         label="Address *"
         value={attributes.address || ""}
@@ -115,6 +123,23 @@ export function PlaceForm({ attributes, errors, onUpdate }: PlaceFormProps) {
         onBlur={(e) => onUpdate("phone", e.target.value)}
         placeholder="+66 2 123 4567"
       />
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label="Email"
+          type="email"
+          value={attributes.email || ""}
+          onChange={(e) => onUpdate("email", e.target.value || undefined)}
+          onBlur={(e) => onUpdate("email", e.target.value || undefined)}
+          placeholder="contact@example.com"
+        />
+        <Input
+          label="Timezone"
+          value={attributes.timezone || ""}
+          onChange={(e) => onUpdate("timezone", e.target.value || undefined)}
+          onBlur={(e) => onUpdate("timezone", e.target.value || undefined)}
+          placeholder="Asia/Bangkok"
+        />
+      </div>
 
       {/* Enhanced Opening Hours */}
       <div className="space-y-3">
@@ -159,7 +184,8 @@ export function PlaceForm({ attributes, errors, onUpdate }: PlaceFormProps) {
         </div>
       </div>
 
-      {/* Additional Place Attributes */}
+      {/* Additional Place Attributes */
+      }
       <div className="grid grid-cols-2 gap-4">
         <Input
           label="Website"
@@ -170,32 +196,186 @@ export function PlaceForm({ attributes, errors, onUpdate }: PlaceFormProps) {
           placeholder="https://example.com"
         />
         <Input
-          label="Category"
-          value={attributes.category || ""}
-          onChange={(e) => onUpdate("category", e.target.value)}
-          onBlur={(e) => onUpdate("category", e.target.value)}
-          placeholder="Restaurant, Shopping Mall, etc."
+          label="Booking URL"
+          type="url"
+          value={attributes.booking_url || ""}
+          onChange={(e) => onUpdate("booking_url", e.target.value || undefined)}
+          onBlur={(e) => onUpdate("booking_url", e.target.value || undefined)}
+          placeholder="https://example.com/book"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <Input
-          label="Price Range"
-          value={attributes.price_range || ""}
-          onChange={(e) => onUpdate("price_range", e.target.value)}
-          onBlur={(e) => onUpdate("price_range", e.target.value)}
-          placeholder="$ or $$ or $$$ or $$$$"
+          label="Google Maps URL"
+          type="url"
+          value={attributes.maps_url || ""}
+          onChange={(e) => onUpdate("maps_url", e.target.value || undefined)}
+          onBlur={(e) => onUpdate("maps_url", e.target.value || undefined)}
+          placeholder="https://www.google.com/maps/place/?q=place_id:..."
         />
         <Input
-          label="Rating"
-          type="number"
-          step="0.1"
-          min="0"
-          max="5"
-          value={attributes.rating || ""}
-          onChange={(e) => onUpdate("rating", e.target.value ? parseFloat(e.target.value) : undefined)}
-          onBlur={(e) => onUpdate("rating", e.target.value ? parseFloat(e.target.value) : undefined)}
-          placeholder="4.5"
+          label="Google Place ID"
+          value={attributes.google_place_id || ""}
+          onChange={(e) => onUpdate("google_place_id", e.target.value || undefined)}
+          onBlur={(e) => onUpdate("google_place_id", e.target.value || undefined)}
+          placeholder="ChIJxxxxxxxxxxxx"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label="Menu URL"
+          type="url"
+          value={attributes.menu_url || ""}
+          onChange={(e) => onUpdate("menu_url", e.target.value || undefined)}
+          onBlur={(e) => onUpdate("menu_url", e.target.value || undefined)}
+          placeholder="https://example.com/menu"
+        />
+        <Input
+          label="Timezone Note"
+          value={attributes.timezone_note || ""}
+          onChange={(e) => onUpdate("timezone_note", e.target.value || undefined)}
+          onBlur={(e) => onUpdate("timezone_note", e.target.value || undefined)}
+          placeholder="Optional note to explain local time context"
+        />
+      </div>
+
+      {/* Rating & Pricing */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[color:var(--text)]">Rating & Pricing</label>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <Input
+            label="Rating"
+            type="number"
+            step="0.1"
+            min="0"
+            max="5"
+            value={(attributes.rating_pricing?.rating ?? attributes.rating) || ""}
+            onChange={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), rating: e.target.value ? parseFloat(e.target.value) : undefined })}
+            onBlur={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), rating: e.target.value ? parseFloat(e.target.value) : undefined })}
+            placeholder="4.5"
+          />
+          <Input
+            label="Review Count"
+            type="number"
+            min="0"
+            value={(attributes.rating_pricing?.review_count ?? attributes.review_count) || ""}
+            onChange={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), review_count: e.target.value ? parseInt(e.target.value) : undefined })}
+            onBlur={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), review_count: e.target.value ? parseInt(e.target.value) : undefined })}
+            placeholder="120"
+          />
+          <Input
+            label="Rating Source"
+            value={(attributes.rating_pricing?.rating_source ?? attributes.rating_source) || ""}
+            onChange={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), rating_source: e.target.value || undefined })}
+            onBlur={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), rating_source: e.target.value || undefined })}
+            placeholder="Google, Tripadvisor, ..."
+          />
+          <Input
+            label="Price Level (1-4)"
+            type="number"
+            min="1"
+            max="4"
+            value={(attributes.rating_pricing?.price_level ?? attributes.price_level) || ""}
+            onChange={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), price_level: e.target.value ? parseInt(e.target.value) : undefined })}
+            onBlur={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), price_level: e.target.value ? parseInt(e.target.value) : undefined })}
+            placeholder="2"
+          />
+          <Input
+            label="Price Range"
+            value={(attributes.rating_pricing?.price_range ?? attributes.price_range) || ""}
+            onChange={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), price_range: e.target.value || undefined })}
+            onBlur={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), price_range: e.target.value || undefined })}
+            placeholder="$, $$, $$$, $$$$"
+          />
+          <Input
+            label="Currency"
+            value={(attributes.rating_pricing?.currency ?? attributes.currency) || ""}
+            onChange={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), currency: e.target.value || undefined })}
+            onBlur={(e) => onUpdate("rating_pricing", { ...(attributes.rating_pricing || {}), currency: e.target.value || undefined })}
+            placeholder="THB"
+          />
+        </div>
+      </div>
+
+      {/* Social & Links */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[color:var(--text)]">Social & Links</label>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <Input
+            label="Facebook"
+            value={attributes.social?.facebook || ""}
+            onChange={(e) => onUpdate("social", { ...(attributes.social || {}), facebook: e.target.value || undefined })}
+            onBlur={(e) => onUpdate("social", { ...(attributes.social || {}), facebook: e.target.value || undefined })}
+            placeholder="https://facebook.com/..."
+          />
+          <Input
+            label="Instagram"
+            value={attributes.social?.instagram || ""}
+            onChange={(e) => onUpdate("social", { ...(attributes.social || {}), instagram: e.target.value || undefined })}
+            onBlur={(e) => onUpdate("social", { ...(attributes.social || {}), instagram: e.target.value || undefined })}
+            placeholder="https://instagram.com/..."
+          />
+          <Input
+            label="LINE"
+            value={attributes.social?.line || ""}
+            onChange={(e) => onUpdate("social", { ...(attributes.social || {}), line: e.target.value || undefined })}
+            onBlur={(e) => onUpdate("social", { ...(attributes.social || {}), line: e.target.value || undefined })}
+            placeholder="@yourlineid"
+          />
+          <Input
+            label="WhatsApp"
+            value={attributes.social?.whatsapp || ""}
+            onChange={(e) => onUpdate("social", { ...(attributes.social || {}), whatsapp: e.target.value || undefined })}
+            onBlur={(e) => onUpdate("social", { ...(attributes.social || {}), whatsapp: e.target.value || undefined })}
+            placeholder="+66 ..."
+          />
+        </div>
+      </div>
+
+      {/* Amenities */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[color:var(--text)]">Amenities</label>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { key: 'accepts_reservations', label: 'Accepts reservations' },
+            { key: 'has_delivery', label: 'Delivery' },
+            { key: 'has_takeout', label: 'Takeout' },
+            { key: 'wheelchair_accessible', label: 'Wheelchair accessible' },
+            { key: 'parking', label: 'Parking' },
+            { key: 'wifi', label: 'Wi‑Fi' },
+            { key: 'family_friendly', label: 'Family friendly' },
+            { key: 'pet_friendly', label: 'Pet friendly' },
+            { key: 'smoking_area', label: 'Smoking area' },
+          ].map((opt) => (
+            <label key={opt.key} className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!attributes.amenities?.[opt.key]}
+                onChange={(e) => onUpdate('amenities', { ...(attributes.amenities || {}), [opt.key]: e.target.checked || undefined })}
+              />
+              <span>{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Tags */}
+      <div className="space-y-2">
+        <Input
+          label="Tags (comma separated)"
+          value={tagsInput}
+          onChange={(e) => setTagsInput(e.target.value)}
+          onBlur={() => {
+            const tags = tagsInput
+              .split(/[\,\n;]+/)
+              .map(s => s.trim())
+              .filter(Boolean)
+              .filter((v, i, a) => a.indexOf(v) === i);
+            onUpdate('tags', tags.length ? tags : undefined);
+          }}
+          placeholder="resort, spa, beachfront"
         />
       </div>
 

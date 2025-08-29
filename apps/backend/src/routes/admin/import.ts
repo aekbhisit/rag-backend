@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { importService } from '../../services/importService.js';
 import { getPostgresPool } from '../../adapters/db/postgresClient';
 import { TenantsRepository } from '../../repositories/tenantsRepository';
+import { getTenantIdFromReq } from '../../config/tenant';
 
 const router = Router();
 const tenantsRepo = new TenantsRepository(getPostgresPool());
@@ -23,7 +24,7 @@ router.get('/places/nearby', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid lat/lng' });
     }
 
-    const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+    const tenantId = getTenantIdFromReq(req);
     const tenant = await tenantsRepo.get(tenantId);
     const apiKey = tenant?.settings?.integrations?.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) return res.status(503).json({ error: 'Google Maps API not configured' });
@@ -78,7 +79,7 @@ router.get('/places/details', async (req, res, next) => {
   try {
     const placeId = (req.query.place_id as string) || '';
     if (!placeId) return res.status(400).json({ error: 'place_id is required' });
-    const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+    const tenantId = getTenantIdFromReq(req);
     const tenant = await tenantsRepo.get(tenantId);
     const apiKey = tenant?.settings?.integrations?.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) return res.status(503).json({ error: 'Google Maps API not configured' });
@@ -152,7 +153,7 @@ router.post('/place', async (req, res, next) => {
       });
     }
 
-    const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+    const tenantId = getTenantIdFromReq(req);
     const tenant = await tenantsRepo.get(tenantId);
     const apiKey = tenant?.settings?.integrations?.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
@@ -174,7 +175,7 @@ router.get('/google-photo', async (req, res, next) => {
     const ref = (req.query.ref as string) || '';
     if (!ref) return res.status(400).json({ error: 'Missing ref' });
     // Accept tenant id via query since <img> requests cannot send custom headers
-    const tenantId = ((req.query.tenant_id as string) || req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+    const tenantId = ((req.query.tenant_id as string) || getTenantIdFromReq(req)).toString();
     const tenant = await tenantsRepo.get(tenantId);
     const apiKey = tenant?.settings?.integrations?.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) return res.status(503).json({ error: 'Google Maps API not configured' });
@@ -230,7 +231,7 @@ router.post('/website', async (req, res, next) => {
       });
     }
 
-    const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+    const tenantId = getTenantIdFromReq(req);
     const tenant = await tenantsRepo.get(tenantId);
     const firecrawlKey = tenant?.settings?.integrations?.firecrawlApiKey || process.env.FIRECRAWL_API_KEY;
     const imported = await importService.importFromWebsite(url, firecrawlKey, { preferFirecrawlFirst: !!preferFirecrawlFirst, engine });

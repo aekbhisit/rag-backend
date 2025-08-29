@@ -11,6 +11,7 @@ import { getPostgresPool } from './adapters/db/postgresClient';
 import { buildContextsRouter } from './routes/admin/contexts';
 import type { ErrorResponse } from './types/error';
 import { buildIntentsRouter } from './routes/admin/intents';
+import { getTenantIdFromReq } from './config/tenant';
 import { tenantSettingsRateLimiter } from './middleware/rateLimiter';
 
 export async function createApp() {
@@ -154,7 +155,7 @@ export async function createApp() {
 
   // Simple API-key + tenant extractor placeholders
   app.use((req, _res, next) => {
-    (req as any).tenantId = req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000';
+    (req as any).tenantId = getTenantIdFromReq(req);
     next();
   });
 
@@ -192,7 +193,7 @@ export async function createApp() {
   // Test endpoints for debugging (placed before admin routes to ensure error handling works)
   app.get('/api/test-categories', async (req, res) => {
     try {
-      const tenantId = req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000';
+      const tenantId = getTenantIdFromReq(req);
       console.log('Testing categories endpoint for tenant:', tenantId);
       
       const { getPostgresPool } = await import('./adapters/db/postgresClient.js');
@@ -255,7 +256,7 @@ export async function createApp() {
   // Test endpoint to trigger database errors and test error logging
   app.get('/api/test-db-error', async (req, res, next) => {
     try {
-      const tenantId = req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000';
+      const tenantId = getTenantIdFromReq(req);
       console.log('Testing database error logging for tenant:', tenantId);
       
       const { getPostgresPool } = await import('./adapters/db/postgresClient.js');
@@ -345,6 +346,8 @@ export async function createApp() {
     const { buildIntentSystemRouter } = await import('./routes/admin/intentSystem.js');
     const { buildPromptsRouter } = await import('./routes/admin/prompts.js');
     const { buildRequestsRouter } = await import('./routes/admin/requests.js');
+    const { buildMessagesRouter } = await import('./routes/admin/messages.js');
+    const { buildSessionsRouter } = await import('./routes/admin/sessions.js');
     const { buildCostsRouter } = await import('./routes/admin/costs.js');
     const { buildAiCostsRouter } = await import('./routes/admin/aiCosts.js').catch(() => ({ buildAiCostsRouter: null as any }));
     const { buildAiUsageRouter } = await import('./routes/admin/aiUsage.js').catch(() => ({ buildAiUsageRouter: null as any }));
@@ -354,6 +357,8 @@ export async function createApp() {
     app.use('/api/admin/intent-system', buildIntentSystemRouter(getPostgresPool()));
     app.use('/api/admin/prompts', buildPromptsRouter(getPostgresPool()));
     app.use('/api/admin/requests', buildRequestsRouter(getPostgresPool()));
+    app.use('/api/admin/messages', buildMessagesRouter(getPostgresPool()));
+    app.use('/api/admin/sessions', buildSessionsRouter(getPostgresPool()));
     app.use('/api/admin/costs', buildCostsRouter());
     if (buildAiCostsRouter) app.use('/api/admin/ai-costs', buildAiCostsRouter());
     if (buildAiUsageRouter) app.use('/api/admin/ai-usage', buildAiUsageRouter());

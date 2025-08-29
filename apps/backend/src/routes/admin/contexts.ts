@@ -9,9 +9,11 @@ import { ensureContextsVectorColumns, extractLatLon } from '../../adapters/db/ve
 import { TenantsRepository } from '../../repositories/tenantsRepository';
 import { getPostgresPool } from '../../adapters/db/postgresClient';
 import { QueryLogsRepository } from '../../repositories/queryLogsRepository';
+import { ErrorLogsRepository } from '../../repositories/errorLogsRepository';
+import { getTenantIdFromReq } from '../../config/tenant';
 
 const CreateContextSchema = z.object({
-  type: z.enum(['place', 'website', 'ticket', 'document', 'text']).default('text'),
+  type: z.enum(['place', 'website', 'ticket', 'document', 'text', 'product']).default('text'),
   title: z.string().min(1),
   body: z.string().min(1),
   instruction: z.string().optional(),
@@ -39,11 +41,12 @@ export function buildContextsRouter(pool?: Pool) {
   const repo = pool ? new ContextsRepository(pool) : null;
   const tenantsRepo = new TenantsRepository(getPostgresPool());
   const logsRepo = new QueryLogsRepository(getPostgresPool());
+  const errorRepo = new ErrorLogsRepository(getPostgresPool());
   const router = Router();
 
   router.get('/', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const q = typeof req.query.q === 'string' ? req.query.q : undefined;
       const page = Math.max(Number(req.query.page || 1), 1);
       const size = Math.min(Math.max(Number(req.query.size || 20), 1), 200);
@@ -68,8 +71,46 @@ export function buildContextsRouter(pool?: Pool) {
 
   router.post('/', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const input: CreateContext = CreateContextSchema.parse(req.body);
+      // Normalize incoming place attributes (no schema change)
+      if (input.type === 'place' && input.attributes) {
+        const a: any = input.attributes || {};
+        if (a.hours && !a.opening_hours) a.opening_hours = a.hours; // legacy -> new key
+        if (a.longitude !== undefined && a.lon === undefined) a.lon = a.longitude;
+        // Ensure maps_url exists if we have coordinates or Google Place ID
+        if (!a.maps_url) {
+          if (typeof a.google_place_id === 'string' && a.google_place_id.trim()) {
+            a.maps_url = `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(a.google_place_id)}`;
+          } else if (typeof a.lat === 'number' && typeof a.lon === 'number') {
+            a.maps_url = `https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lon}`;
+          }
+        }
+        if (!a.rating_pricing) {
+          const rp: any = {};
+          if (a.rating !== undefined) rp.rating = Number(a.rating);
+          if (a.review_count !== undefined) rp.review_count = Number(a.review_count);
+          if (a.rating_source) rp.rating_source = a.rating_source;
+          if (a.price_level !== undefined) rp.price_level = Number(a.price_level);
+          if (a.price_range) rp.price_range = a.price_range;
+          if (a.currency) rp.currency = a.currency;
+          if (Object.keys(rp).length) a.rating_pricing = rp;
+        }
+        input.attributes = a;
+      }
+
+      // Normalize incoming product attributes (rental product)
+      if (input.type === 'product' && input.attributes) {
+        const a: any = input.attributes || {};
+        // Common numeric/string normalizations
+        if (a.seats !== undefined) a.seats = Number(a.seats);
+        if (a.price_per_day !== undefined) a.price_per_day = Number(a.price_per_day);
+        if (a.deposit !== undefined) a.deposit = Number(a.deposit);
+        if (a.min_age !== undefined) a.min_age = Number(a.min_age);
+        if (typeof a.slug !== 'string' && typeof a.product_key === 'string') a.slug = a.product_key;
+        if (!a.currency && typeof a.currency_code === 'string') a.currency = a.currency_code;
+        input.attributes = a;
+      }
       if (useMock || !repo) {
         const now = new Date().toISOString();
         const item = { id: randomUUID(), tenant_id: tenantId, created_at: now, updated_at: now, ...input };
@@ -156,7 +197,7 @@ export function buildContextsRouter(pool?: Pool) {
   // Import a context with full fields including optional embedding vector
   router.post('/import', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const ImportSchema = CreateContextSchema.extend({
         id: z.string().uuid().optional(),
         embedding: z.array(z.number()).min(2).optional(),
@@ -166,6 +207,56 @@ export function buildContextsRouter(pool?: Pool) {
         updated_at: z.string().optional(),
       });
       const input = ImportSchema.parse(req.body) as any;
+      const pool = getPostgresPool();
+      const isUuid = (s: string) => /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i.test(s);
+      // Resolve categories: allow UUIDs or slugs; ensure they belong to current tenant
+      if (Array.isArray(input.categories) && input.categories.length > 0) {
+        const resolved: string[] = [];
+        for (const cat of input.categories) {
+          const val = String(cat || '').trim();
+          if (!val) continue;
+          if (isUuid(val)) {
+            const r = await pool.query(`SELECT id FROM categories WHERE tenant_id=$1 AND id=$2 LIMIT 1`, [tenantId, val]);
+            if (r.rows[0]?.id) { resolved.push(r.rows[0].id); continue; }
+          }
+          // try slug or name
+          const r2 = await pool.query(`SELECT id FROM categories WHERE tenant_id=$1 AND (slug=$2 OR name ILIKE $3) LIMIT 1`, [tenantId, val, val]);
+          if (r2.rows[0]?.id) { resolved.push(r2.rows[0].id); continue; }
+          // if not found, create it quickly with slug
+          const slug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) || 'category';
+          const cIns = await pool.query(
+            `INSERT INTO categories (tenant_id, name, slug, level, sort_order, is_active, metadata) VALUES ($1,$2,$3,0,0,true,'{}') RETURNING id`,
+            [tenantId, val, slug]
+          );
+          if (cIns.rows[0]?.id) resolved.push(cIns.rows[0].id);
+        }
+        input.categories = resolved;
+      }
+      // Normalize attributes for place type on import
+      if (input.type === 'place' && input.attributes) {
+        const a: any = input.attributes || {};
+        if (a.hours && !a.opening_hours) a.opening_hours = a.hours;
+        if (a.longitude !== undefined && a.lon === undefined) a.lon = a.longitude;
+        // Ensure maps_url exists if we have coordinates or Google Place ID
+        if (!a.maps_url) {
+          if (typeof a.google_place_id === 'string' && a.google_place_id.trim()) {
+            a.maps_url = `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(a.google_place_id)}`;
+          } else if (typeof a.lat === 'number' && typeof a.lon === 'number') {
+            a.maps_url = `https://www.google.com/maps/search/?api=1&query=${a.lat},${a.lon}`;
+          }
+        }
+        if (!a.rating_pricing) {
+          const rp: any = {};
+          if (a.rating !== undefined) rp.rating = Number(a.rating);
+          if (a.review_count !== undefined) rp.review_count = Number(a.review_count);
+          if (a.rating_source) rp.rating_source = a.rating_source;
+          if (a.price_level !== undefined) rp.price_level = Number(a.price_level);
+          if (a.price_range) rp.price_range = a.price_range;
+          if (a.currency) rp.currency = a.currency;
+          if (Object.keys(rp).length) a.rating_pricing = rp;
+        }
+        input.attributes = a;
+      }
       const now = new Date().toISOString();
 
       if (useMock || !repo) {
@@ -197,9 +288,7 @@ export function buildContextsRouter(pool?: Pool) {
               embedding: input.embedding,
               trust_level: item.trust_level,
               language: item.language,
-              attributes: item.attributes,
-              created_at: item.created_at,
-              updated_at: item.updated_at,
+              attributes: input.attributes,
             });
           }
         } catch {}
@@ -207,8 +296,29 @@ export function buildContextsRouter(pool?: Pool) {
       }
 
       // Persist without embedding first
-      const { embedding, latitude, longitude, id: providedId, created_at, updated_at, ...rest } = input as any;
-      const created = await repo.create(tenantId, rest);
+      const { embedding, latitude, longitude, id: _providedId, created_at: _ca, updated_at: _ua, ...restForCreate } = input as any;
+      let created: any;
+      try {
+        created = await repo.create(tenantId, restForCreate);
+      } catch (err: any) {
+        try {
+          await errorRepo.create({
+            tenant_id: tenantId,
+            endpoint: '/api/admin/contexts/import',
+            method: 'POST',
+            http_status: 500,
+            message: String(err?.message || err),
+            error_code: 'CONTEXT_IMPORT_FAILED',
+            stack: typeof err?.stack === 'string' ? err.stack : null,
+            headers: req.headers,
+            query: req.query,
+            body: req.body,
+            request_id: (req as any).request_id || null,
+            notes: 'Failed to create context; likely invalid category id for tenant',
+          } as any);
+        } catch {}
+        throw err;
+      }
 
       // Ensure DB vector columns exist
       await ensureContextsVectorColumns(getPostgresPool(), Number(process.env.EMBEDDING_DIM || '1536'));
@@ -226,12 +336,6 @@ export function buildContextsRouter(pool?: Pool) {
         });
       } catch {}
 
-      const keywords = Array.isArray((req.body as any)?.keywords)
-        ? (req.body as any).keywords
-        : (typeof (req.body as any)?.keywords === 'string'
-            ? (req.body as any).keywords.split(',').map((s: string) => s.trim()).filter(Boolean)
-            : []);
-
       let usedEmbedding: number[] | null = null;
       if (Array.isArray(embedding) && embedding.length > 0) {
         usedEmbedding = embedding.map((n: number) => Number(n));
@@ -244,6 +348,11 @@ export function buildContextsRouter(pool?: Pool) {
           const embSettings = ai.embedding || {};
           const provider = (embSettings.provider || '').toLowerCase() === 'openai' ? 'openai' : (process.env.EMBEDDING_PROVIDER === 'openai' ? 'openai' : 'none');
           const targetDim = Number(process.env.EMBEDDING_DIM || '1536');
+          const keywords = Array.isArray((req.body as any)?.keywords)
+            ? (req.body as any).keywords
+            : (typeof (req.body as any)?.keywords === 'string'
+                ? (req.body as any).keywords.split(',').map((s: string) => s.trim()).filter(Boolean)
+                : []);
           const emb = await createEmbedding({ title: created.title, body: created.body, keywords }, {
             provider,
             apiKey: (ai.providers?.[embSettings.provider?.toLowerCase?.() || 'openai']?.apiKey) || process.env.OPENAI_API_KEY,
@@ -251,34 +360,30 @@ export function buildContextsRouter(pool?: Pool) {
             targetDim,
             metadata: { tenant_id: tenantId, context_id: created.id },
           });
-          usedEmbedding = emb.vector as number[];
+          usedEmbedding = emb.vector.map((n: number) => Number(n));
         } catch {}
       }
 
       // Index embedding if available
       try {
         if (usedEmbedding) {
+          const keywords = Array.isArray((req.body as any)?.keywords)
+            ? (req.body as any).keywords
+            : (typeof (req.body as any)?.keywords === 'string'
+                ? (req.body as any).keywords.split(',').map((s: string) => s.trim()).filter(Boolean)
+                : []);
           await indexContextDocument({
             tenant_id: tenantId,
             context_id: created.id,
             type: created.type,
             title: created.title,
-            instruction: created.instruction,
             body: created.body,
             keywords,
             embedding: usedEmbedding,
             trust_level: created.trust_level,
             language: created.language,
             attributes: created.attributes,
-            created_at: created.created_at,
-            updated_at: created.updated_at,
           });
-          const pool = getPostgresPool();
-          const vectorLiteral = `[${usedEmbedding.map((n: number) => Number(n)).join(',')}]`;
-          await pool.query(
-            `UPDATE contexts SET embedding = $3::vector WHERE tenant_id=$1 AND id=$2`,
-            [tenantId, created.id, vectorLiteral]
-          );
         }
       } catch {}
 
@@ -300,7 +405,7 @@ export function buildContextsRouter(pool?: Pool) {
 
   router.get('/:id', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const id = req.params.id;
       if (useMock || !repo) {
         const item = mockStore.find(x => x.id === id);
@@ -328,7 +433,7 @@ export function buildContextsRouter(pool?: Pool) {
 
   router.put('/:id', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const id = req.params.id;
       const PatchSchema = CreateContextSchema.partial();
       const patch = PatchSchema.parse(req.body);

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Pool } from 'pg';
 import { CategoriesRepository } from '../../repositories/categoriesRepository.js';
+import { getTenantIdFromReq } from '../../config/tenant';
 import { QueryLogsRepository } from '../../repositories/queryLogsRepository';
 
 export function buildCategoriesRouter(pool: Pool) {
@@ -11,7 +12,7 @@ export function buildCategoriesRouter(pool: Pool) {
   // List all categories (flat or hierarchical)
   router.get('/', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const hierarchy = req.query.hierarchy === 'true';
       
       console.log('Categories request:', { tenantId, hierarchy, query: req.query });
@@ -58,7 +59,7 @@ export function buildCategoriesRouter(pool: Pool) {
   // Get single category
   router.get('/:id', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const category = await repo.get(tenantId, req.params.id);
       
       if (!category) {
@@ -74,7 +75,7 @@ export function buildCategoriesRouter(pool: Pool) {
   // Create category
   router.post('/', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const category = await repo.create(tenantId, req.body);
       // Audit: category create
       try {
@@ -97,7 +98,7 @@ export function buildCategoriesRouter(pool: Pool) {
   // Update category
   router.put('/:id', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const category = await repo.update(tenantId, req.params.id, req.body);
       
       if (!category) {

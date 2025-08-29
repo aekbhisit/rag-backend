@@ -109,6 +109,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </Link>
           </div>
 
+          {/* Conversation group */}
+          <div className="mt-3">
+            <div className={`text-[color:var(--text-muted)] text-xs px-3 ${sidebarCollapsed ? 'hidden' : ''}`}>
+              {translationMounted ? t('conversations') : 'Conversations'}
+            </div>
+            <Link prefetch={false} className={`no-underline text-[color:var(--text)] hover:bg-[color:var(--bg-muted)] rounded-md flex items-center ${sidebarCollapsed ? 'justify-center px-0 py-2' : 'px-3 py-2 gap-3'}`} href="/admin/sessions">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v7a2 2 0 01-2 2h-2M7 8H5a2 2 0 00-2 2v7a2 2 0 002 2h2m10-11V7a5 5 0 00-10 0v1m10 0H7" /></svg>
+              {!sidebarCollapsed && <span>{translationMounted ? t('conversations') : 'Conversations'}</span>}
+            </Link>
+          </div>
+
           {/* RAG group */}
           <div className="mt-3">
             <div className={`text-[color:var(--text-muted)] text-xs px-3 ${sidebarCollapsed ? 'hidden' : ''}`}>

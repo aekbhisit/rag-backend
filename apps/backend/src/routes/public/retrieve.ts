@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 import { createEmbedding } from '../../adapters/ai/embeddingClient';
 import { TenantsRepository } from '../../repositories/tenantsRepository';
 import { getPostgresPool } from '../../adapters/db/postgresClient';
+import { getTenantIdFromReq } from '../../config/tenant';
 
 const BaseRetrieveSchema = z.object({
   conversation_history: z.string().optional(),
@@ -45,7 +46,7 @@ export function buildPublicRetrieveRouter() {
   // 1) Raw contexts search with filters + pagination
   router.get('/contexts', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const q = typeof req.query.q === 'string' ? req.query.q : undefined;
       const type = typeof req.query.type === 'string' ? req.query.type : undefined;
       const scope = typeof req.query.intent_scope === 'string' ? req.query.intent_scope : undefined;
@@ -67,10 +68,11 @@ export function buildPublicRetrieveRouter() {
         // Match by slug (exact) or name (ILIKE)
         params.push(category); const pSlug = params.length;
         params.push(`%${category}%`); const pName = params.length;
+        console.log(`DEBUG: Adding category filter for '${category}', slug param: $${pSlug}, name param: $${pName}`);
         where += ` AND EXISTS (
           SELECT 1 FROM context_categories cc
           JOIN categories c ON c.id = cc.category_id
-          WHERE cc.context_id = contexts.id AND cc.tenant_id = $1 AND (c.slug = $${pSlug} OR c.name ILIKE $${pName})
+          WHERE cc.context_id = contexts.id AND cc.tenant_id = contexts.tenant_id AND (c.slug = $${pSlug} OR c.name ILIKE $${pName})
         )`;
       }
       params.push(pageSize); params.push(from);
@@ -99,7 +101,7 @@ export function buildPublicRetrieveRouter() {
   // Categories: list and create (public API with tenant header)
   router.get('/categories', async (req, res) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const { CategoriesRepository } = await import('../../repositories/categoriesRepository.js');
       const repo = new CategoriesRepository(getPostgresPool());
       const hierarchy = await repo.getHierarchy(tenantId);
@@ -111,7 +113,7 @@ export function buildPublicRetrieveRouter() {
 
   router.post('/categories', async (req, res) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const CreateSchema = z.object({ name: z.string().min(1), slug: z.string().min(1), description: z.string().optional(), parent_id: z.string().uuid().optional(), sort_order: z.number().int().optional(), metadata: z.record(z.any()).optional() });
       const input = CreateSchema.parse(req.body || {});
       const { CategoriesRepository } = await import('../../repositories/categoriesRepository.js');
@@ -126,7 +128,7 @@ export function buildPublicRetrieveRouter() {
   // Intent system (scopes/actions): list and create minimal endpoints
   router.get('/intent/scopes', async (req, res) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const pool = getPostgresPool();
       const { rows } = await pool.query(`SELECT id, name, slug, description, created_at, updated_at FROM intent_scopes WHERE tenant_id=$1 ORDER BY name`, [tenantId]);
       res.json({ items: rows });
@@ -135,7 +137,7 @@ export function buildPublicRetrieveRouter() {
 
   router.post('/intent/scopes', async (req, res) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const S = z.object({ name: z.string().min(1), slug: z.string().min(1), description: z.string().optional() });
       const input = S.parse(req.body || {});
       const pool = getPostgresPool();
@@ -146,7 +148,7 @@ export function buildPublicRetrieveRouter() {
 
   router.get('/intent/actions', async (req, res) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const scopeId = typeof req.query.scope_id === 'string' ? req.query.scope_id : undefined;
       const pool = getPostgresPool();
       const params: any[] = [tenantId];
@@ -159,7 +161,7 @@ export function buildPublicRetrieveRouter() {
 
   router.post('/intent/actions', async (req, res) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const S = z.object({ scope_id: z.string().uuid(), name: z.string().min(1), slug: z.string().min(1), description: z.string().optional() });
       const input = S.parse(req.body || {});
       const pool = getPostgresPool();
@@ -171,7 +173,7 @@ export function buildPublicRetrieveRouter() {
   // 1.1) Get single context by id (public)
   router.get('/contexts/:id', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const id = req.params.id;
       if (!id) return res.status(400).json({ error: 'Missing id' });
       const { rows } = await pool.query(
@@ -589,7 +591,7 @@ Return a concise answer in English/Thai if applicable.`;
   // 2) RAG summary default (top 3)
   router.post('/rag/summary', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const input = BaseRetrieveSchema.parse(req.body || {});
       const { apiKey } = await getGeneratingConfig(tenantId);
       if (!apiKey) {
@@ -914,7 +916,7 @@ Return a concise answer in English/Thai if applicable.`;
   // 3) RAG contexts endpoint: try summary; if not available, return raw contexts
   router.post('/rag/contexts', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const input = BaseRetrieveSchema.parse(req.body || {});
       const combined = [input.text_query, input.simantic_query].filter(Boolean).join(' ');
       const { hits, embeddingUsage, embeddingProvider, embeddingModel } = await knnRetrieve(
@@ -1216,7 +1218,7 @@ Return a concise answer in English/Thai if applicable.`;
   // 3) RAG place search (nearby places with hybrid + distance)
   router.post('/rag/place', async (req, res) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const input = PlaceRetrieveSchema.parse(req.body || {});
       const combined = [input.text_query, input.simantic_query].filter(Boolean).join(' ');
       const { hits, embeddingUsageId, embeddingUsage, embeddingLatencyMs, embeddingCost, embeddingProvider, embeddingModel } = await placeRetrieve(

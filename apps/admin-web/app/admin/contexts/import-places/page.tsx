@@ -57,15 +57,25 @@ function toContextPayload(d: PlaceDetails) {
     title: d.name || 'Place',
     body: lines.join('\n'),
     instruction: 'Use the provided details as reference when answering related queries.',
-    latitude: typeof lat === 'number' ? lat : undefined,
-    longitude: typeof lng === 'number' ? lng : undefined,
     attributes: {
       address,
       lat,
-      longitude: lng,
+      lon: lng,
       phone,
-      opening_hours: d.opening_hours || [],
-      rating: d.rating,
+      timezone: 'Asia/Bangkok',
+      opening_hours: normalizeOpeningHours(d.opening_hours),
+      rating_pricing: {
+        rating: d.rating,
+        review_count: d.user_ratings_total,
+        price_level: d.price_level,
+        price_range: (typeof d.price_level === 'number') ? ['$', '$$', '$$$', '$$$$'][Math.max(1, Math.min(4, d.price_level)) - 1] : undefined,
+        currency: 'THB'
+      },
+      social: {},
+      amenities: {},
+      tags: types,
+      maps_url: d.place_id ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(d.place_id)}` : (typeof lat==='number'&&typeof lng==='number' ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : undefined),
+      google_place_id: d.place_id,
       source_uri: website,
       google_place_id: d.place_id,
       imported_at: new Date().toISOString(),
@@ -76,6 +86,41 @@ function toContextPayload(d: PlaceDetails) {
     status: 'active',
     keywords: types,
   } as any;
+}
+
+function normalizeOpeningHours(hours?: string[]): Record<string, string> {
+  // Accept array like ["Mon-Fri 09:00-18:00", "Sat 10:00-16:00", "Sun Closed"] and collapse to simple single-interval strings per day
+  // Keep minimal logic to avoid complexity; missing days remain undefined
+  const map: Record<string, string> = {};
+  if (!Array.isArray(hours)) return map;
+  const dayKeys = { Mon:'mon', Tue:'tue', Wed:'wed', Thu:'thu', Fri:'fri', Sat:'sat', Sun:'sun' } as Record<string,string>;
+  for (const line of hours) {
+    const m = line.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:-(Mon|Tue|Wed|Thu|Fri|Sat|Sun))?\s+(\d{1,2}:\d{2})-(\d{1,2}:\d{2})/i);
+    if (m) {
+      const startDay = m[1].slice(0,3);
+      const endDay = (m[2] || m[1]).slice(0,3);
+      const start = m[3];
+      const end = m[4];
+      const order = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      const si = order.indexOf(startDay.charAt(0).toUpperCase()+startDay.slice(1,3));
+      const ei = order.indexOf(endDay.charAt(0).toUpperCase()+endDay.slice(1,3));
+      if (si >= 0 && ei >= si) {
+        for (let i = si; i <= ei; i++) {
+          const key = dayKeys[order[i] as keyof typeof dayKeys];
+          if (key) map[key] = `${start}-${end}`;
+        }
+      } else if (si >=0 && ei >=0 && ei < si) {
+        // wrap over week end (rare); keep start day only
+        const key = dayKeys[order[si] as keyof typeof dayKeys];
+        if (key) map[key] = `${start}-${end}`;
+      }
+    } else if (/Sun\s+Closed/i.test(line)) {
+      map['sun'] = '';
+    }
+  }
+  // remove empty
+  Object.keys(map).forEach(k => { if (!map[k]) delete map[k]; });
+  return map;
 }
 
 export default function ImportPlacesPage() {

@@ -9,6 +9,7 @@ import { Button } from "../Button";
 import { Badge } from "../ui/Badge";
 import { ImportBar } from "./ImportBar";
 import { PlaceForm } from "./PlaceForm";
+import { ProductForm } from "./ProductForm";
 import { WebsiteForm } from "./WebsiteForm";
 import { TicketForm } from "./TicketForm";
 import { DocumentForm } from "./DocumentForm";
@@ -57,6 +58,7 @@ const CONTEXT_TYPES = [
   { value: "website", label: "Website" },
   { value: "ticket", label: "Ticket" },
   { value: "document", label: "Document" },
+  { value: "product", label: "Product" },
   { value: "text", label: "Text" }
 ];
 
@@ -351,6 +353,14 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
       case "document":
         return (
           <DocumentForm
+            attributes={formData.attributes}
+            errors={errors}
+            onUpdate={updateAttribute}
+          />
+        );
+      case "product":
+        return (
+          <ProductForm
             attributes={formData.attributes}
             errors={errors}
             onUpdate={updateAttribute}

@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import bcrypt from 'bcryptjs';
+import { getTenantIdFromReq } from '../../config/tenant';
 
 export function buildAuthRouter(pool: Pool) {
   const router = Router();
@@ -32,7 +33,7 @@ export function buildAuthRouter(pool: Pool) {
   router.post('/login', async (req, res, next) => {
     try {
       const { email, password } = (req.body || {}) as { email?: string; password?: string };
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       if (!email || !password) return res.status(400).json({ message: 'Missing email or password' });
       await ensureUserColumns();
       // First, try to find a user within the provided tenant
@@ -60,7 +61,7 @@ export function buildAuthRouter(pool: Pool) {
   router.post('/set-password', async (req, res, next) => {
     try {
       const { email, password } = (req.body || {}) as { email?: string; password?: string };
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       if (!email || !password) return res.status(400).json({ message: 'Missing email or password' });
       await ensureUserColumns();
       const hash = await bcrypt.hash(password, 10);
