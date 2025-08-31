@@ -1,0 +1,101 @@
+                {/* Recent Activity - Completely redesigned for tablet display */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+                  {/* Recent Listings - Improved card design */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-gray-100 flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-900">Recent Listings</h3>
+                      <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">View All</button>
+                    </div>
+                    <div className="p-3 sm:p-4">
+                      {recentListings.map((ticket) => (
+                        <div key={ticket.id} className="bg-gray-50 rounded-lg mb-3 last:mb-0">
+                          <div className="px-3 py-3 sm:px-4 sm:py-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
+                              <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-1 sm:mb-0 pr-4">{ticket.title}</h4>
+                              <p className="font-semibold text-gray-900 text-sm whitespace-nowrap">฿{ticket.price.toLocaleString()}</p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between">
+                              <p className="text-xs text-gray-600 mb-2 sm:mb-0">{ticket.venue} • {ticket.date}</p>
+                              <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border mr-2 sm:mr-3 ${getStatusColor(ticket.status)}`}>
+                                  {ticket.status}
+                                </span>
+                                <div className="flex items-center text-xs text-gray-500">
+                                  <Eye className="w-3.5 h-3.5 mr-1" />
+                                  <span>{ticket.views}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Recent Orders - Improved card design */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-gray-100 flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
+                      <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">View All</button>
+                    </div>
+                    <div className="p-3 sm:p-4">
+                      {recentOrders.map((order) => (
+                        <div key={order.id} className="bg-gray-50 rounded-lg mb-3 last:mb-0">
+                          <div className="px-3 py-3 sm:px-4 sm:py-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
+                              <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-1 sm:mb-0 pr-4">{order.title}</h4>
+                              <div className="flex items-center">
+                                <p className="font-semibold text-gray-900 text-sm whitespace-nowrap mr-1">฿{order.price.toLocaleString()}</p>
+                                <p className="text-xs text-gray-500">({order.id})</p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between">
+                              <p className="text-xs text-gray-600 mb-2 sm:mb-0">{order.venue} • {order.date}</p>
+                              <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border mr-2 sm:mr-3 ${getStatusColor(order.status)}`}>
+                                  {order.status}
+                                </span>
+                                <div className="flex items-center text-xs text-gray-500">
+                                  <span>{order.tickets} ticket(s)</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'my-tickets' && (
+              <div className="space-y-6">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5 md:gap-6">
+                  <div className="bg-white rounded-xl p-4 sm:p-5 md:p-6 shadow-sm border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Total Listed</p>
+                        <p className="text-2xl font-bold text-gray-900">{myTicketListings.length}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <Ticket className="w-6 h-6 text-blue-600" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl p-4 sm:p-5 md:p-6 shadow-sm border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Sold</p>
+                        <p className="text-2xl font-bold text-gray-900">{myTicketListings.filter(t => t.status === 'sold').length}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                        <DollarSign className="w-6 h-6 text-green-600" />

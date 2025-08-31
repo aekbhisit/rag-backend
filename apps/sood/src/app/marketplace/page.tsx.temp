@@ -1,0 +1,1178 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/app/contexts/AuthContext';
+import { useCart } from '@/app/contexts/CartContext';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Header from '@/app/components/Header';
+import Breadcrumb, { breadcrumbConfigs } from '@/app/components/Breadcrumb';
+import MarketplaceChatBot from '@/app/components/MarketplaceChatBot';
+import { Event } from '@/app/types/marketplace';
+import { 
+  MagnifyingGlassIcon as Search, 
+  FunnelIcon as Filter, 
+  CalendarIcon as Calendar, 
+  MapPinIcon as MapPin, 
+  StarIcon as Star, 
+  HeartIcon as Heart, 
+  ShoppingCartIcon as ShoppingCart, 
+  UserIcon as User, 
+  Bars3Icon as Menu, 
+  XMarkIcon as X, 
+  ChevronDownIcon as ChevronDown, 
+  ArrowTrendingUpIcon as TrendingUp, 
+  FireIcon as Fire, 
+  SparklesIcon as Sparkles, 
+  BoltIcon as Lightning, 
+  ClockIcon as Clock, 
+  InformationCircleIcon as Info, 
+  PhoneIcon as Phone, 
+  DocumentTextIcon as Document, 
+  ShieldCheckIcon as Shield, 
+  HomeIcon, 
+  UserGroupIcon, 
+  CurrencyDollarIcon, 
+  TicketIcon, 
+  EyeIcon as Eye, 
+  QuestionMarkCircleIcon, 
+  Cog6ToothIcon, 
+  ChatBubbleLeftRightIcon, 
+  MinusIcon 
+} from '@heroicons/react/24/outline';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { 
+  faStore, 
+  faCalendarAlt, 
+  faMusic, 
+  faFutbol, 
+  faTheaterMasks, 
+  faLaughSquint, 
+  faMapMarkerAlt, 
+  faTags, 
+  faTicketAlt, 
+  faEye, 
+  faQuestionCircle, 
+  faStar, 
+  faHeart, 
+  faShoppingCart, 
+  faUserCircle, 
+  faBars, 
+  faTimes 
+} from '@fortawesome/free-solid-svg-icons';
+
+interface Event {
+  id: string;
+  title: string;
+  category: string;
+  venue: string;
+  city: string;
+  date: string;
+  time: string;
+  priceRange: { min: number; max: number };
+  originalPriceRange?: { min: number; max: number };
+  image: string;
+  verified: boolean;
+  rating: number;
+  totalTickets: number;
+  availableTickets: number;
+  soldTickets: number;
+  featured: boolean;
+  organizer: string;
+  description: string;
+  tags: string[];
+}
+
+interface Ticket {
+  id: string;
+  eventId: string;
+  title: string;
+  category: string;
+  venue: string;
+  city: string;
+  date: string;
+  time: string;
+  price: number;
+  originalPrice?: number;
+  image: string;
+  verified: boolean;
+  rating: number;
+  soldCount: number;
+  featured: boolean;
+  seller: string;
+  sellerId: string;
+  sellerRating: number;
+  sellerSales: number;
+  description: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  avatar: string;
+  rating: number;
+  reviewCount: number;
+  isLoggedIn: boolean;
+  role: 'buyer' | 'seller' | 'both';
+  totalSales?: number;
+  totalPurchases?: number;
+}
+
+type MenuSection = 'home' | 'about' | 'contact' | 'terms' | 'privacy';
+
+interface Seller {
+  id: string;
+  name: string;
+  avatar: string;
+  rating: number;
+  totalSales: number;
+  joinedDate: string;
+  verificationBadge: boolean;
+  specialties: string[];
+}
+
+const MarketplacePage: React.FC = () => {
+  const { user, isAuthenticated, logout } = useAuth();
+  const { addToCart, totalItems, isInCart } = useCart();
+  const router = useRouter();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedLocation, setSelectedLocation] = useState('all');
+  const [sortBy, setSortBy] = useState('featured');
+  const [showFilters, setShowFilters] = useState(false);
+  const [showMemberMenu, setShowMemberMenu] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [activeMenuSection, setActiveMenuSection] = useState<MenuSection>('home');
+  const [selectedTicketDetail, setSelectedTicketDetail] = useState<Ticket | null>(null);
+  const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showFloatingMenu, setShowFloatingMenu] = useState(false);
+  const [showMobileChatbox, setShowMobileChatbox] = useState(false);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const eventsPerPage = 9; // Show 9 events per page (3 rows of 3 on desktop)
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showMobileMenu && !target.closest('.mobile-menu-container') && !target.closest('.mobile-menu-button')) {
+        setShowMobileMenu(false);
+      }
+      if (showMemberMenu && !target.closest('.member-menu-container') && !target.closest('.member-menu-button')) {
+        setShowMemberMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMobileMenu, showMemberMenu]);
+
+  const navigationMenuItems = [
+    { id: 'marketplace', name: 'Marketplace', nameTh: 'ตลาดกลาง', icon: faStore, href: '/marketplace' },
+    { id: 'events', name: 'Events', nameTh: 'กิจกรรม', icon: faCalendarAlt, href: '/events' },
+    { id: 'sports', name: 'Sports', nameTh: 'กีฬา', icon: faFutbol, href: '/sports' },
+    { id: 'concerts', name: 'Concerts', nameTh: 'คอนเสิร์ต', icon: faMusic, href: '/concerts' },
+    { id: 'festivals', name: 'Festivals', nameTh: 'เทศกาล', icon: faStar, href: '/festivals' },
+    { id: 'venues', name: 'Venues', nameTh: 'สถานที่', icon: faMapMarkerAlt, href: '/venues' },
+    { id: 'deals', name: 'Deals', nameTh: 'โปรโมชั่น', icon: faTags, href: '/deals' },
+  ];
+
+  const categories = [
+    { id: 'all', name: 'All Events', nameTh: 'กิจกรรมทั้งหมด', icon: faStore, count: 4325, color: 'bg-purple-100 text-purple-700' },
+    { id: 'concerts', name: 'Concerts', nameTh: 'คอนเสิร์ต', icon: faMusic, count: 1850, color: 'bg-pink-100 text-pink-700' },
+    { id: 'sports', name: 'Sports', nameTh: 'กีฬา', icon: faFutbol, count: 1240, color: 'bg-green-100 text-green-700' },
+    { id: 'festivals', name: 'Festivals', nameTh: 'เทศกาล', icon: faStar, count: 680, color: 'bg-indigo-100 text-indigo-700' },
+    { id: 'theater', name: 'Theater', nameTh: 'ละคร', icon: faTheaterMasks, count: 425, color: 'bg-red-100 text-red-700' },
+    { id: 'comedy', name: 'Comedy', nameTh: 'ตลก', icon: faLaughSquint, count: 130, color: 'bg-yellow-100 text-yellow-700' },
+  ];
+
+  const featuredEvents: Event[] = [
+    {
+      id: '1',
+      title: 'BNK48 Special Concert 2024',
+      category: 'concerts',
+      venue: 'Impact Arena',
+      city: 'Bangkok',
+      date: '2024-12-15',
+      time: '19:30',
+      priceRange: { min: 1200, max: 8500 },
+      originalPriceRange: { min: 1500, max: 10000 },
+      image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400',
+      verified: true,
+      rating: 4.9,
+      totalTickets: 450,
+      availableTickets: 89,
+      soldTickets: 361,
+      featured: true,
+      organizer: 'BNK48 Official',
+      description: 'Special concert featuring all BNK48 members with exclusive performances and fan interactions.',
+      tags: ['Concert', 'J-Pop', 'Idol', 'Meet & Greet']
+    }
+  ];
+
+  const eventSections = [
+    {
+      id: 'hot',
+      title: '🔥 Hot Events',
+      subtitle: 'Most popular in Thailand right now',
+      color: 'from-red-500 to-orange-500',
+      events: featuredEvents.filter(e => e.soldTickets > 200)
+    }
+  ];
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    // Implement search logic
+  };
+
+  const handleMenuNavigation = (section: MenuSection) => {
+    setActiveMenuSection(section);
+  };
+
+  const handleTicketDetail = (ticket: Ticket) => {
+    setSelectedTicketDetail(ticket);
+  };
+
+  const formatThaiPrice = (price: number) => {
+    return `฿${price.toLocaleString()}`;
+  };
+
+  const handleEventClick = (event: Event) => {
+    router.push(`/events/${event.id}`);
+  };
+
+  const handleAddToCart = (ticket: Ticket) => {
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
+
+    addToCart({
+      id: ticket.id,
+      title: ticket.title,
+      venue: ticket.venue,
+      city: ticket.city,
+      date: ticket.date,
+      time: ticket.time,
+      price: ticket.price,
+      originalPrice: ticket.originalPrice,
+      image: ticket.image,
+      category: ticket.category,
+      seller: ticket.seller,
+      verified: ticket.verified,
+      maxQuantity: 8 // Default max tickets per order
+    });
+  };
+
+  const handleSellerClick = (sellerId: string) => {
+    // Navigate to seller profile or show seller details
+    router.push(`/sellers/${sellerId}`);
+  };
+
+  const toggleFavorite = (ticketId: string) => {
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
+    
+    setFavorites(prev => 
+      prev.includes(ticketId) 
+        ? prev.filter(id => id !== ticketId)
+        : [...prev, ticketId]
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Using the new reusable Header component */}
+      <Header />
+      
+      {/* Featured Menu Bar */}
+      <div className="bg-gradient-to-r from-red-600 to-blue-600 text-white py-3">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-6">
+              <span className="text-sm font-semibold">🔥 Featured:</span>
+              <div className="hidden md:flex items-center space-x-4">
+                {[
+                  { name: 'Hot Deals', icon: '💥', href: '/deals' },
+                  { name: 'This Weekend', icon: '📅', href: '/weekend' },
+                  { name: 'VIP Tickets', icon: '⭐', href: '/vip' },
+                  { name: 'Last Minute', icon: '⏰', href: '/last-minute' }
+                ].map((item) => (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className="flex items-center space-x-1 text-sm hover:text-yellow-300 transition-colors"
+                  >
+                    <span>{item.icon}</span>
+                    <span>{item.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 text-sm">
+              <span className="hidden sm:inline">📞 Support: </span>
+              <span className="font-semibold">02-123-4567</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-4 md:py-6">
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 max-w-full">
+          {/* Left Sidebar - Complete Menu */}
+          <aside className="hidden lg:block w-64 xl:w-72 flex-shrink-0">
+            <div className="space-y-6 sticky top-24">
+              {/* Categories Section */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-gray-100">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    <FontAwesomeIcon icon={faStore} className="w-5 h-5 mr-3 text-purple-600" />
+                    Categories
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">Browse by event type</p>
+                </div>
+                <div className="p-4">
+                  <div className="space-y-2">
+                    {categories.map((category) => {
+                      const isSelected = selectedCategory === category.id;
+                      return (
+                        <button
+                          key={category.id}
+                          onClick={() => setSelectedCategory(category.id)}
+                          className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                              : 'text-gray-700 hover:bg-purple-50 hover:text-purple-700'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${category.color}`}>
+                              <FontAwesomeIcon icon={category.icon} className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium">{category.name}</div>
+                              <div className="text-xs text-gray-500">{category.nameTh}</div>
+                            </div>
+                          </div>
+                          <span className="text-xs font-semibold px-2 py-1 bg-gray-100 rounded-full">
+                            {category.count.toLocaleString()}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Menu Items */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-slate-50 border-b border-gray-100">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    <Info className="w-5 h-5 mr-3 text-gray-600" />
+                    Menu
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">Account & support</p>
+                </div>
+                <div className="p-4">
+                  <div className="space-y-2">
+                    {[
+                      { name: 'About Us', icon: Info, section: 'about' },
+                      { name: 'Contact', icon: Phone, section: 'contact' },
+                      { name: 'Terms', icon: Document, section: 'terms' },
+                      { name: 'Privacy', icon: Shield, section: 'privacy' }
+                    ].map((item) => (
+                      <button
+                        key={item.name}
+                        onClick={() => handleMenuNavigation(item.section as MenuSection)}
+                        className={`w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-colors ${
+                          activeMenuSection === item.section
+                            ? 'bg-gray-100 text-gray-900'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <item.icon className="w-4 h-4" />
+                        <span className="text-sm font-medium">{item.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* Main Content - Responsive width */}
+          <main className="flex-1 min-w-0">
+            {/* Breadcrumb Navigation */}
+            <div className="mb-4 hidden md:block">
+              <Breadcrumb items={breadcrumbConfigs.marketplace} />
+            </div>
+            
+            {/* Mobile Search Bar */}
+            <div className="md:hidden mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="ค้นหากิจกรรม... | Search events..."
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white text-gray-800 placeholder-gray-500"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Mobile Filters - Show on mobile when filters are toggled */}
+            {showFilters && (
+              <div className="lg:hidden mb-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div className="space-y-4">
+                  {/* Mobile Categories */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                      <FontAwesomeIcon icon={faStore} className="w-4 h-4 mr-2 text-blue-600" />
+                      Categories
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {categories.slice(0, 6).map((category) => {
+                        const isSelected = selectedCategory === category.id;
+                        return (
+                          <button
+                            key={category.id}
+                            onClick={() => setSelectedCategory(category.id)}
+                            className={`flex items-center space-x-2 p-3 rounded-lg text-left transition-all duration-200 ${
+                              isSelected
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-gray-50 text-gray-700 hover:bg-blue-50'
+                            }`}
+                          >
+                            <FontAwesomeIcon icon={category.icon} className={`w-4 h-4 ${isSelected ? 'text-blue-600' : 'text-gray-500'}`} />
+                            <span className="text-xs font-medium">{category.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Conditional Content Based on Menu Selection */}
+            {activeMenuSection === 'home' && (
+              <>
+                {/* Enhanced Event Sections - Improved Responsive Design */}
+                {/* Only show featured sections when no category is selected */}
+                {selectedCategory === 'all' && eventSections.map((section) => (
+                  <section key={section.id} className="mb-6 sm:mb-8">
+                    <div className={`bg-gradient-to-r ${section.color} rounded-xl p-4 sm:p-6 text-white mb-6 relative overflow-hidden`}>
+                      <div className="absolute inset-0 bg-black/10 rounded-xl"></div>
+                      <div className="relative z-10">
+                        {/* Header - Responsive layout */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
+                          <div className="mb-2 sm:mb-0">
+                            <h2 className="text-xl sm:text-2xl font-bold mb-1">{section.title}</h2>
+                            <p className="text-white/90 text-sm sm:text-base">{section.subtitle}</p>
+                          </div>
+                          <div className="text-2xl sm:text-4xl opacity-20 self-end">{section.title.split(' ')[0]}</div>
+                        </div>
+                        
+                        {/* Event Cards Grid - Enhanced Responsive */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-4">
+                          {section.events.map((event) => (
+                            <div 
+                              key={event.id} 
+                              onClick={() => handleEventClick(event)}
+                              className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-4 hover:bg-white/20 transition-all duration-200 cursor-pointer group transform hover:scale-105 min-h-[80px] sm:min-h-[120px] flex flex-col justify-between"
+                            >
+                              {/* Mobile Compact layout */}
+                              <div className="flex items-center space-x-2 sm:space-x-3 mb-2 sm:mb-3">
+                                <img
+                                  src={event.image}
+                                  alt={event.title}
+                                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg object-cover group-hover:scale-105 transition-transform duration-200 flex-shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-sm sm:text-base text-white line-clamp-1 mb-1">{event.title}</h3>
+                                  <p className="text-xs sm:text-sm text-white/80 line-clamp-1">{event.venue}, {event.city}</p>
+                                </div>
+                              </div>
+                              
+                              {/* Price range and action - Mobile optimized */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex flex-col">
+                                  <span className="text-base sm:text-lg font-bold text-white">
+                                    {formatThaiPrice(event.priceRange.min)} - {formatThaiPrice(event.priceRange.max)}
+                                  </span>
+                                  {event.originalPriceRange && (
+                                    <span className="text-xs text-white/60 line-through">
+                                      {formatThaiPrice(event.originalPriceRange.min)} - {formatThaiPrice(event.originalPriceRange.max)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <div className="flex items-center space-x-1 text-xs text-white/80">
+                                    <TrendingUp className="w-3 h-3" />
+                                    <span>{event.availableTickets} left</span>
+                                  </div>
+                                  <button className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg transition-colors font-medium">
+                                    View →
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* View All Button - Improved responsive */}
+                        {section.events.length > 3 && (
+                          <div className="mt-5 sm:mt-6 text-center">
+                            <button className="text-base sm:text-sm bg-white/20 hover:bg-white/30 active:bg-white/40 px-8 py-3 sm:px-6 sm:py-2 rounded-lg transition-colors font-medium touch-manipulation shadow-lg hover:shadow-xl">
+                              <span className="hidden sm:inline">View All {section.events.length} Events</span>
+                              <span className="sm:hidden">View All ({section.events.length})</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                ))}
+
+                {/* Category Filter Results Header - Enhanced Responsive */}
+                {(selectedCategory !== 'all' || searchQuery) && (
+                  <div className="mb-6">
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {selectedCategory !== 'all' ? categories.find(cat => cat.id === selectedCategory)?.name + ' Events' : 'Search Results'}
+                    </h2>
+                    <p className="text-gray-600 text-sm sm:text-base">
+                      Showing {totalEvents} results
+                    </p>
+                  </div>
+                )}
+
+                {/* Sort & Results Header - Enhanced Responsive */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-800">
+                      {selectedCategory === 'all' ? 'All Events' : `${categories.find(cat => cat.id === selectedCategory)?.name} Events`}
+                    </h2>
+                    <p className="text-gray-600 text-sm sm:text-base">
+                      Showing {totalEvents} results
+                    </p>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:space-x-4 sm:gap-0">
+                    <div className="relative flex-1 sm:flex-initial">
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="w-full sm:w-auto appearance-none bg-white border-2 border-gray-200 rounded-lg px-4 py-2 pr-10 text-gray-700 font-medium focus:ring-2 focus:ring-red-500 focus:border-red-500 hover:border-red-300 transition-colors cursor-pointer"
+                      >
+                        <option value="featured">Featured</option>
+                        <option value="price-low">Price: Low to High</option>
+                        <option value="price-high">Price: High to Low</option>
+                        <option value="date">Date</option>
+                        <option value="popularity">Most Popular</option>
+                      </select>
+                      <ChevronDown className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
+                    </div>
+                    
+                    <button
+                      onClick={() => setShowFilters(!showFilters)}
+                      className="lg:hidden flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-700"
+                    >
+                      <Filter className="w-4 h-4" />
+                      <span>Filters</span>
+                      {showFilters && <span className="text-xs bg-red-500 text-white rounded-full px-1.5">ON</span>}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Loading State */}
+                {loading && (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  </div>
+                )}
+
+                {/* Events Grid - Enhanced Responsive Layout */}
+                {!loading && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-6">
+                      {events.map((event) => (
+                        <div key={event.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow group cursor-pointer" onClick={() => handleEventClick(event)}>
+                          
+                          {/* Mobile Compact List Layout */}
+                          <div className="sm:hidden flex items-center p-3 h-20 space-x-3">
+                            {/* Compact Image */}
+                            <div className="relative w-16 h-14 overflow-hidden rounded-lg flex-shrink-0">
+                              <img
+                                src={event.image}
+                                alt={event.title}
+                                className="w-full h-full object-cover"
+                              />
+                              {/* Verified Badge */}
+                              {event.verified && (
+                                <div className="absolute top-0 left-0 bg-green-500 rounded-br-lg p-0.5">
+                                  <Shield className="w-2 h-2 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Compact Content */}
+                            <div className="flex-1 min-w-0 h-14 flex flex-col justify-between">
+                              <div>
+                                <h3 className="text-sm font-semibold text-gray-800 line-clamp-1 mb-0.5">{event.title}</h3>
+                                <div className="flex items-center text-gray-500">
+                                  <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
+                                  <span className="text-xs truncate">{event.venue}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-bold text-blue-600">
+                                  {formatThaiPrice(event.priceRange.min)} - {formatThaiPrice(event.priceRange.max)}
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                  <span className="text-xs font-medium text-gray-800">{event.availableTickets} tickets</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Action Buttons */}
+                            <div className="flex flex-col space-y-1 flex-shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(event.id);
+                                }}
+                                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                              >
+                                <Heart
+                                  className={`w-3.5 h-3.5 ${
+                                    favorites.includes(event.id)
+                                      ? 'text-red-500 fill-red-500'
+                                      : 'text-gray-400'
+                                  }`}
+                                />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEventClick(event);
+                                }}
+                                className="w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Desktop/Tablet Layout - Vertical (hidden on mobile) */}
+                          <div className="hidden sm:block">
+                            {/* Event Image */}
+                            <div className="relative h-40 sm:h-48 overflow-hidden">
+                              <img
+                                src={event.image}
+                                alt={event.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              
+                              {/* Overlay Elements */}
+                              <div className="absolute top-3 left-3">
+                                {event.verified && (
+                                  <div className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg border-2 border-white">
+                                    <Shield className="w-3 h-3 mr-1.5" />
+                                    <span>Verified</span>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(event.id);
+                                }}
+                                className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors"
+                              >
+                                <Heart
+                                  className={`w-4 h-4 ${
+                                    favorites.includes(event.id)
+                                      ? 'text-red-500 fill-red-500'
+                                      : 'text-gray-600'
+                                  }`}
+                                />
+                              </button>
+
+                              {/* Price Range Badge */}
+                              <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2">
+                                <div className="text-base font-bold text-gray-800">
+                                  {formatThaiPrice(event.priceRange.min)} - {formatThaiPrice(event.priceRange.max)}
+                                </div>
+                                {event.originalPriceRange && (
+                                  <div className="text-sm text-gray-500 line-through">
+                                    {formatThaiPrice(event.originalPriceRange.min)} - {formatThaiPrice(event.originalPriceRange.max)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Event Content - Enhanced Desktop Layout */}
+                            <div className="p-4 sm:p-5">
+                              <div className="flex items-start justify-between mb-3">
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-800 line-clamp-2 pr-2">{event.title}</h3>
+                              </div>
+                              
+                              <div className="space-y-2 mb-4">
+                                <div className="flex items-center text-gray-600">
+                                  <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
+                                  <span className="text-sm line-clamp-1">{event.venue}, {event.city}</span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                  <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
+                                  <span className="text-sm">{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {event.time}</span>
+                                </div>
+                              </div>
+
+                              <p className="text-sm text-gray-600 mb-4 line-clamp-2">{event.description}</p>
+
+                              {/* Event Statistics */}
+                              <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <div className="grid grid-cols-2 gap-4 text-center">
+                                  <div>
+                                    <div className="text-lg font-bold text-gray-900">{event.availableTickets}</div>
+                                    <div className="text-xs text-gray-600">Available Tickets</div>
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center justify-center space-x-1">
+                                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                                      <span className="text-lg font-bold text-gray-900">{event.rating}</span>
+                                    </div>
+                                    <div className="text-xs text-gray-600">Event Rating</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons - Desktop */}
+                              <div className="flex flex-col sm:flex-row gap-2 sm:space-x-3 sm:gap-0">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEventClick(event);
+                                  }}
+                                  className="flex-1 py-2.5 sm:py-2 px-4 rounded-lg transition-colors text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                                >
+                                  View Tickets
+                                </button>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleFavorite(event.id);
+                                  }}
+                                  className="sm:flex-shrink-0 px-4 py-2.5 sm:py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                                >
+                                  Save Event
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-8">
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                          className={`px-4 py-2 rounded-lg border ${
+                            currentPage === 1 
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                              : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Previous
+                        </button>
+                        
+                        <div className="flex items-center space-x-2">
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                            <button
+                              key={page}
+                              onClick={() => setCurrentPage(page)}
+                              className={`w-10 h-10 rounded-full ${
+                                currentPage === page
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                          disabled={currentPage === totalPages}
+                          className={`px-4 py-2 rounded-lg border ${
+                            currentPage === totalPages 
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                              : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Load More - Mobile Optimized */}
+                    <div className="text-center mt-6 sm:mt-8">
+                      <button className="w-full sm:w-auto bg-red-600 border border-red-600 text-white px-6 sm:px-8 py-3 rounded-lg hover:bg-red-700 transition-colors font-medium">
+                        Load More Events
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* About Us Page */}
+            {activeMenuSection === 'about' && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <h1 className="text-3xl font-bold text-gray-800 mb-6 flex items-center">
+                  👥 About ThaiTicket Hub
+                </h1>
+                <div className="prose max-w-none">
+                  <p className="text-lg text-gray-600 mb-6">
+                    Welcome to ThaiTicket Hub - Thailand's premier marketplace for buying and selling event tickets.
+                    We connect ticket sellers and buyers across Thailand, creating a safe and secure platform for all your entertainment needs.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                    <div className="bg-gradient-to-br from-red-50 to-blue-50 p-6 rounded-lg">
+                      <h3 className="text-xl font-semibold text-gray-800 mb-3">🇹🇭 Made for Thailand</h3>
+                      <p className="text-gray-600">Designed specifically for the Thai market with local payment methods, Thai Baht pricing, and Thailand-focused events.</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-lg">
+                      <h3 className="text-xl font-semibold text-gray-800 mb-3">🔒 Safe & Secure</h3>
+                      <p className="text-gray-600">Advanced security measures, verified sellers, and secure payment processing to protect all transactions.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Contact Us Page */}
+            {activeMenuSection === 'contact' && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <h1 className="text-3xl font-bold text-gray-800 mb-6 flex items-center">
+                  📞 Contact Us
+                </h1>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Get in Touch</h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-3">
+                        <Phone className="w-5 h-5 text-red-600" />
+                        <span className="text-gray-700">+66 2 123 4567</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className="text-lg">📧</span>
+                        <span className="text-gray-700">support@thaitickethub.com</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <MapPin className="w-5 h-5 text-red-600" />
+                        <span className="text-gray-700">Bangkok, Thailand</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 p-6 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Business Hours</h3>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <p>Monday - Friday: 9:00 AM - 6:00 PM</p>
+                      <p>Saturday: 10:00 AM - 4:00 PM</p>
+                      <p>Sunday: Closed</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Terms & Conditions Page */}
+            {activeMenuSection === 'terms' && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <h1 className="text-3xl font-bold text-gray-800 mb-6 flex items-center">
+                  📋 Terms & Conditions
+                </h1>
+                <div className="prose max-w-none text-gray-600">
+                  <h3 className="text-xl font-semibold text-gray-800 mt-6 mb-3">1. General Terms</h3>
+                  <p>By using ThaiTicket Hub, you agree to these terms and conditions. Our platform facilitates ticket transactions between buyers and sellers in Thailand.</p>
+                  
+                  <h3 className="text-xl font-semibold text-gray-800 mt-6 mb-3">2. User Responsibilities</h3>
+                  <p>Users must provide accurate information and follow platform guidelines. Sellers must provide authentic tickets, and buyers must complete transactions in good faith.</p>
+                  
+                  <h3 className="text-xl font-semibold text-gray-800 mt-6 mb-3">3. Payment Terms</h3>
+                  <p>All payments are processed in Thai Baht (฿). Platform fees apply to transactions. Refunds are subject to our refund policy.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Privacy Policy Page */}
+            {activeMenuSection === 'privacy' && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <h1 className="text-3xl font-bold text-gray-800 mb-6 flex items-center">
+                  🔒 Privacy Policy
+                </h1>
+                <div className="prose max-w-none text-gray-600">
+                  <h3 className="text-xl font-semibold text-gray-800 mt-6 mb-3">Data Collection</h3>
+                  <p>We collect information necessary to provide our services, including personal details for account creation and payment processing.</p>
+                  
+                  <h3 className="text-xl font-semibold text-gray-800 mt-6 mb-3">Data Usage</h3>
+                  <p>Your data is used to facilitate ticket transactions, provide customer support, and improve our services. We never sell personal information to third parties.</p>
+                  
+                  <h3 className="text-xl font-semibold text-gray-800 mt-6 mb-3">Data Protection</h3>
+                  <p>We implement industry-standard security measures to protect your personal information and comply with Thai data protection laws.</p>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* Ticket Detail Modal */}
+          {selectedTicketDetail && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-2xl font-bold text-gray-800">Ticket Details</h2>
+                    <button 
+                      onClick={() => setSelectedTicketDetail(null)}
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <img 
+                        src={selectedTicketDetail.image} 
+                        alt={selectedTicketDetail.title}
+                        className="w-full h-64 object-cover rounded-lg"
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-800">{selectedTicketDetail.title}</h3>
+                        <p className="text-gray-600">{selectedTicketDetail.venue}, {selectedTicketDetail.city}</p>
+                      </div>
+                      
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <div className="text-2xl font-bold text-gray-800">{formatThaiPrice(selectedTicketDetail.price)}</div>
+                        {selectedTicketDetail.originalPrice && (
+                          <div className="text-lg text-gray-500 line-through">{formatThaiPrice(selectedTicketDetail.originalPrice)}</div>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-500">Date:</span>
+                          <div className="font-semibold">{new Date(selectedTicketDetail.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Time:</span>
+                          <div className="font-semibold">{selectedTicketDetail.time}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-4">
+                        <button 
+                          onClick={() => handleAddToCart(selectedTicketDetail)}
+                          className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium"
+                        >
+                          Add to Cart
+                        </button>
+                        <button 
+                          onClick={() => handleSellerClick(selectedTicketDetail.sellerId)}
+                          className="flex-1 border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                        >
+                          View Seller
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6">
+                    <h4 className="font-semibold text-gray-800 mb-2">Description</h4>
+                    <p className="text-gray-600">{selectedTicketDetail.description}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Seller Profile Modal */}
+          {selectedSeller && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">Seller Profile</h2>
+                    <button 
+                      onClick={() => setSelectedSeller(null)}
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div className="text-center mb-6">
+                    <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4">
+                      {selectedSeller.name.charAt(0)}
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800">{selectedSeller.name}</h3>
+                    <div className="flex items-center justify-center space-x-2 mt-2">
+                      {selectedSeller.verificationBadge && (
+                        <div className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                          <Shield className="w-3 h-3 mr-1" />
+                          Verified
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gray-50 p-4 rounded-lg text-center">
+                        <div className="text-2xl font-bold text-gray-800">{selectedSeller.rating}</div>
+                        <div className="text-sm text-gray-500">Rating</div>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg text-center">
+                        <div className="text-2xl font-bold text-gray-800">{selectedSeller.totalSales}</div>
+                        <div className="text-sm text-gray-500">Total Sales</div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">Specialties</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedSeller.specialties.map((specialty) => (
+                          <span key={specialty} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                            {specialty}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <span className="text-gray-500 text-sm">Member since:</span>
+                      <div className="font-semibold">{new Date(selectedSeller.joinedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                    </div>
+                    
+                    <div className="flex space-x-3 mt-6">
+                      <button className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium">
+                        Message Seller
+                      </button>
+                      <button className="flex-1 border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+                        View All Tickets
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Right Sidebar - Clean AI Chat - Desktop Only */}
+          <aside className="hidden lg:block w-96 flex-shrink-0">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 sticky top-24 overflow-hidden" style={{ height: 'calc(100vh - 140px)' }}>
+              {/* Chat Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <span className="text-xl">🤖</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold">Ticket Assistant</h3>
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                      <span className="text-blue-100">Online & Ready</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Chat Content Area - Full Height */}
+              <div className="h-[calc(100%-80px)]">
+                <MarketplaceChatBot className="h-full" />
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      {/* Chat Toggle Button - Mobile Only - Hide when chatbox is open */}
+      {!showMobileChatbox && (
+        <div className="lg:hidden fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => setShowMobileChatbox(!showMobileChatbox)}
+            className="w-14 h-14 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full shadow-lg flex items-center justify-center text-white hover:scale-110 transition-all duration-200"
+          >
+            <ChatBubbleLeftRightIcon className="w-6 h-6" />
+          </button>
+        </div>
+      )}
+
+      {/* Mobile Chatbox - Floating with Padding */}
+      {showMobileChatbox && (
+        <div className="lg:hidden fixed inset-0 z-40 bg-black/20 p-4 pt-28 pb-6">
+          <div className="h-full bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Mobile Chat Header Bar */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-3 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="text-lg">🤖</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold">Ticket Assistant</h3>
+                  <div className="flex items-center space-x-2 text-xs">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span className="text-blue-100">Online & Ready</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowMobileChatbox(false)}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                  title="Minimize"
+                >
+                  <MinusIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setShowMobileChatbox(false)}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            
+            {/* Mobile Chat Content - Proper Height */}
+            <div className="flex-1 overflow-hidden">
+              <MarketplaceChatBot className="h-full" />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MarketplacePage;
