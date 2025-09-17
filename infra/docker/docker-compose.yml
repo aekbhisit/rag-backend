@@ -71,7 +71,6 @@ services:
       
       # Redis
       REDIS_URL: redis://redis:6379
-      REDIS_PASSWORD: 
       
       # MinIO
       MINIO_ENDPOINT: minio
@@ -143,6 +142,49 @@ services:
       - rag-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Travel AI Bot Frontend
+  travel-ai-bot:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.travel-ai-bot
+    container_name: rag-travel-ai-bot-local
+    restart: unless-stopped
+    environment:
+      # Backend API (browser hits host; keep localhost)
+      NEXT_PUBLIC_API_URL: http://localhost:3002
+      NEXT_PUBLIC_BACKEND_URL: http://rag-backend:3001
+      NEXT_PUBLIC_RAG_TENANT_ID: acc44cdb-8da5-4226-9569-1233a39f564f
+      
+      # RAG Client Configuration
+      RAG_BASE_URL: http://rag-backend:3001
+      RAG_TENANT_ID: acc44cdb-8da5-4226-9569-1233a39f564f
+
+      # Application
+      NODE_ENV: production
+      PORT: 3200
+
+      # Development features
+      NEXT_TELEMETRY_DISABLED: 1
+      
+    ports:
+      - "3200:3200"
+    volumes:
+      - ../../apps/travel-ai-bot:/app/apps/travel-ai-bot:ro
+      - ../../packages:/app/packages:ro
+      - ../../nx.json:/app/nx.json:ro
+      - ../../tsconfig*.json:/app/tsconfig*.json:ro
+      - ../../package*.json:/app/package*.json:ro
+    depends_on:
+      - rag-backend
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3200/"]
       interval: 30s
       timeout: 10s
       retries: 3
