@@ -12,12 +12,11 @@ export const intentionChangeHandler = async (args: any) => {
   console.log(`[Core] User intention changed to: ${currentIntention}, style: ${communicationStyle}`);
   console.log(`[Core] Trigger reason: ${triggerReason}`);
   
-  // Return success with adaptation instructions
+  // Silent success: do not produce assistant-visible text; just acknowledge
   return {
     success: true,
     currentIntention,
     communicationStyle,
-    triggerReason,
-    message: `Intention updated to ${currentIntention} with ${communicationStyle} communication style`
+    triggerReason
   };
 }; 

@@ -84,14 +84,26 @@ function AppContent() {
     handleServerEventRef.current(event);
   };
 
-  // WebRTC connection hook
-  const webRTCConnection = useWebRTCConnection({
-    isAudioPlaybackEnabled,
-    handleServerEvent,
-    urlCodec,
-    urlModel,
-    language: language || 'th-TH',
-  });
+  // WebRTC connection hook - DISABLED to prevent automatic microphone permission request
+  // The VoiceChatInterface uses the new SDK approach instead
+  const webRTCConnection = {
+    sessionStatus: "DISCONNECTED" as const,
+    connectToRealtime: () => console.log('[App] WebRTC connection disabled - using SDK instead'),
+    disconnectFromRealtime: () => console.log('[App] WebRTC connection disabled - using SDK instead'),
+    sendClientEvent: () => console.log('[App] WebRTC connection disabled - using SDK instead'),
+    setSessionStatus: () => console.log('[App] WebRTC connection disabled - using SDK instead'),
+    audioElementRef: { current: null },
+    dcRef: { current: null }
+  };
+  
+  // Original WebRTC connection (commented out to prevent microphone permission request)
+  // const webRTCConnection = useWebRTCConnection({
+  //   isAudioPlaybackEnabled,
+  //   handleServerEvent,
+  //   urlCodec,
+  //   urlModel,
+  //   language: language || 'th-TH',
+  // });
   
   // Track language change state to prevent unnecessary reconnections
   const previousLanguageRef = useRef<string | null>(null);

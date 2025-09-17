@@ -1,7 +1,7 @@
 /**
  * Default Agent - Entry point that can redirect to other agents
  */
-import { injectTransferTools, getCoreSchemasByConfig, getCoreHandlersByConfig, type CoreFunctionConfig } from "../core/functions";
+import { getCoreSchemasByConfig, getCoreHandlersByConfig, type CoreFunctionConfig } from "../core/functions";
 import { DEFAULT_AGENT_ALLOWED_TRAVEL_PAGES, DEFAULT_AGENT_PAGE_HINTS } from "./config/navigationTargets";
 import welcomeAgent from "./config/agentConfig";
 // import thaiResortGuide from "../thaiResortGuide";
@@ -153,7 +153,7 @@ const agentWithCore = {
   }
 };
 
-// Add transfer tools
-const agents = injectTransferTools([agentWithCore]);
+// Note: transferAgents and transferBack are now core tools, no injection needed
+const agents = [agentWithCore];
 
 export default agents; 

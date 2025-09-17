@@ -66,6 +66,12 @@ export default function AgentChatInterface({
   // Get current agent
   const currentAgent = selectedAgentConfigSet?.find(a => a.name === selectedAgentName);
 
+  // Use server-provided instructions only (avoid duplicate prompt fetches)
+  const [systemInstructions, setSystemInstructions] = useState<string>(currentAgent?.instructions || '');
+  useEffect(() => {
+    setSystemInstructions(currentAgent?.instructions || '');
+  }, [currentAgent?.instructions]);
+
   // Handle agent transfer (including cross-agent-set transfers)
   const handleAgentTransfer = (targetAgentName: string) => {
     console.log(`[AgentChatInterface] Starting transfer to ${targetAgentName}`);
@@ -80,7 +86,8 @@ export default function AgentChatInterface({
       
       // Import allAgentSets to find the target agent
       import('@/app/agents').then(({ allAgentSets }) => {
-        for (const [setKey, agentSet] of Object.entries(allAgentSets)) {
+        const typedAllAgentSets = allAgentSets as Record<string, AgentConfig[]>;
+        for (const [setKey, agentSet] of Object.entries(typedAllAgentSets)) {
           const foundAgent = agentSet.find(a => a.name === targetAgentName);
           if (foundAgent) {
             targetAgent = foundAgent;
@@ -133,41 +140,7 @@ export default function AgentChatInterface({
           onAgentChange(agentName);
         }
         
-        // Add welcome message immediately after agent change
-        setTimeout(() => {
-          // Add welcome message from new agent with proper language
-          let welcomeContent = `Hello! I'm ${agentName}. I've received the context from your previous conversation. How can I help you?`;
-          let language = 'en';
-          
-          // Customize welcome message based on agent
-          if (agentName === 'thaiResortGuide') {
-            welcomeContent = 'สวัสดีครับ! ผมเป็นไกด์แนะนำรีสอร์ทไทย ได้รับข้อมูลจากการสนทนาก่อนหน้าแล้ว มีอะไรให้ช่วยเหลือเกี่ยวกับรีสอร์ทและที่พักในประเทศไทยไหมครับ?';
-            language = 'th';
-          } else if (agentName === 'customerServiceRetail') {
-            welcomeContent = 'Hello! I\'m your customer service assistant. I can help you with returns, exchanges, product information, and any other retail inquiries. How can I assist you today?';
-          } else if (agentName === 'frontDeskAuthentication') {
-            welcomeContent = 'Welcome! I\'m your front desk assistant. I can help you with authentication, tour bookings, and general hotel services. How may I help you?';
-          }
-          
-          console.log(`[AgentChatInterface] Adding welcome message for ${agentName}:`, welcomeContent);
-          
-          const welcomeMessage: UniversalMessage = {
-            id: generateMessageId(),
-            sessionId,
-            timestamp: new Date().toISOString(),
-            type: 'text',
-            content: welcomeContent,
-            metadata: {
-              source: 'ai',
-              channel: activeChannel,
-              language: language,
-              agentName: agentName
-            }
-          };
-          
-          addMessage(welcomeMessage);
-          console.log(`[AgentChatInterface] Welcome message added successfully`);
-        }, 500); // Short delay to ensure agent change is processed
+        // No automatic welcome message - agent will respond when user sends a message
       }, 1000); // Reduced transfer delay
     }
   };
@@ -260,7 +233,7 @@ export default function AgentChatInterface({
         messages: [
           {
             role: 'system',
-            content: `${currentAgent.instructions}
+            content: `${systemInstructions}
 
 You are currently the "${selectedAgentName}" agent. 
 

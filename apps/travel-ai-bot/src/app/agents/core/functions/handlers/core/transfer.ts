@@ -6,40 +6,44 @@
 export const transferAgentsHandler = async (args: any) => {
   console.log('[Core] transferAgents called:', args);
   
-  const { destination_agent, rationale_for_transfer, conversation_context } = args;
+  const { destination_agent, agent_name, rationale_for_transfer, conversation_context } = args;
+  const targetAgent = destination_agent || agent_name;
   
   // ===== CENTRALIZED TRANSFER LOGIC =====
   // All transfer logic is now in one place for easy modification
   
   // 1. Validation
-  if (!destination_agent) {
+  if (!targetAgent) {
     throw new Error('Target agent is required for transfer');
   }
   
   // 2. Custom transfer logic can be added here
-  console.log(`[Core Transfer] Initiating transfer to: ${destination_agent}`);
+  console.log(`[Core Transfer] Initiating transfer to: ${targetAgent}`);
   console.log(`[Core Transfer] Reason: ${rationale_for_transfer}`);
   console.log(`[Core Transfer] Context: ${conversation_context}`);
   
   // 3. Pre-transfer hooks (you can add custom logic here)
-  const preTransferResult = await executePreTransferHooks(destination_agent, rationale_for_transfer, conversation_context);
+  const preTransferResult = await executePreTransferHooks(targetAgent, rationale_for_transfer, conversation_context);
   if (!preTransferResult.allowed) {
     throw new Error(`Transfer blocked: ${preTransferResult.reason}`);
   }
   
   // 4. Execute the actual transfer
-  const transferResult = await executeActualTransfer(destination_agent, rationale_for_transfer, conversation_context);
+  const transferResult = await executeActualTransfer(targetAgent, rationale_for_transfer, conversation_context);
   
   // 5. Post-transfer hooks (you can add custom logic here)
-  await executePostTransferHooks(destination_agent, transferResult);
+  await executePostTransferHooks(targetAgent, transferResult);
   
+  // 6. Return success - the SDK should automatically detect this as a handoff request
+  // based on the downstreamAgents configuration and function call pattern
   return {
     success: true,
-    targetAgent: destination_agent,
+    targetAgent: targetAgent,
     reason: rationale_for_transfer,
     context: conversation_context,
     transferId: transferResult.transferId,
-    message: `Transfer to ${destination_agent} completed: ${rationale_for_transfer}`
+    message: `Transfer to ${targetAgent} completed: ${rationale_for_transfer}`,
+    handoff_required: true // Signal that handoff is needed
   };
 };
 

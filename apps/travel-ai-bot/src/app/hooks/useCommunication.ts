@@ -58,11 +58,12 @@ export function useCommunication({
         id: messageId, // Add explicit ID for the message
         type: "message",
         role: "user",
-        content: [{ type: "input_text", text: trimmedText }],
+        content: [{ type: "text", text: trimmedText }],
       },
     });
     setUserText("");
 
+    // Text mode only: let server start next response. Realtime (voice) should use SDK PTT path
     sendClientEvent({ type: "response.create" });
   };
 
@@ -85,7 +86,7 @@ export function useCommunication({
     // which is handled in useHandleServerEvent
     
     sendClientEvent({ type: "input_audio_buffer.commit" });
-    sendClientEvent({ type: "response.create" });
+    // Do NOT send response.create here for voice; SDK PTT flow will create the response
   };
 
   // Handle connection toggling with manual disconnect tracking

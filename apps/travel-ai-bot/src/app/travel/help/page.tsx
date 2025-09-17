@@ -44,7 +44,7 @@ export default function HelpPage(props: { embedded?: boolean }) {
         // Load help articles
         const res = await fetch('/api/contexts?type=text&category=help&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
         const data = await res.json();
-        const list: any[] = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+        let list: any[] = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
 
         const tenantId = (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '';
         const seedKey = `seed:help:${tenantId || 'default'}`;
@@ -95,11 +95,15 @@ export default function HelpPage(props: { embedded?: boolean }) {
             });
           }
           try { if (typeof window !== 'undefined') window.localStorage.setItem(seedKey, '1'); } catch {}
+          
+          // If we created new items, we need to refetch to get the updated list
+          const res2 = await fetch('/api/contexts?type=text&category=help&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+          const d2 = await res2.json();
+          list = Array.isArray(d2?.items) ? d2.items : (Array.isArray(d2) ? d2 : []);
         }
 
-        const res2 = await fetch('/api/contexts?type=text&category=help&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
-        const d2 = await res2.json();
-        setItems((Array.isArray(d2?.items) ? d2.items : (Array.isArray(d2) ? d2 : [])).map((x: any) => ({ id: x.id, title: x.title, body: x.body })));
+        // Use the list (either original or updated after seeding)
+        setItems(list.map((x: any) => ({ id: x.id, title: x.title, body: x.body })));
       } catch (e: any) {
         setError(String(e?.message || e));
       } finally {

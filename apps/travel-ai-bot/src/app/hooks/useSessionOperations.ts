@@ -270,10 +270,8 @@ CURRENT LANGUAGE SETTING: \`${language}\`
       // Send a hidden system message to prime the bot with context
       const contextSummaryId = `ctx_${Date.now()}`.substring(0, 32);
       
-      // Add more detailed instructions for initial greeting
-      const greetingInstruction = shouldTriggerResponse ? 
-        " Please introduce yourself with a brief, friendly welcome message in the appropriate language." : 
-        "";
+      // No automatic greeting instruction - agent will respond when user sends a message
+      const greetingInstruction = "";
       
       sendClientEvent({
         type: "conversation.item.create",
@@ -282,7 +280,7 @@ CURRENT LANGUAGE SETTING: \`${language}\`
           type: "message",
           role: "system",
           content: [{ 
-            type: "input_text",
+            type: "text",
             text: `You are now acting as ${agentName}. IMPORTANT: You must respond entirely in ${language}.${greetingInstruction} ${conversationContext}`
           }],
         },
@@ -385,7 +383,7 @@ CURRENT LANGUAGE SETTING: \`${language}\`
           id,
           type: "message",
           role: "user",
-          content: [{ type: "input_text", text }],
+          content: [{ type: "text", text }],
         },
         metadata: {
           isSimulated: true // Mark as simulated to prevent duplicate logging
@@ -536,7 +534,7 @@ CURRENT LANGUAGE SETTING: \`${language}\`
         type: "message",
         role: "system",
         content: [{ 
-          type: "input_text",
+          type: "text",
           text: `IMPORTANT LANGUAGE INSTRUCTION: While your default language is ${language}, you MUST respond in the same language as the user's most recent message. If a user explicitly asks you to speak in a specific language (e.g., "Can you tell me in English?"), ALWAYS honor that request regardless of your default language setting.`
         }]
       },

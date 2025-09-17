@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSearchParams } from 'next/navigation';
 import { ActionType, useActionContext } from '@/botActionFramework';
 
 // Mock data for Thai resort categories and articles
@@ -82,8 +81,6 @@ const WebContent: React.FC = () => {
   const [places, setPlaces] = useState<Place[] | null>(null);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
-  const [travelPath, setTravelPath] = useState<string | null>(null);
-  const searchParams = useSearchParams();
   const [travelPath, setTravelPath] = useState<string | null>(null);
   const searchParams = useSearchParams();
   
@@ -621,18 +618,8 @@ const WebContent: React.FC = () => {
     updateFromLocation();
     window.addEventListener('popstate', updateFromLocation);
     return () => window.removeEventListener('popstate', updateFromLocation);
-  }, [actionContext]);
+  }, []); // Remove actionContext dependency to prevent infinite loops
 
-  // Sync travel content from URL (?content=/travel/slug)
-  useEffect(() => {
-    try {
-      const c = searchParams?.get('content');
-      if (c && c.startsWith('/travel')) {
-        setTravelPath(c);
-        actionContext.updateContext({ currentView: 'travelPage', travelPath: c });
-      }
-    } catch {}
-  }, [searchParams]);
 
   // Main render logic
   return (

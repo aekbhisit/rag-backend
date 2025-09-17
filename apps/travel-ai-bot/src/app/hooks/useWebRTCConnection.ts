@@ -111,10 +111,10 @@ export function useWebRTCConnection({
     preloadCache.isPreloading = true;
 
     try {
-      // Parallel preloading of ephemeral key and media stream
-      const [ephemeralKey, mediaStream] = await Promise.all([
+      // Only preload ephemeral key, not media stream (push-to-talk only)
+      const [ephemeralKey] = await Promise.all([
         fetchEphemeralKey(),
-        getMediaStreamWithCache()
+        // getMediaStreamWithCache() // Disabled to prevent automatic microphone access
       ]);
 
       if (ephemeralKey) {
@@ -334,14 +334,14 @@ export function useWebRTCConnection({
     
     // Handle conversation items
     if (sanitized.type === 'conversation.item.create' && sanitized.item) {
-      // Ensure content uses input_text instead of text
+      // Ensure content uses text instead of text
       if (sanitized.item.content && Array.isArray(sanitized.item.content)) {
         sanitized.item.content = sanitized.item.content.map((contentItem: any) => {
           if (contentItem.type === 'text') {
-            // console.debug('[WebRTC] Converting content type from "text" to "input_text"');
+            // console.debug('[WebRTC] Converting content type from "text" to "text"');
             return {
               ...contentItem,
-              type: 'input_text'
+              type: 'text'
             };
           }
           return contentItem;
@@ -633,29 +633,29 @@ export function useWebRTCConnection({
       // Initialize audio element with volume restoration
       initializeAudioElement();
 
-      // Get media stream (may use cache)
-      const mediaStream = await getMediaStreamWithCache();
-      if (!mediaStream) {
-        console.error("[WebRTC] Failed to get media stream");
-        setSessionStatus("DISCONNECTED");
-        isReconnectingRef.current = false;
-        if (connectionTimeoutRef.current) {
-          clearTimeout(connectionTimeoutRef.current);
-        }
-        return;
-      }
+      // Disabled automatic media stream request (push-to-talk only)
+      // const mediaStream = await getMediaStreamWithCache();
+      // if (!mediaStream) {
+      //   console.error("[WebRTC] Failed to get media stream");
+      //   setSessionStatus("DISCONNECTED");
+      //   isReconnectingRef.current = false;
+      //   if (connectionTimeoutRef.current) {
+      //     clearTimeout(connectionTimeoutRef.current);
+      //   }
+      //   return;
+      // }
 
       // console.debug("[WebRTC] Creating optimized realtime connection");
       // console.debug(`[WebRTC] Connection params: language=${language}, codec=${urlCodec}, model=${urlModel}`);
       
-      // Use existing connection creation but with preloaded media stream
+      // Use existing connection creation without media stream (push-to-talk only)
       const { pc, dc } = await createRealtimeConnection(
         EPHEMERAL_KEY,
         audioElementRef,
         urlCodec,
         language,
         urlModel,
-        mediaStream
+        null // No media stream - push-to-talk only
       );
       
       // console.debug("[WebRTC] Optimized realtime connection created successfully");

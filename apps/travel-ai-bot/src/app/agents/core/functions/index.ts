@@ -15,8 +15,7 @@ export {
   type TransferBackResult 
 } from './handlers';
 
-// Export dynamic schema injection utilities
-export { injectTransferTools, injectTransferBackTools } from './dynamic-injection';
+// Note: Dynamic injection utilities removed - transfer functions are now core tools
 
 // Export schema arrays
 export { CORE_SCHEMAS, SKILL_SCHEMAS, UI_SCHEMAS, ALL_SCHEMAS } from './schemas';

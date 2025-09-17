@@ -38,4 +38,20 @@ export const navigateToPreviousSchema: Tool = {
     },
     required: []
   }
+};
+
+export const navigateSchema: Tool = {
+  type: 'function',
+  name: 'navigate',
+  description: 'Navigate the UI to a given in-app URI path.',
+  parameters: {
+    type: 'object',
+    properties: {
+      uri: { 
+        type: 'string', 
+        description: 'Target in-app URI path, e.g., \'/travel/taxi\'' 
+      }
+    },
+    required: ['uri']
+  }
 }; 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { useConfiguration } from "@/app/lib/config";
 import { LanguageProvider, useLanguage } from "@/app/contexts/LanguageContext";
 import { SessionRegistryProvider } from "../contexts/SessionRegistryContext";
@@ -8,14 +8,16 @@ import { EventProvider } from "@/app/contexts/EventContext";
 import { TranscriptProvider } from "@/app/contexts/TranscriptContext";
 import AgentChatInterface from "./chat/AgentChatInterface";
 import { useAgentSelection } from "@/app/hooks/useAgentSelection";
-import { allAgentSets } from "@/app/agents";
+import { useDbAgentSets } from "@/app/hooks/useDbAgentSets";
 import { ActionProvider } from "@/botActionFramework/ActionContext";
 import { useActionContext, ActionType } from "@/botActionFramework";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { usePersistedChannel } from "@/app/hooks/usePersistedChannel";
 
 // Inner component that uses the language context and agent selection
 function AgentIntegratedChatAppContent() {
+  const { agentSets: allAgentSets, defaultSetKey: dbDefault, loading: dbLoading } = useDbAgentSets();
   const searchParams = useSearchParams();
   const [contentPath, setContentPath] = useState<string | null>(null);
   // Register global navigation handler to real pages like /travel/:slug
@@ -106,7 +108,7 @@ function AgentIntegratedChatAppContent() {
   console.log('[AgentIntegratedChatApp] useAgentSelection returned:', { selectedAgentName, agentSetKey, hasConfigSet: !!selectedAgentConfigSet });
 
   // Session management - SSR-safe approach
-  const [activeChannel, setActiveChannel] = useState<'normal' | 'realtime' | 'human' | 'line'>('normal');
+  const [activeChannel, setActiveChannel] = usePersistedChannel('normal');
   const [isProcessing, setIsProcessing] = useState(false);
   
   // SSR-safe session ID generation - start with empty string to match server
@@ -212,6 +214,7 @@ function AgentIntegratedChatAppContent() {
       setIsProcessing(false);
     }, 1000);
   }, []);
+  // Persisted setter comes from hook; keep stable deps
 
   // Handle cross-agent-set transfers - memoized to prevent recreation
   const handleAgentSetChange = useMemo(() => (newAgentSetKey: string, newAgentName: string) => {
@@ -467,7 +470,16 @@ export default function AgentIntegratedChatApp() {
         <EventProvider>
           <TranscriptProvider>
             <ActionProvider>
-              <AgentIntegratedChatAppContent />
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-64 text-gray-500">
+                  <div className="text-center">
+                    <div className="text-4xl mb-4">⏳</div>
+                    <p className="text-lg font-medium">Loading...</p>
+                  </div>
+                </div>
+              }>
+                <AgentIntegratedChatAppContent />
+              </Suspense>
             </ActionProvider>
           </TranscriptProvider>
         </EventProvider>

@@ -75,14 +75,24 @@ function safeCreateResponse(sendClientEvent: any, metadata = {}, eventSuffix = "
 
     }
     
-    sendClientEvent({ 
-      type: "response.create",
-      metadata: {
-        ...metadata,
-        auto_generated: true,
-        timestamp: now
+    // In realtime voice mode, do not auto-create responses; server/SDK PTT controls the response lifecycle
+    try {
+      const isRealtime = (typeof window !== 'undefined') && (window as any).__VOICE_REALTIME_ACTIVE__ === true;
+      if (!isRealtime) {
+        sendClientEvent({ 
+          type: "response.create",
+          metadata: {
+            ...metadata,
+            auto_generated: true,
+            timestamp: now
+          }
+        }, eventSuffix);
+      } else {
+        console.log('[ServerEvent] Skipping auto response.create in realtime mode');
       }
-    }, eventSuffix);
+    } catch {
+      // Fallback: skip if detection fails
+    }
   } catch (error) {
           console.error('[ServerEvent] Error in safeCreateResponse:', error);
   } finally {
@@ -521,7 +531,7 @@ export function useHandleServerEvent({
                   type: "message",
                   role: "system",
                   content: [{ 
-                    type: "input_text",
+                    type: "text",
                     text: "CRITICAL INSTRUCTION OVERRIDE: The user has explicitly requested English. You MUST respond in English now and for all future messages. This instruction overrides ALL previous language settings. DO NOT APOLOGIZE for switching languages - just respond in English directly."
                   }]
                 }

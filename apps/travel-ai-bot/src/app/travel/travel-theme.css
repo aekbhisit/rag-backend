@@ -1,0 +1,262 @@
+/* Travel App Theme Variables
+   Usage: apply class "ta-theme ta-theme-<preset>" on a container (e.g., <main>)
+   Then use Tailwind arbitrary values with CSS vars, e.g.:
+   bg-gradient-to-br from-[var(--ta-bg-start)] via-[var(--ta-bg-mid)] to-[var(--ta-bg-end)]
+   text-[color:var(--ta-text)] border-[color:var(--ta-border)]
+*/
+
+.ta-theme {
+  /* Common surfaces */
+  --ta-topbar-bg: rgba(255, 255, 255, 0.9);
+  --ta-surface: #ffffff; /* clean white surfaces */
+  --ta-on-accent: #ffffff;
+  --ta-primary: #2563eb; /* default primary if theme doesn't override */
+  --ta-on-primary: #ffffff;
+
+  /* Defaults (fallback – sunset-like) */
+  --ta-bg-start: #fff7ed; /* orange-50 */
+  --ta-bg-mid: #fffbeb;   /* amber-50 */
+  --ta-bg-end: #ffedd5;   /* orange-100 */
+  --ta-border: #fed7aa;   /* orange-200 */
+  --ta-text: #1f2937;     /* gray-800 */
+  --ta-muted: #7c2d12;    /* orange-900 */
+
+  --ta-card-from: #fff7ed;  /* orange-50 */
+  --ta-card-to: #fee2e2;    /* rose-100 */
+  --ta-card-border: #fecdd3;/* rose-200 */
+  --ta-icon-from: #7c2d12;  /* orange-900 */
+  --ta-icon-to: #991b1b;    /* red-900 */
+  --ta-link: #9a3412;       /* orange-800 */
+  --ta-btn-from: #9a3412;   /* orange-800 */
+  --ta-btn-to: #7f1d1d;     /* red-900 */
+
+  --ta-panel-from: rgba(255, 255, 255, 0.9);
+  --ta-panel-to: rgba(255, 237, 213, 0.5); /* orange-100/50 */
+  --ta-divider-from: #fdba74; /* orange-300 */
+  --ta-divider-to: #f97316;   /* orange-500 */
+}
+
+/* Sunset – warm oranges and reds */
+.ta-theme-sunset {
+  --ta-bg-start: #fff7ed; /* orange-50 */
+  --ta-bg-mid: #fffbeb;   /* amber-50 */
+  --ta-bg-end: #ffedd5;   /* orange-100 */
+  --ta-border: #fed7aa;   /* orange-200 */
+  --ta-text: #1f2937;     /* gray-800 */
+  --ta-muted: #7c2d12;    /* orange-900 */
+
+  --ta-card-from: #fff7ed;
+  --ta-card-to: #ffe4e6;      /* rose-100 */
+  --ta-card-border: #fecaca;  /* red-200 */
+  --ta-icon-from: #9a3412;    /* orange-800 */
+  --ta-icon-to: #7f1d1d;      /* red-900 */
+  --ta-link: #9a3412;
+  --ta-btn-from: #9a3412;
+  --ta-btn-to: #7f1d1d;
+
+  --ta-panel-from: rgba(255, 255, 255, 0.9);
+  --ta-panel-to: rgba(254, 215, 170, 0.35); /* orange-200/35 */
+  --ta-divider-from: #fdba74; /* orange-300 */
+  --ta-divider-to: #f97316;   /* orange-500 */
+
+  /* Primary surface (topbar/buttons) */
+  --ta-primary: #9a3412; /* orange-800 */
+  --ta-on-primary: #ffffff;
+}
+
+/* Tropical – teals and emeralds */
+.ta-theme-tropical {
+  --ta-bg-start: #ecfeff; /* cyan-50 */
+  --ta-bg-mid: #f0fdf4;   /* green-50 */
+  --ta-bg-end: #d1fae5;   /* emerald-100 */
+  --ta-border: #a7f3d0;   /* emerald-200 */
+  --ta-text: #064e3b;     /* emerald-900 */
+  --ta-muted: #065f46;    /* emerald-800 */
+
+  --ta-card-from: #ecfeff;
+  --ta-card-to: #d1fae5;
+  --ta-card-border: #a7f3d0;
+  --ta-icon-from: #0f766e; /* teal-700 */
+  --ta-icon-to: #047857;   /* emerald-700 */
+  --ta-link: #065f46;
+  --ta-btn-from: #0f766e;
+  --ta-btn-to: #065f46;
+
+  --ta-panel-from: rgba(255, 255, 255, 0.9);
+  --ta-panel-to: rgba(209, 250, 229, 0.4); /* emerald-100/40 */
+  --ta-divider-from: #6ee7b7; /* emerald-300 */
+  --ta-divider-to: #34d399;   /* emerald-400 */
+
+  --ta-primary: #0f766e; /* teal-700 */
+  --ta-on-primary: #ffffff;
+}
+
+/* Ocean – clear blues */
+.ta-theme-ocean {
+  --ta-bg-start: #eff6ff; /* blue-50 */
+  --ta-bg-mid: #dbeafe;   /* blue-100 */
+  --ta-bg-end: #bfdbfe;   /* blue-200 */
+  --ta-border: #bfdbfe;   /* blue-200 */
+  --ta-text: #1e3a8a;     /* blue-900 */
+  --ta-muted: #1e40af;    /* blue-800 */
+
+  --ta-card-from: #eff6ff;
+  --ta-card-to: #dbeafe;
+  --ta-card-border: #c7d2fe; /* indigo-200 */
+  --ta-icon-from: #1d4ed8; /* blue-700 */
+  --ta-icon-to: #1e40af;   /* blue-800 */
+  --ta-link: #1e40af;
+  --ta-btn-from: #1d4ed8;
+  --ta-btn-to: #1e40af;
+
+  --ta-panel-from: rgba(255, 255, 255, 0.9);
+  --ta-panel-to: rgba(219, 234, 254, 0.45); /* blue-100/45 */
+  --ta-divider-from: #93c5fd; /* blue-300 */
+  --ta-divider-to: #60a5fa;   /* blue-400 */
+
+  --ta-primary: #1d4ed8; /* blue-700 */
+  --ta-on-primary: #ffffff;
+}
+
+/* Forest – lush greens */
+.ta-theme-forest {
+  --ta-bg-start: #f7fee7; /* lime-50 */
+  --ta-bg-mid: #ecfccb;   /* lime-100 */
+  --ta-bg-end: #d9f99d;   /* lime-200 */
+  --ta-border: #bbf7d0;   /* green-200 */
+  --ta-text: #14532d;     /* green-900 */
+  --ta-muted: #166534;    /* green-800 */
+
+  --ta-card-from: #f7fee7;
+  --ta-card-to: #ecfccb;
+  --ta-card-border: #bbf7d0;
+  --ta-icon-from: #166534; /* green-800 */
+  --ta-icon-to: #14532d;   /* green-900 */
+  --ta-link: #166534;
+  --ta-btn-from: #166534;
+  --ta-btn-to: #14532d;
+
+  --ta-panel-from: rgba(255, 255, 255, 0.9);
+  --ta-panel-to: rgba(217, 249, 157, 0.35); /* lime-200/35 */
+  --ta-divider-from: #86efac; /* green-300 */
+  --ta-divider-to: #4ade80;   /* green-400 */
+
+  --ta-primary: #166534; /* green-800 */
+  --ta-on-primary: #ffffff;
+}
+
+/* Desert – sands and golds with strong contrast */
+.ta-theme-desert {
+  --ta-bg-start: #fffbeb; /* amber-50 */
+  --ta-bg-mid: #fef3c7;   /* amber-100 */
+  --ta-bg-end: #fde68a;   /* amber-200 */
+  --ta-border: #fcd34d;   /* amber-300 */
+  --ta-text: #7c2d12;     /* orange-900 */
+  --ta-muted: #78350f;    /* amber-900 */
+
+  --ta-card-from: #fffbeb;
+  --ta-card-to: #fef3c7;
+  --ta-card-border: #fde68a;
+  --ta-icon-from: #a16207; /* amber-700 */
+  --ta-icon-to: #92400e;   /* orange-700 */
+  --ta-link: #92400e;
+  --ta-btn-from: #a16207;
+  --ta-btn-to: #92400e;
+
+  --ta-panel-from: rgba(255, 255, 255, 0.9);
+  --ta-panel-to: rgba(254, 240, 138, 0.4); /* yellow-200/40 */
+  --ta-divider-from: #facc15; /* yellow-400 */
+  --ta-divider-to: #eab308;   /* yellow-500 */
+
+  --ta-primary: #a16207; /* amber-700 */
+  --ta-on-primary: #ffffff;
+}
+
+/* Island – coral, aqua, and sand for a lively tropical vibe */
+.ta-theme-island {
+  --ta-bg-start: #fff1f2; /* rose-50 */
+  --ta-bg-mid: #ecfeff;   /* cyan-50 */
+  --ta-bg-end: #fef3c7;   /* amber-100 */
+  --ta-border: #fbcfe8;   /* pink-200 */
+  --ta-text: #0f172a;     /* slate-900 */
+  --ta-muted: #0ea5e9;    /* sky-500 */
+
+  --ta-card-from: #fff1f2; /* rose-50 */
+  --ta-card-to: #cffafe;   /* cyan-100 */
+  --ta-card-border: #bae6fd; /* sky-200 */
+  --ta-icon-from: #fb7185; /* rose-400 */
+  --ta-icon-to: #0ea5e9;   /* sky-500 */
+  --ta-link: #0ea5e9;      /* sky-500 */
+  --ta-btn-from: #fb7185;  /* rose-400 */
+  --ta-btn-to: #0ea5e9;    /* sky-500 */
+
+  --ta-panel-from: rgba(255, 255, 255, 0.9);
+  --ta-panel-to: rgba(207, 250, 254, 0.4); /* cyan-100/40 */
+  --ta-divider-from: #fda4af; /* rose-300 */
+  --ta-divider-to: #7dd3fc;   /* sky-300 */
+
+  --ta-primary: #fb7185; /* rose-400 */
+  --ta-on-primary: #ffffff;
+}
+
+/* Professional – neutral surfaces with blue accents (clean, accessible) */
+.ta-theme-pro {
+  --ta-bg-start: #ffffff;   /* white */
+  --ta-bg-mid: #f8fafc;     /* slate-50 */
+  --ta-bg-end: #eef2ff;     /* indigo-50 */
+  --ta-border: #e2e8f0;     /* slate-200 */
+  --ta-text: #0f172a;       /* slate-900 */
+  --ta-muted: #334155;      /* slate-700 */
+
+  --ta-card-from: #ffffff;  /* white */
+  --ta-card-to: #f8fafc;    /* slate-50 */
+  --ta-card-border: #e2e8f0;/* slate-200 */
+  --ta-icon-from: #2563eb;  /* blue-600 */
+  --ta-icon-to: #4338ca;    /* indigo-700 */
+  --ta-link: #1d4ed8;       /* blue-700 */
+  --ta-btn-from: #2563eb;   /* blue-600 */
+  --ta-btn-to: #4338ca;     /* indigo-700 */
+
+  --ta-panel-from: rgba(255, 255, 255, 0.95);
+  --ta-panel-to: rgba(248, 250, 252, 0.9); /* slate-50 */
+  --ta-divider-from: #93c5fd; /* blue-300 */
+  --ta-divider-to: #818cf8;   /* indigo-400 */
+
+  /* Primary brand color for solid areas (topbar, user bubble, buttons) */
+  --ta-primary: #1d4ed8;  /* blue-700 */
+  --ta-on-primary: #ffffff;
+}
+
+/* Warm Professional – clean white UI with warm terracotta accents */
+.ta-theme-warm {
+  /* Clean surfaces */
+  --ta-bg-start: #ffffff;
+  --ta-bg-mid: #ffffff;
+  --ta-bg-end: #ffffff;
+  --ta-surface: #ffffff;
+  --ta-panel-from: #ffffff;
+  --ta-panel-to: #ffffff;
+  --ta-border: #e5e7eb;   /* gray-200 */
+  --ta-card-from: #ffffff;
+  --ta-card-to: #ffffff;
+  --ta-card-border: #e5e7eb;
+
+  /* Text */
+  --ta-text: #111827;     /* gray-900 */
+  --ta-muted: #57534e;    /* stone-600 */
+
+  /* Primary brand (no gradient) */
+  --ta-primary: #b45309;  /* orange-700 */
+  --ta-on-primary: #ffffff;
+  --ta-icon-from: #b45309;
+  --ta-icon-to: #b45309;
+  --ta-btn-from: #b45309;
+  --ta-btn-to: #b45309;
+  --ta-link: #b45309;     /* for small links */
+
+  /* Divider (subtle) */
+  --ta-divider-from: #e5e7eb;
+  --ta-divider-to: #e5e7eb;
+}
+
+

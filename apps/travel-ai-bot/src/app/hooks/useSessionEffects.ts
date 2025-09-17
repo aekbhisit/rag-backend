@@ -132,12 +132,7 @@ export function useSessionEffects({
       // Mark setup as complete before triggering updateSession to prevent race conditions
       setIsInitialSetupDone(true);
       
-      // Add a small delay before triggering the initial welcome message
-      // This ensures everything is properly initialized first
-      setTimeout(() => {
-        console.log("[SessionEffects] Triggering initial welcome after delay");
-        updateSession(true);
-      }, 1000);
+      // No automatic welcome message - agent will respond when user sends a message
       
       // Identify user if possible
       if (identifyUser) {

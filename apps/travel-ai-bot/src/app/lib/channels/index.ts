@@ -3,6 +3,7 @@ export { BaseChannel } from './BaseChannel';
 export { RealtimeChannel } from './RealtimeChannel';
 export { NormalAPIChannel } from './NormalAPIChannel';
 export { HumanStaffChannel } from './HumanStaffChannel';
+export { TextStreamChannel } from './TextStreamChannel';
 export { ChannelManager } from './ChannelManager';
 
 // Export routing and context services

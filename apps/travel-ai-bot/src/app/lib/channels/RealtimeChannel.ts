@@ -45,7 +45,7 @@ export class RealtimeChannel extends BaseChannel {
             id: messageId,
             type: "message",
             role: "user", 
-            content: [{ type: "input_text", text: message.content }],
+            content: [{ type: "text", text: message.content }],
           },
         });
         

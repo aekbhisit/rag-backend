@@ -1,15 +1,22 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { UniversalMessage } from '@/app/types';
-import { PaperAirplaneIcon, MicrophoneIcon, UserIcon, CpuChipIcon, UserGroupIcon, TrashIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
+import { PaperAirplaneIcon, UserIcon, CpuChipIcon, UserGroupIcon, TrashIcon, ArrowsRightLeftIcon, MapPinIcon, TruckIcon, HomeIcon, ShieldCheckIcon, ChatBubbleLeftRightIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
 import { useMessageHistory } from './MessageHistory';
+import HumanChatInterface from './HumanChatInterface';
 import VoiceChatInterface from './VoiceChatInterface';
 
 import { allAgentSets, defaultAgentSetKey } from '@/app/agents';
-import { createCollector } from '@/app/lib/conversationCollector';
+import { useDbAgentSets } from '@/app/hooks/useDbAgentSets';
 import { getOrCreateDbSession } from '@/app/lib/sharedSessionManager';
+import { useTenantAiConfig } from '@/app/hooks/useTenantAiConfig';
+import { TextStreamTransport } from '@/app/lib/textstream/transport';
+import { buildTextStreamUrl } from '@/app/lib/textstream/sessionAuth';
+import { TextResponseMerger } from '@/app/lib/textstream/responseQueue';
+import { logMessage } from '@/app/lib/loggerClient';
+import { callAgentCompletions } from '@/app/lib/callCompletions';
 
 interface ChatInterfaceProps {
   sessionId: string;
@@ -19,6 +26,8 @@ interface ChatInterfaceProps {
   agentSetKey?: string;
   agentName?: string;
   baseLanguage?: string; // Language from UI selector
+  // Bubble agent selection to page (updates header select label)
+  onAgentSelected?: (setKey: string, agentName: string) => void;
 }
 
 export default function ChatInterface({ 
@@ -29,20 +38,29 @@ export default function ChatInterface({
   agentSetKey: providedAgentSetKey,
   agentName: providedAgentName,
   baseLanguage = 'en',
+  onAgentSelected,
 }: ChatInterfaceProps) {
-  const { messages, addMessage, clearMessages } = useMessageHistory(sessionId);
+  const { agentSets: dbAgentSets, loading: agentSetsLoading } = useDbAgentSets();
+  const dynamicAgentSets = Object.keys(dbAgentSets).length > 0 ? dbAgentSets : allAgentSets;
+  const { messages, addMessage, clearMessages, updateMessage } = useMessageHistory(sessionId);
+  const { config: tenantAiConfig } = useTenantAiConfig();
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [localChannel, setLocalChannel] = useState<'normal' | 'realtime' | 'human'>(activeChannel);
-  const [micEnabled, setMicEnabled] = useState<boolean>(false);
+  const HUMAN_MODE_ENABLED = typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_HUMAN_MODE_ENABLED === 'true');
+  const channelOptions = (HUMAN_MODE_ENABLED ? (['normal', 'realtime', 'human'] as const) : (['normal', 'realtime'] as const));
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const sseTransportRef = useRef<TextStreamTransport | null>(null);
 
   // Persist active agent across messages (updated on transfer)
   const [activeAgentSetKeyState, setActiveAgentSetKeyState] = useState<string>(providedAgentSetKey || defaultAgentSetKey);
   const [activeAgentNameState, setActiveAgentNameState] = useState<string | null>(providedAgentName || null);
+
+  // Get user's current location
+  // Location capture removed for text SSE (DB-driven tools should request it explicitly via tool)
   const [conversationId, setConversationId] = useState<string>('');
 
   // Smooth scroll to bottom
@@ -69,10 +87,9 @@ export default function ChatInterface({
     setLocalChannel(activeChannel);
   }, [activeChannel]);
 
-  // Auto-enable mic when entering voice mode; disable when leaving
+  // Do not auto-enable mic on channel switch; user must trigger mic explicitly
   useEffect(() => {
-    if (localChannel === 'realtime') setMicEnabled(true);
-    else setMicEnabled(false);
+    // Intentionally no-op to avoid implicit mic activation
   }, [localChannel]);
 
   // Simple: Get or create conversation ID using shared session manager
@@ -81,7 +98,7 @@ export default function ChatInterface({
       try {
         const dbSessionId = await getOrCreateDbSession(sessionId, 'text');
         setConversationId(dbSessionId);
-        console.log(`[ChatInterface] ✅ Using session: ${dbSessionId} for text mode`);
+        
       } catch (err) {
         console.warn(`[ChatInterface] ❌ Failed to get session, using frontend session:`, err);
         setConversationId(sessionId);
@@ -106,6 +123,44 @@ export default function ChatInterface({
     return uuidv4().replace(/-/g, '').slice(0, 32);
   };
 
+  // Get agent-specific icon
+  const getAgentIcon = (agentName?: string) => {
+    switch (agentName) {
+      case 'placeGuide':
+        return MapPinIcon;
+      case 'tourTaxi':
+        return TruckIcon;
+      case 'thaiResortGuide':
+        return HomeIcon;
+      case 'authentication':
+      case 'frontDeskAuthentication':
+        return ShieldCheckIcon;
+      case 'welcomeAgent':
+      default:
+        return CpuChipIcon; // Default for text mode
+    }
+  };
+
+  // Channel display info
+  const getChannelInfo = (channel: string) => {
+    switch (channel) {
+      case 'normal': return { name: 'Text Chat', icon: ChatBubbleLeftRightIcon, color: 'blue' };
+      case 'realtime': return { name: 'Voice Chat', icon: MicrophoneIcon, color: 'green' };
+      case 'human': return { name: 'Human Support', icon: UserGroupIcon, color: 'purple' };
+      default: return { name: 'Unknown', icon: CpuChipIcon, color: 'gray' };
+    }
+  };
+
+  // Time formatter
+  const formatTime = (timestamp: string) => new Date(timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  // Debug helpers
+  const preview = (text: unknown, max = 200) => {
+    const str = typeof text === 'string' ? text : JSON.stringify(text);
+    if (!str) return '';
+    return str.length > max ? `${str.slice(0, max)}…` : str;
+  };
+
 
 
   const sendMessage = async (content: string) => {
@@ -126,20 +181,7 @@ export default function ChatInterface({
     addMessage(userMessage);
     
     // Log user message to backend
-    try {
-      console.log(`[ChatInterface] 📝 Logging user message with conversation_id: ${conversationId}`);
-      await fetch('/api/log/messages', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: conversationId,
-          role: 'user',
-          type: 'text',
-          content: content.trim(),
-          channel: activeChannel,
-          meta: { language: 'en', is_internal: false }
-        })
-      });
-    } catch {}
+    await logMessage({ sessionId: conversationId, role: 'user', type: 'text', content: content.trim(), channel: activeChannel, meta: { language: 'en' } });
     
     setTimeout(scrollToBottom, 50);
 
@@ -157,165 +199,196 @@ export default function ChatInterface({
       }
 
       if (localChannel === 'human') {
-        const humanMessage: UniversalMessage = {
-          id: generateMessageId(), sessionId, timestamp: new Date().toISOString(), type: 'system',
-          content: 'Your message has been forwarded to our human support team (LINE). A representative will respond shortly.',
-          metadata: { source: 'ai', channel: localChannel, language: 'en' }
-        };
-        addMessage(humanMessage);
-        // Persist user message and forward notice to backend
-        try {
-          await fetch('/api/log/messages', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              session_id: conversationId,
-              role: 'user',
-              type: 'text',
-              content: content.trim(),
-              channel: localChannel,
-              meta: { language: 'en', is_internal: false }
-            })
-          });
-          await fetch('/api/log/messages', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              session_id: conversationId,
-              role: 'system',
-              type: 'system',
-              content: humanMessage.content,
-              channel: localChannel,
-              meta: { language: 'en', is_internal: false }
-            })
-          });
-        } catch {}
-        // Forward user content to LINE via server push API (uses LINE_DEFAULT_TO if no recipient provided)
-        try {
-          await fetch('/api/line/push', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: content.trim() })
-          });
-        } catch (err) {
-          const errMsg: UniversalMessage = {
-            id: generateMessageId(), sessionId, timestamp: new Date().toISOString(), type: 'system',
-            content: 'We could not forward your message to LINE at the moment. Please try again.',
-            metadata: { source: 'ai', channel: localChannel, language: 'en' }
-          };
-          addMessage(errMsg);
-        }
+        // Human flow handled by HumanChatInterface; do not process here
         setIsLoading(false);
         return;
       }
 
-      const t0 = Date.now();
-      // Resolve agent config with injected transfer tools from config files
-      const setKey = activeAgentSetKeyState || defaultAgentSetKey;
-      const allInSet = allAgentSets[setKey] || [];
-      const targetName = activeAgentNameState || (allInSet[0]?.name || 'welcomeAgent');
-      const agentConfig = allInSet.find(a => a.name === targetName) || allInSet[0];
-      const agentInstructions = agentConfig?.instructions || 'You are a helpful assistant.';
-      const agentTools = Array.isArray(agentConfig?.tools) ? agentConfig!.tools : [];
-      console.log(`[ChatInterface] 🚀 Calling agent-completions for agent: ${agentConfig?.name || targetName}`);
-      console.log(`[ChatInterface] 🚀 Message count: ${messages.length}, Tools: ${agentTools.length}`);
-      
-      const response = await fetch('/api/chat/agent-completions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          agentName: agentConfig?.name || targetName,
+      // === New SSE streaming path for text mode ===
+      const TEXT_SSE_ENABLED = typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_TEXT_SSE_ENABLED === 'true');
+      if (localChannel === 'normal' && TEXT_SSE_ENABLED) {
+        try { sseTransportRef.current?.close(); } catch {}
+
+        // Resolve current agent config to pass agent key/name
+        const setKey = activeAgentSetKeyState || defaultAgentSetKey;
+        const allInSet = dynamicAgentSets[setKey] || [];
+        const targetName = activeAgentNameState || (allInSet[0]?.name || 'welcomeAgent');
+        const agentConfig = allInSet.find((a: { name: string }) => a.name === targetName) || allInSet[0];
+        console.log('[SSE] ▶ start', { setKey, agentName: agentConfig?.name, agentKey: agentConfig?.key });
+
+        // Create AI streaming placeholder
+        const phId = `ai-stream-${generateMessageId()}`;
+        const placeholder: UniversalMessage = {
+          id: phId,
+          sessionId,
+          timestamp: new Date().toISOString(),
+          type: 'text',
+          content: '',
+          metadata: {
+            source: 'ai',
+            channel: 'normal',
+            language: baseLanguage,
+            isStreaming: true,
+            agentName: activeAgentNameState || agentConfig?.name || 'welcomeAgent'
+          } as any
+        };
+        addMessage(placeholder);
+
+        const merger = new TextResponseMerger();
+        const url = buildTextStreamUrl({
+          sessionId: conversationId || sessionId,
           agentSetKey: setKey,
-          sessionId: conversationId,
+          agentName: agentConfig?.name,
+          agentKey: agentConfig?.key,
+          language: baseLanguage,
+          text: content.trim()
+        });
 
-          messages: [
-            { role: 'system', content: agentInstructions },
-            ...messages.slice(-10).map(msg => ({ role: msg.metadata.source === 'user' ? 'user' : 'assistant', content: msg.content })),
-            { role: 'user', content: content.trim() }
-          ],
-          ...(agentTools.length > 0 ? { tools: agentTools } : {}),
-          temperature: 0.7, max_tokens: 1000
-        })
-      });
-
-      console.log(`[ChatInterface] 📡 Agent response status: ${response.status}`);
-      if (!response.ok) {
-        console.error(`[ChatInterface] ❌ Agent API call failed: ${response.status}`);
-        throw new Error(`API call failed: ${response.status}`);
+        const transport = new TextStreamTransport({
+          onOpen: () => {
+            console.log('[SSE] ✔ open', { url });
+          },
+          onError: (e) => {
+            console.error('[ChatInterface] SSE error', e);
+            const errMsg: UniversalMessage = {
+              id: generateMessageId(), sessionId, timestamp: new Date().toISOString(), type: 'system',
+              content: 'Sorry, there was a streaming error. Please try again.',
+              metadata: { source: 'ai', channel: 'normal', language: 'en' }
+            };
+            addMessage(errMsg);
+            setIsLoading(false);
+          },
+          onResponseStart: () => {
+            console.log('[SSE] event: response_start');
+            // already created placeholder
+          },
+          onDelta: (delta) => {
+            console.debug('[SSE] event: delta', preview(delta));
+            const merged = merger.append(delta);
+            const existing = {
+              ...placeholder,
+              content: merged,
+              metadata: { ...placeholder.metadata, isStreaming: true }
+            } as UniversalMessage;
+            updateMessage(existing);
+          },
+          onResponseDone: async (finalText, agentName) => {
+            console.log('[SSE] event: response_done', { agentName, text: preview(finalText) });
+            const existing = {
+              ...placeholder,
+              content: finalText,
+              metadata: { ...placeholder.metadata, isStreaming: false, agentName: agentName || (activeAgentNameState || 'welcomeAgent') }
+            } as UniversalMessage;
+            updateMessage(existing);
+            setIsLoading(false);
+            // Log assistant response to backend
+            await logMessage({ sessionId: conversationId, role: 'assistant', type: 'text', content: finalText, channel: 'normal', meta: { agentName: agentName || (activeAgentNameState || '') } });
+          },
+          onAgentTransfer: (name) => {
+            console.log('[SSE] event: agent_transfer', { agentName: name });
+            // Future: update active agent from SSE event
+            setActiveAgentNameState(name);
+            try { onAgentSelected?.(activeAgentSetKeyState, name); } catch {}
+          },
+          onDebug: (info: any) => {
+            try {
+              if (info?.type === 'tools') {
+                console.log('[SSE][debug] tools', info);
+              } else if (info?.type === 'tool_call_delta') {
+                console.log('[SSE][debug] tool_call_delta', info);
+              } else if (info?.type === 'tool_calls_summary') {
+                console.log('[SSE][debug] tool_calls_summary', info);
+              } else if (info?.type === 'agent_completions_start' || info?.type === 'agent_completions_result' || info?.type === 'agent_completions_error') {
+                console.log('[SSE][debug] agent_completions', info);
+              } else {
+                console.log('[SSE][debug]', info);
+              }
+            } catch {}
+          }
+        });
+        sseTransportRef.current = transport;
+        transport.open(url);
+        return;
       }
 
-      const data = await response.json();
+      // Resolve agent config from DB-provided set
+      const setKey = activeAgentSetKeyState || defaultAgentSetKey;
+      const allInSet = dynamicAgentSets[setKey] || [];
+      const targetName = activeAgentNameState || (allInSet[0]?.name || '');
+      const agentConfig = allInSet.find((a: { name: string }) => a.name === targetName) || allInSet[0];
+      const agentInstructions = agentConfig?.instructions || 'You are a helpful assistant.';
+      let agentTools = Array.isArray(agentConfig?.tools) ? agentConfig!.tools : [];
+      
+      
+      // Tools are DB-driven; avoid client-side injection
+      const isFirstTurn = messages.length === 0 || !messages.some(m => m.metadata.source !== 'user');
+      let mergedTools = [...(agentTools || [])];
+      // Do not set tool_choice based on specific agent names
 
-      console.log(`[ChatInterface] 📥 Received response data:`, {
-        hasChoices: !!data.choices?.length,
-        hasMessage: !!data.choices?.[0]?.message,
-        hasContent: !!data.choices?.[0]?.message?.content,
-        hasToolCalls: !!data.choices?.[0]?.message?.tool_calls?.length,
-        contentLength: data.choices?.[0]?.message?.content?.length || 0,
-        toolCallsCount: data.choices?.[0]?.message?.tool_calls?.length || 0
+      console.log('[CMP] ▶ request', { setKey, agentName: agentConfig?.name || targetName, tools: (agentTools || []).map((t: any) => t?.function?.name).filter(Boolean) });
+      const data = await callAgentCompletions({
+        model: tenantAiConfig?.model || 'gpt-4o',
+        agentName: agentConfig?.name || targetName,
+        agentKey: agentConfig?.key || agentConfig?.name || targetName,
+        agentSetKey: setKey,
+        sessionId: conversationId,
+        messages: [
+          { role: 'system', content: agentInstructions },
+          ...messages.slice(-10).map(msg => ({ role: msg.metadata.source === 'user' ? 'user' : 'assistant', content: msg.content })),
+          { role: 'user', content: content.trim() }
+        ],
+        tools: mergedTools,
+        temperature: tenantAiConfig?.temperature,
+        max_tokens: tenantAiConfig?.maxTokens
       });
+
+      
       
       const toolCalls = data.choices?.[0]?.message?.tool_calls;
       const assistantContentRaw = data.choices?.[0]?.message?.content;
+      console.log('[CMP] ◀ response', { text: preview(assistantContentRaw), toolCalls: (toolCalls || []).map((tc: any) => tc?.function?.name) });
       const assistantContent = (assistantContentRaw && String(assistantContentRaw).trim()) ? assistantContentRaw : '';
       
-      console.log(`[ChatInterface] 🔄 Processing: assistantContent="${assistantContent.slice(0, 50)}...", toolCalls=${toolCalls?.length || 0}`);
-      console.log(`[ChatInterface] 🔍 Tool calls raw data:`, toolCalls);
-      console.log(`[ChatInterface] 🔍 About to check first transfer block - toolCalls exists: ${!!toolCalls}, length: ${toolCalls?.length || 0}`);
+      
 
       // Handle transfer tool calls if present
       if (toolCalls && toolCalls.length > 0) {
-        console.log(`[ChatInterface] ✅ Entering tool call handling block`);
+        
         for (const toolCall of toolCalls) {
-          console.log(`[ChatInterface] 🔍 Checking tool call: ${toolCall.function?.name}`);
-          if (toolCall.function?.name === 'transferAgents') {
-            console.log(`[ChatInterface] 🎯 Found transferAgents call, executing transfer logic`);
+          
+          if (toolCall.function?.name && String(toolCall.function.name).startsWith('transfer_to_')) {
+            console.log('[TOOL] transfer', { name: toolCall.function.name, args: preview(toolCall.function.arguments) });
             try {
-              const args = JSON.parse(toolCall.function.arguments || '{}');
-              const destination = args.destination_agent || 'thaiResortGuide';
+              const fnName = String(toolCall.function.name);
+              const destination = fnName.replace('transfer_to_', '');
+              const args = (() => { try { return JSON.parse(toolCall.function.arguments || '{}'); } catch { return {}; } })();
               const explain = args.rationale_for_transfer || 'Transferring to a more suitable agent.';
-              console.log('[ChatInterface] 🧭 Transfer block start', {
-                destination,
-                explain,
-                conversationId,
-                activeAgentSetKeyState,
-                activeAgentNameState
-              });
+              
               // Do not add a separate transfer bubble; we'll show icon atop next agent reply
 
               // Log internal transfer message for auditing (not user-visible)
               try {
-                await fetch('/api/log/messages', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    session_id: conversationId,
-                    role: 'system',
-                    type: 'system',
-                    content: `Internal transfer initiated to ${destination}. Rationale: ${explain}`,
-                    channel: localChannel,
-                    meta: {
-                      is_internal: true,
-                      source: 'transfer',
-                      from_agent: agentConfig?.name || targetName,
-                      to_agent: destination,
-                      conversation_context: typeof args.conversation_context === 'string' ? args.conversation_context : undefined
-                    }
-                  })
-                });
+                const meta: any = {
+                  is_internal: true,
+                  source: 'transfer',
+                  from_agent: agentConfig?.name || targetName,
+                  to_agent: destination,
+                  conversation_context: typeof args.conversation_context === 'string' ? args.conversation_context : undefined
+                };
+                const { logMessage } = await import('@/app/lib/loggerClient');
+                await logMessage({ sessionId: conversationId, role: 'system', type: 'system', content: `Internal transfer initiated to ${destination}. Rationale: ${explain}`, channel: localChannel, meta });
               } catch {}
 
               // Resolve destination agent across sets
               let nextSetKey = providedAgentSetKey || defaultAgentSetKey;
-              let nextAgent = (allAgentSets[nextSetKey] || []).find(a => a.name === destination) || null;
+              let nextAgent = (dynamicAgentSets[nextSetKey] || []).find((a: { name: string }) => a.name === destination) || null;
               if (!nextAgent) {
-                for (const [setKey, setAgents] of Object.entries(allAgentSets)) {
-                  const found = setAgents.find(a => a.name === destination);
+                for (const [setKey, setAgents] of (Object.entries(dynamicAgentSets) as Array<[string, Array<{ name: string }>] >)) {
+                  const found = setAgents.find((a) => a.name === destination);
                   if (found) { nextAgent = found; nextSetKey = setKey; break; }
                 }
               }
-              console.log('[ChatInterface] 🧭 Resolved destination', {
-                destination,
-                nextSetKey,
-                foundAgent: !!nextAgent,
-                setAgents: (allAgentSets[nextSetKey] || []).map(a => a.name)
-              });
+              
 
               // Compose follow-up request for the destination agent
               const followUserText = (typeof args.conversation_context === 'string' && args.conversation_context.trim())
@@ -328,22 +401,19 @@ export default function ChatInterface({
                   setActiveAgentSetKeyState(nextSetKey);
                   setActiveAgentNameState(nextAgent.name);
                   // Still need to get a response from the new agent in voice mode
-                  console.log(`[ChatInterface] 🔁 Voice mode transfer to ${nextAgent.name} - getting initial response`);
+                  
                 }
                 // Continue to get response from the new agent (both text and voice mode)
                 const nextInstructions = nextAgent.instructions || '';
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
-                console.log('[ChatInterface] 📤 Calling follow-up for destination agent', {
-                  agentName: nextAgent.name,
-                  nextSetKey,
-                  followUserTextLength: followUserText.length,
-                  hasTools: (nextTools.length > 0)
-                });
+                
+                console.log('[CMP] ▶ follow-up for destination agent', { agent: nextAgent.name, tools: (nextTools || []).map((t: any) => t?.function?.name).filter(Boolean) });
                 const follow = await fetch('/api/chat/agent-completions', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    model: 'gpt-4o',
+                    model: tenantAiConfig?.model || 'gpt-4o',
                     agentName: nextAgent.name,
+                    agentKey: nextAgent.key || nextAgent.name,
                     agentSetKey: nextSetKey,
                     sessionId: conversationId || sessionId,
           
@@ -353,20 +423,16 @@ export default function ChatInterface({
                       { role: 'user', content: followUserText }
                     ],
                     ...(nextTools.length > 0 ? { tools: nextTools } : {}),
-                    temperature: 0.7, max_tokens: 1000
+                    temperature: tenantAiConfig?.temperature || 0.7, max_tokens: tenantAiConfig?.maxTokens || 4000
                   })
                 });
-                console.log('[ChatInterface] 📥 Follow-up response status', follow.status);
+                
                 if (follow.ok) {
                   const nextData = await follow.json();
-                  console.log('[ChatInterface] 📥 Follow-up JSON received', {
-                    hasChoices: !!nextData?.choices?.length,
-                    hasMessage: !!nextData?.choices?.[0]?.message,
-                    hasContent: !!nextData?.choices?.[0]?.message?.content,
-                    hasToolCalls: !!nextData?.choices?.[0]?.message?.tool_calls?.length
-                  });
+                  
   
                   const nextTextRaw = nextData.choices?.[0]?.message?.content;
+                  console.log('[CMP] ◀ follow-up response', { text: preview(nextTextRaw), toolCalls: (nextData.choices?.[0]?.message?.tool_calls || []).map((tc: any) => tc?.function?.name) });
                   const nextText = (nextTextRaw && String(nextTextRaw).trim()) ? nextTextRaw : '';
                   const nextToolCalls = nextData.choices?.[0]?.message?.tool_calls;
                   if (nextText) {
@@ -377,16 +443,18 @@ export default function ChatInterface({
                     };
                     addMessage(nextMsg);
                   } else if (nextToolCalls && nextToolCalls.length > 0) {
-                    console.log('[ChatInterface] 🔁 Destination agent returned tool calls; executing locally', nextToolCalls.map((t: any) => t?.function?.name));
+                    
                     try {
                       const executedToolMessages: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
                       for (const tc of nextToolCalls) {
                         if (!tc?.function?.name) continue;
                         const fnName = tc.function.name as string;
                         const fnArgs = (() => { try { return JSON.parse(tc.function.arguments || '{}'); } catch { return {}; } })();
+                        console.log('[TOOL] exec', { name: fnName, args: preview(fnArgs) });
                         const impl = nextAgent?.toolLogic && nextAgent.toolLogic[fnName];
                         if (typeof impl === 'function') {
                           const result = await impl(fnArgs, [] as any);
+                          console.log('[TOOL] result', preview(result));
                           executedToolMessages.push({ role: 'tool', content: JSON.stringify(result ?? {}), tool_call_id: tc.id });
                         }
                       }
@@ -411,25 +479,28 @@ export default function ChatInterface({
                         { role: 'assistant', content: '', tool_calls: nextToolCalls },
                         ...executedToolMessages,
                       ];
-                      console.log('[ChatInterface] 📤 Calling second follow-up with tool outputs', { messageCount: convo.length });
+                      
+                      console.log('[CMP] ▶ follow-up after tools', { agent: nextAgent.name });
                       const follow2 = await fetch('/api/chat/agent-completions', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          model: 'gpt-4o',
+                          model: tenantAiConfig?.model || 'gpt-4o',
                           agentName: nextAgent.name,
+                          agentKey: nextAgent.key || nextAgent.name,
                           agentSetKey: nextSetKey,
                           sessionId: conversationId || sessionId,
                 
                           messages: convo,
                           ...(nextTools.length > 0 ? { tools: nextTools } : {}),
-                          temperature: 0.7, max_tokens: 1000
+                          temperature: tenantAiConfig?.temperature || 0.7, max_tokens: tenantAiConfig?.maxTokens || 4000
                         })
                       });
-                      console.log('[ChatInterface] 📥 Second follow-up status', follow2.status);
+                      
                       if (follow2.ok) {
                         const nextData2 = await follow2.json();
 
                         const nextTextRaw2 = nextData2.choices?.[0]?.message?.content;
+                        console.log('[CMP] ◀ follow-up after tools response', { text: preview(nextTextRaw2) });
                         const nextText2 = (nextTextRaw2 && String(nextTextRaw2).trim()) ? nextTextRaw2 : '';
                         if (nextText2) {
                           const nextMsg: UniversalMessage = {
@@ -451,8 +522,36 @@ export default function ChatInterface({
                 // Persist new active agent for subsequent user messages
                 setActiveAgentSetKeyState(nextSetKey);
                 setActiveAgentNameState(nextAgent.name);
+                
+                // Send initial message from new agent after transfer
+                setTimeout(() => {
+                  try {
+                    
+                    
+                    // Create a system message to introduce the new agent
+                    const initialMessage: UniversalMessage = {
+                      id: generateMessageId(),
+                      sessionId,
+                      timestamp: new Date().toISOString(),
+                      type: 'system',
+                      content: `Hello! I'm now your ${nextAgent.name} assistant. How can I help you today?`,
+                      metadata: {
+                        source: 'ai',
+                        channel: localChannel,
+                        language: 'en',
+                        agentName: nextAgent.name
+                      }
+                    };
+                    
+                    addMessage(initialMessage);
+                    
+                    
+                  } catch (error) {
+                    console.error('[ChatInterface] ❌ Failed to send initial message from transferred agent:', error);
+                  }
+                }, 1000); // Delay to ensure the follow-up response is processed first
               }
-              console.log(`[ChatInterface] ✅ Transfer logic completed, setting loading=false and returning`);
+              
               setIsLoading(false);
               return; // handled transfer path entirely
             } catch (err) {
@@ -462,17 +561,17 @@ export default function ChatInterface({
         }
       }
 
-      console.log(`[ChatInterface] 🎯 Final processing: assistantContent exists=${!!assistantContent}, length=${assistantContent.length}`);
+      
       if (!assistantContent || assistantContent.trim() === '') {
-        console.log(`[ChatInterface] ⚠️ No assistant content to display - this might be the issue!`);
+        
       }
 
       // Handle general tool calls (iterate: tool -> return to API -> (optional) tool -> return -> answer)
       if (toolCalls && toolCalls.length > 0) {
-        console.log(`[ChatInterface] ⚡ Entering general tool system (this should NOT run if transfer was processed)`);
+        
         try {
-          const isTransfer = (tc: any) => tc?.function?.name === 'transferAgents';
-          console.log(`[ChatInterface] 🔧 Tool calls detected:`, toolCalls.map((tc: any) => ({ name: tc?.function?.name, isTransfer: isTransfer(tc) })));
+          const isTransfer = (tc: any) => typeof tc?.function?.name === 'string' && tc.function.name.startsWith('transfer_to_');
+          
           let transferBackArgs: any | null = null;
           let navigateMainArgs: any | null = null;
           const executeToolCalls = async (tcList: any[], agent: any) => {
@@ -480,10 +579,28 @@ export default function ChatInterface({
             for (const tc of tcList) {
               if (!tc?.function?.name) continue;
               const fnName = tc.function.name as string;
-              const fnArgs = (() => { try { return JSON.parse(tc.function.arguments || '{}'); } catch { return {}; } })();
-              const impl = agent?.toolLogic && agent.toolLogic[fnName];
+              let fnArgs = (() => { try { return JSON.parse(tc.function.arguments || '{}'); } catch { return {}; } })();
+              console.log('[TOOL] exec', { name: fnName, args: preview(fnArgs) });
+              
+              // Do not inject location based on function name; handler will manage lat/long if needed
+              
+              
+              
+              let impl = agent?.toolLogic && agent.toolLogic[fnName];
+              if (typeof impl !== 'function') {
+                try {
+                  // Fallback to local UI handlers for core UI tools (e.g., navigate)
+                  const { UI_HANDLERS } = await import('@/app/agents/core/functions/handlers/ui');
+                  impl = (UI_HANDLERS as any)[fnName];
+                  
+                } catch (e) {
+                  console.warn('[ChatInterface] ⚠️ Failed loading UI_HANDLERS fallback', e);
+                }
+              }
               if (typeof impl === 'function') {
                 const result = await impl(fnArgs, [] as any);
+                console.log('[TOOL] result', preview(result));
+                
                 outputs.push({ role: 'tool', content: JSON.stringify(result ?? {}), tool_call_id: tc.id });
                 // If agent decided to transfer back, reset active agent to default
                 if (fnName === 'transferBack') {
@@ -514,34 +631,34 @@ export default function ChatInterface({
           const MAX_ITERATIONS = 3;
           let lastToolOutputs: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
 
-          console.log(`[ChatInterface] 🔧 Tool execution loop: ${currentToolCalls?.length || 0} tool calls, iteration ${iterations}`);
+          
           while (currentToolCalls && currentToolCalls.length && iterations < MAX_ITERATIONS) {
             const nonTransfer = currentToolCalls.filter(tc => !isTransfer(tc));
-            console.log(`[ChatInterface] 🔧 Iteration ${iterations}: ${currentToolCalls.length} total calls, ${nonTransfer.length} non-transfer`);
+            
             if (nonTransfer.length === 0) {
-              console.log(`[ChatInterface] 🔧 No non-transfer tool calls, breaking loop`);
+              
               break;
             }
             convo.push({ role: 'assistant', content: '', tool_calls: nonTransfer });
             const toolOutputs = await executeToolCalls(nonTransfer, agentConfig);
-            console.log(`[ChatInterface] 🔧 Tool outputs received: ${toolOutputs.length} results`);
+            
             convo.push(...toolOutputs);
             lastToolOutputs = toolOutputs;
 
             const follow = await fetch('/api/chat/agent-completions', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                model: 'gpt-4o',
+                model: tenantAiConfig?.model || 'gpt-4o',
                 agentName: agentConfig?.name || targetName,
                 agentSetKey: setKey,
                 sessionId: conversationId || sessionId,
       
                 messages: convo,
                 ...(agentTools.length > 0 ? { tools: agentTools } : {}),
-                temperature: 0.7, max_tokens: 1000
+                temperature: tenantAiConfig?.temperature || 0.7, max_tokens: tenantAiConfig?.maxTokens || 4000
               })
             });
-            console.log(`[ChatInterface] 🔧 Follow-up completion call status: ${follow.status}`);
+            
             if (!follow.ok) {
               console.error(`[ChatInterface] 🔧 Follow-up call failed: ${follow.status}`);
               break;
@@ -552,10 +669,10 @@ export default function ChatInterface({
             const nextText = (nextTextRaw && String(nextTextRaw).trim()) ? nextTextRaw : '';
             const nextCalls = nextData.choices?.[0]?.message?.tool_calls || [];
             
-            console.log(`[ChatInterface] 🔧 Follow-up response: hasText=${!!nextText}, textLength=${nextText.length}, hasMoreCalls=${nextCalls.length}`);
+            
 
             if (nextText) {
-              console.log(`[ChatInterface] ✅ Follow-up AI response: "${nextText.slice(0, 100)}..."`);
+              
               const nextMsg: UniversalMessage = {
                 id: generateMessageId(), sessionId, timestamp: new Date().toISOString(), type: 'text', content: nextText,
                 metadata: { source: 'ai', channel: localChannel, language: 'en', agentName: agentConfig?.name || targetName }
@@ -567,7 +684,7 @@ export default function ChatInterface({
 
             currentToolCalls = nextCalls;
             iterations++;
-            console.log(`[ChatInterface] 🔧 Continuing iteration ${iterations} with ${nextCalls.length} new tool calls`);
+            
           }
 
           // If a transferBack occurred, immediately ask the default agent to send a welcome-back message
@@ -579,15 +696,16 @@ export default function ChatInterface({
             }
             try {
               let nextSetKey = defaultAgentSetKey;
-              let nextAgent = (allAgentSets[nextSetKey] || []).find(a => a.name === 'welcomeAgent') || (allAgentSets[nextSetKey] || [])[0];
+              let nextAgent = (dynamicAgentSets[nextSetKey] || []).find((a: { name: string }) => a.name === 'welcomeAgent') || (dynamicAgentSets[nextSetKey] || [])[0];
               if (nextAgent) {
                 const nextInstructions = nextAgent.instructions || '';
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
                 const follow = await fetch('/api/chat/agent-completions', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    model: 'gpt-4o',
+                    model: tenantAiConfig?.model || 'gpt-4o',
                     agentName: nextAgent.name,
+                    agentKey: nextAgent.key || nextAgent.name,
                     agentSetKey: nextSetKey,
                     sessionId: conversationId || sessionId,
           
@@ -597,7 +715,7 @@ export default function ChatInterface({
                       { role: 'user', content: typeof (transferBackArgs?.conversation_context) === 'string' && transferBackArgs.conversation_context.trim() ? transferBackArgs.conversation_context : 'User has returned to the main assistant.' }
                     ],
                     ...(nextTools.length > 0 ? { tools: nextTools } : {}),
-                    temperature: 0.7, max_tokens: 1000
+                    temperature: tenantAiConfig?.temperature || 0.7, max_tokens: tenantAiConfig?.maxTokens || 4000
                   })
                 });
                 if (follow.ok) {
@@ -655,15 +773,16 @@ export default function ChatInterface({
             }
             try {
               let nextSetKey = defaultAgentSetKey;
-              let nextAgent = (allAgentSets[nextSetKey] || []).find(a => a.name === 'welcomeAgent') || (allAgentSets[nextSetKey] || [])[0];
+              let nextAgent = (dynamicAgentSets[nextSetKey] || []).find((a: { name: string }) => a.name === 'welcomeAgent') || (dynamicAgentSets[nextSetKey] || [])[0];
               if (nextAgent) {
                 const nextInstructions = nextAgent.instructions || '';
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
                 const follow = await fetch('/api/chat/agent-completions', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    model: 'gpt-4o',
+                    model: tenantAiConfig?.model || 'gpt-4o',
                     agentName: nextAgent.name,
+                    agentKey: nextAgent.key || nextAgent.name,
                     agentSetKey: nextSetKey,
                     sessionId: conversationId || sessionId,
           
@@ -673,7 +792,7 @@ export default function ChatInterface({
                       { role: 'user', content: typeof (navigateMainArgs?.welcomeMessage) === 'string' && navigateMainArgs.welcomeMessage.trim() ? navigateMainArgs.welcomeMessage : 'User has navigated back to the main assistant.' }
                     ],
                     ...(nextTools.length > 0 ? { tools: nextTools } : {}),
-                    temperature: 0.7, max_tokens: 1000
+                    temperature: tenantAiConfig?.temperature || 0.7, max_tokens: tenantAiConfig?.maxTokens || 4000
                   })
                 });
                 if (follow.ok) {
@@ -738,30 +857,17 @@ export default function ChatInterface({
         }
 
       }
-      console.log(`[ChatInterface] 🎯 Final processing: assistantContent exists=${!!assistantContent}, length=${assistantContent?.length || 0}`);
+      
       if (assistantContent) {
-        console.log(`[ChatInterface] ✅ Creating AI message with content: "${assistantContent.slice(0, 100)}..."`);
+        
         const aiMessage: UniversalMessage = {
           id: generateMessageId(), sessionId, timestamp: new Date().toISOString(), type: 'text', content: assistantContent,
           metadata: { source: 'ai', channel: localChannel, language: 'en', agentName: agentConfig?.name || targetName }
         };
         addMessage(aiMessage);
-        console.log(`[ChatInterface] ✅ AI message added to chat with ID: ${aiMessage.id}`);
         
         // Log assistant response to backend
-        try {
-          await fetch('/api/log/messages', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              session_id: conversationId,
-              role: 'assistant',
-              type: 'text',
-              content: assistantContent,
-              channel: localChannel,
-              meta: { agentName: agentConfig?.name || targetName, is_internal: false }
-            })
-          });
-        } catch {}
+        await logMessage({ sessionId: conversationId, role: 'assistant', type: 'text', content: assistantContent, channel: localChannel, meta: { agentName: agentConfig?.name || targetName } });
       } else {
         console.log(`[ChatInterface] ⚠️ No assistant content to display - this might be the issue!`);
       }
@@ -792,90 +898,125 @@ export default function ChatInterface({
     }
   };
 
-  const getChannelInfo = (channel: string) => {
-    switch (channel) {
-      case 'normal': return { name: 'Text Chat', icon: CpuChipIcon, color: 'blue' };
-      case 'realtime': return { name: 'Voice Chat', icon: MicrophoneIcon, color: 'green' };
-      case 'human': return { name: 'Human Support', icon: UserGroupIcon, color: 'purple' };
-      default: return { name: 'Unknown', icon: CpuChipIcon, color: 'gray' };
-    }
-  };
-
-  const formatTime = (timestamp: string) => new Date(timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  
 
   const handleVoiceResponse = (message: UniversalMessage) => {
     console.log('[ChatInterface] Voice response received:', message.content);
   };
 
-  // Proactively request mic permission when switching to realtime
+  // Do not proactively request mic permission; defer to explicit user action
   useEffect(() => {
-    if (localChannel === 'realtime') {
-      try {
-        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-          navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
-        }
-      } catch {}
-    }
+    // Intentionally no-op to prevent unexpected permission prompts
   }, [localChannel]);
 
+  // No longer needed - API key is now retrieved from tenant config
+
+  // Memoize callback functions to prevent re-renders
+  const handleChannelSwitch = useCallback((channel: 'normal' | 'realtime' | 'human') => {
+    setLocalChannel(channel);
+    try {
+      onChannelSwitch(channel);
+    } catch {}
+  }, [onChannelSwitch]);
+
+  const handleAgentTransfer = useCallback((destination: string) => {
+    // Resolve destination across all sets
+    let nextSetKey = activeAgentSetKeyState;
+    let nextAgent = (dynamicAgentSets[nextSetKey] || []).find((a: { name: string }) => a.name === destination) || null;
+    if (!nextAgent) {
+      for (const [setKey, setAgents] of (Object.entries(dynamicAgentSets) as Array<[string, Array<{ name: string }>] >)) {
+        const found = setAgents.find((a) => a.name === destination);
+        if (found) { nextAgent = found; nextSetKey = setKey; break; }
+      }
+    }
+    if (nextAgent) {
+      setActiveAgentSetKeyState(nextSetKey);
+      setActiveAgentNameState(nextAgent.name);
+      try { onAgentSelected?.(nextSetKey, nextAgent.name); } catch {}
+    }
+  }, [activeAgentSetKeyState, dynamicAgentSets]);
+
   if (localChannel === 'realtime') {
+    const selectedAgentName = activeAgentNameState || (dynamicAgentSets[activeAgentSetKeyState]?.[0]?.name || 'welcomeAgent');
+    const selectedAgentConfigSet = dynamicAgentSets[activeAgentSetKeyState] || [];
+
+    // Don't render VoiceChatInterface until agent sets are loaded to prevent multiple initializations
+    if (agentSetsLoading || selectedAgentConfigSet.length === 0) {
+      return (
+        <div className="flex flex-col h-full min-h-0 bg-white rounded-lg shadow border border-gray-200">
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="text-4xl mb-4">⏳</div>
+              <p className="text-lg font-medium text-gray-600">Loading Voice Chat...</p>
+              <p className="text-sm text-gray-500">Initializing AI agents</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // VoiceChatInterface initialization handled silently
+
     return (
       <VoiceChatInterface
         sessionId={sessionId}
         activeChannel={'realtime'}
-        onChannelSwitch={(channel) => { setLocalChannel(channel); try { onChannelSwitch(channel); } catch {} }}
+        onChannelSwitch={handleChannelSwitch}
         onVoiceResponse={handleVoiceResponse}
-        selectedAgentName={activeAgentNameState || (allAgentSets[activeAgentSetKeyState]?.[0]?.name || 'welcomeAgent')}
-        selectedAgentConfigSet={allAgentSets[activeAgentSetKeyState] || []}
         baseLanguage={baseLanguage}
-        onAgentTransfer={(destination) => {
-          // Resolve destination across all sets
-          let nextSetKey = activeAgentSetKeyState;
-          let nextAgent = (allAgentSets[nextSetKey] || []).find(a => a.name === destination) || null;
-          if (!nextAgent) {
-            for (const [setKey, setAgents] of Object.entries(allAgentSets)) {
-              const found = setAgents.find(a => a.name === destination);
-              if (found) { nextAgent = found; nextSetKey = setKey; break; }
-            }
-          }
-          if (nextAgent) {
-            setActiveAgentSetKeyState(nextSetKey);
-            setActiveAgentNameState(nextAgent.name);
-          }
-        }}
+        // Voice mode now loads agents from database internally
+        // Optional override props for backward compatibility
+        selectedAgentName={selectedAgentName}
+        selectedAgentConfigSet={selectedAgentConfigSet}
+        onAgentTransfer={handleAgentTransfer}
+      />
+    );
+  }
+
+  if (localChannel === 'human') {
+    return (
+      <HumanChatInterface
+        sessionId={sessionId}
+        messages={messages}
+        addMessage={addMessage}
+        clearMessages={clearMessages}
+        isProcessing={isProcessing}
+        baseLanguage={baseLanguage}
+        activeChannel={'human'}
+        onChannelSwitch={handleChannelSwitch}
       />
     );
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-gradient-to-b from-orange-50/50 to-amber-50/50">
+    <div className="flex flex-col h-full min-h-0 bg-white rounded-lg shadow border border-gray-200">
       {/* Chat Header */}
-      <div className="flex items-center justify-between p-3 border-b border-orange-200/60 bg-gradient-to-r from-orange-50/90 to-amber-50/90">
-        <div className="flex items-center space-x-2">
-          <div className={`w-2.5 h-2.5 rounded-full ${localChannel === 'normal' ? 'bg-orange-700' : 'bg-red-800'}`} />
-          <h3 className="text-sm font-medium text-orange-900">{getChannelInfo(localChannel).name}</h3>
+      <div className="flex items-center justify-between p-4 border-b border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 rounded-t-lg">
+        <div className="flex items-center space-x-3">
+          <div className={`w-3 h-3 rounded-full ${localChannel === 'normal' ? 'bg-orange-700' : 'bg-orange-700'}`} />
+          <h3 className="font-medium text-gray-800">{getChannelInfo(localChannel).name}</h3>
         </div>
         <div className="flex space-x-2">
           {messages.length > 0 && (
             <button
               onClick={() => { if (confirm('Clear all messages?')) clearMessages(); }}
-              className="p-2 rounded-md bg-white/80 text-amber-600 hover:text-red-700 hover:bg-white"
+              className="p-2 rounded-md bg-white text-gray-400 hover:text-red-600 transition-colors"
               title="Clear all messages"
             >
               <TrashIcon className="w-4 h-4" />
             </button>
           )}
-          {(['normal', 'realtime', 'human'] as const).map((channel) => {
+          {channelOptions.map((channel) => {
             const info = getChannelInfo(channel);
             const Icon = info.icon;
+            const isActive = localChannel === channel;
             return (
               <button
                 key={channel}
                 onClick={() => { setLocalChannel(channel); try { onChannelSwitch(channel); } catch {} }}
-                className={`p-2 rounded-md transition-colors ${
-                  localChannel === channel 
-                    ? 'bg-orange-100 text-orange-800 border border-orange-300' 
-                    : 'bg-white/80 text-amber-700 hover:text-orange-800 hover:bg-orange-50'
+                className={`p-2 rounded-md transition-colors border ${isActive
+                  ? 'bg-orange-100 text-orange-800 border-orange-300'
+                  : 'bg-white/80 text-amber-700 border-orange-200 hover:text-orange-800 hover:bg-orange-50'
                 }`}
                 title={`Switch to ${info.name}`}
               >
@@ -898,33 +1039,45 @@ export default function ChatInterface({
         ) : (
           messages.map((message) => (
             <div key={message.id} className={`flex items-start space-x-3 ${message.metadata.source === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                message.metadata.source === 'user' 
-                  ? 'bg-gradient-to-br from-orange-600 to-red-700 text-white shadow-md' 
-                  : message.metadata.source === 'ai' 
-                    ? 'bg-gradient-to-br from-amber-600 to-orange-700 text-white shadow-md' 
-                    : 'bg-gradient-to-br from-neutral-600 to-stone-700 text-white shadow-md'
-              }`}>
-                {message.metadata.source === 'user' ? <UserIcon className="w-4 h-4" /> : message.metadata.source === 'ai' ? <CpuChipIcon className="w-4 h-4" /> : <UserGroupIcon className="w-4 h-4" />}
+              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-md`} style={{ backgroundImage: 'linear-gradient(to bottom right, var(--ta-icon-from), var(--ta-icon-to))', color: 'var(--ta-on-accent)' }}>
+                {message.metadata.source === 'user' ? <UserIcon className="w-4 h-4" /> : message.metadata.source === 'ai' ? (
+                  (() => {
+                    const IconComponent = getAgentIcon(message.metadata.agentName as string);
+                    return <IconComponent className="w-4 h-4" />;
+                  })()
+                ) : <UserGroupIcon className="w-4 h-4" />}
               </div>
               <div className={`flex-1 max-w-xs lg:max-w-md ${message.metadata.source === 'user' ? 'text-right' : 'text-left'}`}>
-                <div className={`inline-block p-3 rounded-lg shadow-sm relative ${
+                <div className={`inline-block p-3 rounded-lg shadow-sm relative`} style={
                   message.metadata.source === 'user' 
-                    ? 'bg-gradient-to-br from-orange-600 to-red-700 text-white' 
+                    ? { backgroundImage: 'linear-gradient(to bottom right, var(--ta-btn-from), var(--ta-btn-to))', color: 'var(--ta-on-accent)' }
                     : message.type === 'system' 
-                      ? 'bg-gradient-to-br from-amber-50 to-orange-100 text-amber-900 border border-amber-200' 
-                      : 'bg-gradient-to-br from-orange-50 to-amber-100 text-orange-900 border border-orange-200'
-                }`}>
+                      ? { backgroundImage: 'linear-gradient(to bottom right, var(--ta-panel-from), var(--ta-panel-to))', color: 'var(--ta-muted)', border: '1px solid var(--ta-border)' }
+                      : { backgroundImage: 'linear-gradient(to bottom right, var(--ta-card-from), var(--ta-card-to))', color: 'var(--ta-text)', border: '1px solid var(--ta-card-border)' }
+                }>
                   {message.metadata?.mappedFrom?.startsWith('agent-transfer:') && (
-                    <div className="absolute -top-4 left-0 flex items-center space-x-1 text-amber-900">
+                    <div className="absolute -top-4 left-0 flex items-center space-x-1" style={{ color: 'var(--ta-muted)' }}>
                       <ArrowsRightLeftIcon className="w-3.5 h-3.5" />
                       <span className="text-[10px]">{message.metadata.mappedFrom.split(':')[1] || 'agent'}</span>
                     </div>
                   )}
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  {((message.metadata as any)?.isStreaming) ? (
+                    <div>
+                      {(message.content || '').trim().length > 0 && (
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      )}
+                      <div className="flex items-center space-x-1 mt-1" aria-label="loading">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite' }} />
+                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite', animationDelay: '0.15s' }} />
+                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite', animationDelay: '0.3s' }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  )}
                 </div>
-                <div className={`text-xs text-amber-700 mt-1 ${message.metadata.source === 'user' ? 'text-right' : 'text-left'}`}>
-                  {formatTime(message.timestamp)}{message.metadata.agentName && (<span className="ml-2 text-amber-600">• {message.metadata.agentName}</span>)}
+                <div className={`text-xs mt-1 ${message.metadata.source === 'user' ? 'text-right' : 'text-left'}`} style={{ color: 'var(--ta-muted)' }}>
+                  {formatTime(message.timestamp)}{message.metadata.agentName && (<span className="ml-2" style={{ color: 'var(--ta-muted)' }}>• {message.metadata.agentName}</span>)}
                 </div>
               </div>
             </div>
@@ -932,13 +1085,18 @@ export default function ChatInterface({
         )}
         {isLoading && (
           <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-amber-600 to-orange-700 text-white flex items-center justify-center shadow-md"><CpuChipIcon className="w-4 h-4" /></div>
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-amber-600 to-orange-700 text-white flex items-center justify-center shadow-md">
+              {(() => {
+                const IconComponent = getAgentIcon(activeAgentNameState || 'welcomeAgent');
+                return <IconComponent className="w-4 h-4" />;
+              })()}
+            </div>
             <div className="flex-1 max-w-xs lg:max-w-md">
               <div className="inline-block p-3 rounded-lg bg-gradient-to-br from-orange-50 to-amber-100 border border-orange-200 shadow-sm">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-amber-700 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-amber-700 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-amber-700 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="flex items-center space-x-1" aria-label="loading">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite' }} />
+                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite', animationDelay: '0.15s' }} />
+                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite', animationDelay: '0.3s' }} />
                 </div>
               </div>
             </div>
@@ -948,7 +1106,7 @@ export default function ChatInterface({
       </div>
 
       {/* Input Area pinned at bottom by flex */}
-      <div className="border-t border-orange-200/60 bg-gradient-to-r from-orange-50/90 to-amber-50/90">
+      <div className="" style={{ borderTop: '1px solid var(--ta-border)', backgroundImage: 'linear-gradient(to right, var(--ta-panel-from), var(--ta-panel-to))' }}>
         <form onSubmit={handleSubmit} className="p-3">
           <div className="flex items-end space-x-3">
             <textarea
@@ -959,49 +1117,36 @@ export default function ChatInterface({
               onKeyDown={handleKeyPress}
               placeholder={`Type your message... (${getChannelInfo(localChannel).name})`}
               disabled={isLoading}
-              className="flex-1 px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-transparent disabled:bg-orange-100 disabled:cursor-not-allowed disabled:text-amber-700 text-orange-900 placeholder-amber-600 resize-none bg-white/80"
+              className="flex-1 px-3 py-2 rounded-lg focus:ring-2 disabled:cursor-not-allowed resize-none"
+              style={{ border: '1px solid var(--ta-border)', background: 'rgba(255,255,255,0.8)', color: 'var(--ta-text)' }}
             />
             <div className="inline-flex flex-col items-center space-y-2">
-              {localChannel === ('realtime' as 'normal' | 'realtime' | 'human') && (
-                <button
-                  type="button"
-                  onClick={() => setMicEnabled((v) => !v)}
-                  className={`h-10 px-4 rounded-lg shadow-md border focus-visible:ring-2 focus-visible:ring-orange-600 focus-visible:outline-none transition-all flex items-center justify-center ${
-                    micEnabled
-                      ? 'bg-gradient-to-r from-orange-700 to-red-800 border-red-900 text-white hover:from-orange-800 hover:to-red-900'
-                      : 'bg-gradient-to-r from-orange-100 to-amber-200 border-amber-300 text-amber-900 hover:from-orange-200 hover:to-amber-300'
-                  }`}
-                  title={micEnabled ? 'Microphone enabled' : 'Microphone disabled'}
-                  aria-pressed={micEnabled}
-                >
-                  {micEnabled ? (
-                    <MicrophoneIcon className="w-5 h-5" />
-                  ) : (
-                    <span className="relative inline-block w-5 h-5" aria-hidden>
-                      <MicrophoneIcon className="w-5 h-5" />
-                      <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <span className="block w-5 h-[2px] bg-red-600 rotate-45 rounded-sm"></span>
-                      </span>
-                    </span>
-                  )}
-                </button>
-              )}
+              {/* Mic toggle removed from text UI; voice handled in VoiceChatInterface */}
               <button
                 type="submit"
                 disabled={isLoading || !inputValue.trim()}
-                className="h-10 px-4 bg-gradient-to-r from-orange-700 to-red-800 text-white rounded-lg shadow-md hover:from-orange-800 hover:to-red-900 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-orange-600 focus-visible:outline-none disabled:bg-neutral-400 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+                className="h-10 px-4 text-white rounded-lg shadow-md hover:shadow-lg focus-visible:ring-2 focus-visible:outline-none disabled:bg-neutral-400 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+                style={{ backgroundImage: 'linear-gradient(to right, var(--ta-btn-from), var(--ta-btn-to))' }}
                 title="Send"
               >
                 <PaperAirplaneIcon className="w-5 h-5" />
               </button>
             </div>
           </div>
-          <div className="mt-1 text-xs text-amber-700 flex items-center justify-between">
+          <div className="mt-1 text-xs flex items-center justify-between" style={{ color: 'var(--ta-muted)' }}>
             <span>Enter to send • Shift+Enter for newline</span>
-            {isProcessing && (<span className="text-orange-800 font-medium">Processing...</span>)}
+            {isProcessing && (<span className="font-medium" style={{ color: 'var(--ta-link)' }}>Processing...</span>)}
           </div>
         </form>
       </div>
     </div>
   );
-} 
+}
+
+<style>{`
+@keyframes vcPulse {
+  0% { opacity: .25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-1px); }
+  100% { opacity: .25; transform: translateY(0); }
+}
+`}</style> 

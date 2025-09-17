@@ -158,7 +158,7 @@ function ToursPageContent(props: { embedded?: boolean }) {
         // Load existing tour places
         const res = await fetch('/api/contexts?type=place&category=tours&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
         const payload = await res.json();
-        const ctxItems: any[] = Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload) ? payload : []);
+        let ctxItems: any[] = Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload) ? payload : []);
 
         // Seed defaults if needed
         const tenantId = (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '';
@@ -224,10 +224,15 @@ function ToursPageContent(props: { embedded?: boolean }) {
           try { if (typeof window !== 'undefined') window.localStorage.setItem(seedKey, '1'); } catch {}
         }
 
-        // Reload
-        const res2 = await fetch('/api/contexts?type=place&category=tours&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
-        const p2 = await res2.json();
-        setItems((Array.isArray(p2?.items) ? p2.items : (Array.isArray(p2) ? p2 : [])).map((x: any) => ({ id: x.id, title: x.title, attributes: x.attributes })));
+        // If we created new items, we need to refetch to get the updated list
+        if (!alreadySeeded && toCreate.length > 0) {
+          const res2 = await fetch('/api/contexts?type=place&category=tours&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+          const p2 = await res2.json();
+          ctxItems = Array.isArray(p2?.items) ? p2.items : (Array.isArray(p2) ? p2 : []);
+        }
+
+        // Use the items (either original or updated after seeding)
+        setItems(ctxItems.map((x: any) => ({ id: x.id, title: x.title, attributes: x.attributes })));
       } catch (e: any) {
         setError(String(e?.message || e));
       } finally {

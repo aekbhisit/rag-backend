@@ -1,7 +1,7 @@
 /**
  * Thai Resort Guide module exports
  */
-import { injectTransferTools, injectTransferBackTools } from '../core/functions';
+// Note: transferAgents and transferBack are now core tools, no injection needed
 import { AgentConfig } from "@/app/types";
 import { thaiResortFunctions } from "./config/functions";
 import { aiIntentionHandler } from "./services/aiIntentionHandler";
@@ -36,7 +36,7 @@ const updatedThaiResortGuide: AgentConfig = {
 };
 
 // Apply transfer tools (forward transfers) and transfer back tools
-let agents = injectTransferTools([updatedThaiResortGuide]);
-agents = injectTransferBackTools(agents, "default");
+// Note: transferAgents and transferBack are now core tools, no injection needed
+const agents = [updatedThaiResortGuide];
 
 export default agents; 

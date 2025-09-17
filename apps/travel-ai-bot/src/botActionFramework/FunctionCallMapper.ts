@@ -30,6 +30,7 @@ export interface FunctionCallResult {
  */
 const functionToActionMap: Record<string, ActionType> = {
   // Navigation functions
+  navigate: ActionType.NAVIGATE_PAGE,
   navigatePage: ActionType.NAVIGATE_PAGE,
   navigateSection: ActionType.NAVIGATE_SECTION,
   navigateBack: ActionType.NAVIGATE_BACK,
@@ -126,39 +127,7 @@ export async function handleFunctionCall(
  */
 export function getBotActionFunctionDefinitions(): any[] {
   return [
-    // Navigation functions
-    {
-      type: "function",
-      name: "navigatePage",
-      description: "Navigate to a different page in the application",
-      parameters: {
-        type: "object",
-        properties: {
-          pageName: {
-            type: "string",
-            description: "The page to navigate to (e.g., 'home', 'search_results', 'place_details')"
-          },
-          pageParams: {
-            type: "object",
-            description: "URL parameters for the page (e.g., {id: 'place123'})"
-          }
-        },
-        required: ["pageName"]
-      }
-    },
-    {
-      type: "function",
-      name: "navigateTravel",
-      description: "Navigate to a travel subpage, e.g. /travel/taxi as slug.",
-      parameters: {
-        type: "object",
-        properties: {
-          slug: { type: "string", description: "Travel page slug, e.g. 'taxi'" },
-          pageParams: { type: "object", description: "Optional params" }
-        },
-        required: ["slug"]
-      }
-    },
+    // (Navigation functions are now handled by UI_SCHEMAS in core functions)
     
     // Selection functions
     {

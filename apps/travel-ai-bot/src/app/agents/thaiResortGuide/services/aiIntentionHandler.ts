@@ -225,7 +225,35 @@ class AIIntentionHandler {
   private lastUpdateTime: number = 0;
   private readonly UPDATE_COOLDOWN = 5000; // 5 seconds between intention changes
 
-  handleIntentionChange(request: IntentionChangeRequest): IntentionPromptResponse {
+  private getLocale(): string {
+    try {
+      if (typeof window !== 'undefined') {
+        const lang = (window.navigator.language || 'en').toLowerCase();
+        return lang.startsWith('th') ? 'th' : 'en';
+      }
+    } catch {}
+    return 'en';
+  }
+
+  private async fetchDbIntentionPrompt(agentKey: string, intent: string, style: string, locale?: string): Promise<{ instructions: string, responseStyle?: string, expectedFunctions?: string[], mayTransfer?: boolean } | null> {
+    try {
+      const params = new URLSearchParams();
+      params.set('intent', intent);
+      params.set('style', style);
+      if (locale) params.set('locale', locale);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentKey)}/intention?${params.toString()}`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return { instructions: String(data.content || ''), ...(data.metadata || {}) };
+    } catch {
+      return null;
+    }
+  }
+
+  async handleIntentionChange(request: IntentionChangeRequest): Promise<IntentionPromptResponse> {
     const fullIntention = `resort.${request.intent}.${request.style}`;
     const now = Date.now();
 
@@ -253,7 +281,19 @@ class AIIntentionHandler {
     this.lastUpdateTime = now;
 
     console.log(`[AI Intention] Changed to: ${fullIntention} - ${request.reasoning}`);
-
+    // Try DB override first
+    const locale = this.getLocale();
+    const db = await this.fetchDbIntentionPrompt('thaiResortGuide', request.intent, request.style, locale);
+    if (db && db.instructions) {
+      return {
+        instructions: db.instructions,
+        responseStyle: (db as any).responseStyle || promptConfig.responseStyle,
+        expectedFunctions: (db as any).expectedFunctions || promptConfig.expectedFunctions,
+        mayTransfer: (db as any).mayTransfer ?? promptConfig.mayTransfer,
+        success: true
+      };
+    }
+    // Fallback to code
     return {
       instructions: promptConfig.instructions,
       responseStyle: promptConfig.responseStyle,

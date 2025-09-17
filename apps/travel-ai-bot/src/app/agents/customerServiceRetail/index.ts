@@ -1,6 +1,6 @@
 import { AgentConfig } from "@/app/types";
 import salesAgent from "./sales";
-import { injectTransferTools, injectTransferBackTools } from "../core/functions";
+// Note: transferAgents and transferBack are now core tools, no injection needed
 import authenticationAgent from "./authentication";
 import returnsAgent from "./returns";
 import simulatedHuman from "./simulatedHuman";
@@ -13,8 +13,5 @@ const agents: AgentConfig[] = [
   simulatedHuman,
 ];
 
-// Add transfer tools for each agent (forward transfers) and transfer back tools
-let agentsWithTransfers = injectTransferTools(agents);
-agentsWithTransfers = injectTransferBackTools(agentsWithTransfers, "default");
-
-export default agentsWithTransfers;
+// Note: transferAgents and transferBack are now core tools, no injection needed
+export default agents;

@@ -1,11 +1,10 @@
-import { injectTransferTools, injectTransferBackTools } from "../core/functions";
 import { AgentConfig } from "@/app/types";
 import tourTaxi from "./config/agentConfig";
 
 const agent: AgentConfig = tourTaxi;
 
-let agents = injectTransferTools([agent]);
-agents = injectTransferBackTools(agents, "default");
+// Note: transferAgents and transferBack are now core tools, no injection needed
+const agents = [agent];
 
 export default agents;
 

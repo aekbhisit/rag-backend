@@ -119,6 +119,16 @@ export default function Page() {
               </svg>
               Test Application
             </Link>
+
+            <Link
+              href="/sdk-test"
+              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 flex items-center gap-3"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              SDK Function Call Test
+            </Link>
           </div>
           
           <p className="text-gray-500 mt-6 text-sm">

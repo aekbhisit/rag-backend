@@ -31,7 +31,7 @@ class SharedSessionManager {
   async getOrCreateSession(frontendSessionId: string, mode: 'text' | 'voice' = 'text'): Promise<SessionInfo> {
     // If we already have session info, return it
     if (this.sessionInfo) {
-      console.log(`[SessionManager] 📦 Using existing session: ${this.sessionInfo.dbSessionId}`);
+      // Using existing session silently
       return this.sessionInfo;
     }
 

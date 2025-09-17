@@ -6,6 +6,7 @@ import { LanguageProvider, useLanguage } from "@/app/contexts/LanguageContext";
 import { SessionRegistryProvider } from "../contexts/SessionRegistryContext";
 import { EventProvider } from "@/app/contexts/EventContext";
 import ChatInterface from "./chat/ChatInterface";
+import { usePersistedChannel } from "@/app/hooks/usePersistedChannel";
 
 // Inner component that uses the language context
 function IntegratedChatAppContent() {
@@ -18,7 +19,7 @@ function IntegratedChatAppContent() {
   // Session management - avoid hydration mismatch
   const [sessionId, setSessionId] = useState<string>('');
   const [environment, setEnvironment] = useState<string>('');
-  const [activeChannel, setActiveChannel] = useState<'normal' | 'realtime' | 'human'>('normal');
+  const [activeChannel, setActiveChannel] = usePersistedChannel('normal');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   
   // Set session ID and environment after component mounts to avoid hydration mismatch

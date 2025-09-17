@@ -2,7 +2,7 @@
  * Front Desk Authentication Agent Set
  */
 import { AgentConfig } from "@/app/types";
-import { injectTransferTools, injectTransferBackTools } from "../core/functions";
+// Note: transferAgents and transferBack are now core tools, no injection needed
 import authenticationAgent from "./authentication";
 import tourGuideAgent from "./tourGuide";
 
@@ -13,7 +13,5 @@ const agents: AgentConfig[] = [
 ];
 
 // Add transfer tools to each agent (forward transfers) and transfer back tools
-let agentsWithTransfers = injectTransferTools(agents);
-agentsWithTransfers = injectTransferBackTools(agentsWithTransfers, "default");
-
-export default agentsWithTransfers;
+// Note: transferAgents and transferBack are now core tools, no injection needed
+export default agents;

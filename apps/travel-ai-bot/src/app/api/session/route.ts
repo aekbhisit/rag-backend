@@ -1,94 +1,50 @@
 import { NextResponse } from "next/server";
 
-// Cache for ephemeral keys with expiration
-const keyCache = new Map<string, { key: string; expiresAt: number }>();
-const MAX_CACHE_SIZE = 100;
-
-export async function GET() {
-  const startTime = Date.now();
-  
+export async function GET(request: Request) {
   try {
-    // Check cache first
-    const cacheKey = 'ephemeral_key';
-    const cached = keyCache.get(cacheKey);
-    
-    if (cached && cached.expiresAt > Date.now()) {
-      console.log(`[Session API] Returning cached key (${Date.now() - startTime}ms)`);
+    // For testing without a real API key, return a mock ephemeral key
+    // In production, this would make a real API call to OpenAI
+    if (!process.env.OPENAI_API_KEY) {
+      console.log("No OPENAI_API_KEY found, returning mock ephemeral key for testing");
       return NextResponse.json({
-        client_secret: { value: cached.key },
-        cached: true
+        client_secret: {
+          value: `mock-ephemeral-key-for-testing-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }
       });
     }
-
-    // Clean up expired cache entries
-    if (keyCache.size > MAX_CACHE_SIZE) {
-      const now = Date.now();
-      for (const [key, value] of keyCache.entries()) {
-        if (value.expiresAt <= now) {
-          keyCache.delete(key);
-        }
-      }
-    }
-
-    console.log(`[Session API] Fetching new ephemeral key...`);
-    
-    const fetchOptions: RequestInit = {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-        "User-Agent": "AI-Voice-App/1.0",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-realtime-preview-2024-12-17",
-      }),
-    };
-
-    // Note: Connection pooling handled by Next.js fetch implementation
 
     const response = await fetch(
       "https://api.openai.com/v1/realtime/sessions",
-      fetchOptions
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-realtime-preview-2025-06-03"
+        }),
+      }
     );
-
+    const data = await response.json();
+    console.log('[API-Session] OpenAI API response:', data);
+    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Session API] OpenAI API error (${response.status}): ${errorText}`);
+      console.error('[API-Session] OpenAI API error:', data);
       return NextResponse.json(
-        { error: `OpenAI API error: ${response.status}` },
+        { error: `OpenAI API error: ${data.error?.message || 'Unknown error'}` },
         { status: response.status }
       );
     }
-
-    const data = await response.json();
     
-    // Cache the key if it has an expiration
-    if (data.client_secret?.value && data.client_secret?.expires_at) {
-      const expiresAt = new Date(data.client_secret.expires_at).getTime() - 30000; // 30s buffer
-      keyCache.set(cacheKey, {
-        key: data.client_secret.value,
-        expiresAt
-      });
-      console.log(`[Session API] Cached new key until ${new Date(expiresAt).toISOString()}`);
-    }
-
-    const duration = Date.now() - startTime;
-    console.log(`[Session API] New key fetched in ${duration}ms`);
-    
-    return NextResponse.json({
-      ...data,
-      cached: false,
-      fetchTime: duration
-    });
+    return NextResponse.json(data);
   } catch (error) {
-    const duration = Date.now() - startTime;
-    console.error(`[Session API] Error after ${duration}ms:`, error);
-    
+    console.error("Error in /session:", error);
     return NextResponse.json(
-      { 
-        error: "Internal Server Error",
-        details: error instanceof Error ? error.message : "Unknown error"
-      },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }

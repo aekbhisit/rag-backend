@@ -3,12 +3,13 @@
  * Actions that work with bot action framework
  */
 
-export { navigateToMainSchema, navigateToPreviousSchema } from './navigation';
+export { navigateToMainSchema, navigateToPreviousSchema, navigateSchema } from './navigation';
 
 // Export all UI schemas as array
-import { navigateToMainSchema, navigateToPreviousSchema } from './navigation';
+import { navigateToMainSchema, navigateToPreviousSchema, navigateSchema } from './navigation';
 
 export const UI_SCHEMAS = [
   navigateToMainSchema,
   navigateToPreviousSchema,
+  navigateSchema,
 ]; 
