@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { SessionStatus } from "@/app/types";
 
 // Components
-import AppHeader from "./components/AppHeader";
-import MainContent from "./components/MainContent";
-import BottomToolbar from "./components/BottomToolbar";
+import AppHeader from "./components/app/AppHeader";
+import MainContent from "./components/app/MainContent";
+import BottomToolbar from "./components/voice/BottomToolbar";
 
 // Contexts
 import { useTranscript } from "@/app/contexts/TranscriptContext";
@@ -87,13 +88,13 @@ function AppContent() {
   // WebRTC connection hook - DISABLED to prevent automatic microphone permission request
   // The VoiceChatInterface uses the new SDK approach instead
   const webRTCConnection = {
-    sessionStatus: "DISCONNECTED" as const,
-    connectToRealtime: () => console.log('[App] WebRTC connection disabled - using SDK instead'),
-    disconnectFromRealtime: () => console.log('[App] WebRTC connection disabled - using SDK instead'),
+    sessionStatus: 'DISCONNECTED' as SessionStatus,
+    connectToRealtime: async () => { console.log('[App] WebRTC connection disabled - using SDK instead'); },
+    disconnectFromRealtime: async () => { console.log('[App] WebRTC connection disabled - using SDK instead'); },
     sendClientEvent: () => console.log('[App] WebRTC connection disabled - using SDK instead'),
-    setSessionStatus: () => console.log('[App] WebRTC connection disabled - using SDK instead'),
-    audioElementRef: { current: null },
-    dcRef: { current: null }
+    setSessionStatus: (_: SessionStatus) => console.log('[App] WebRTC connection disabled - using SDK instead'),
+    audioElementRef: { current: null as HTMLAudioElement | null },
+    dcRef: { current: null as RTCDataChannel | null }
   };
   
   // Original WebRTC connection (commented out to prevent microphone permission request)
@@ -239,7 +240,7 @@ function AppContent() {
     sessionStatus: webRTCConnection.sessionStatus,
     isPTTActive,
     sendClientEvent: webRTCConnection.sendClientEvent,
-    cancelAssistantSpeech: (isActive) => sessionOperations.cancelAssistantSpeech(isActive),
+    cancelAssistantSpeech: async (isActive) => { await sessionOperations.cancelAssistantSpeech(isActive); },
     isOutputAudioBufferActive,
     connectToRealtime: webRTCConnection.connectToRealtime,
     disconnectFromRealtime: webRTCConnection.disconnectFromRealtime,

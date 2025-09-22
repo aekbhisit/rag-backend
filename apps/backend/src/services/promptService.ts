@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { getPostgresPool } from '../adapters/db/postgresClient';
 
-type PromptCategory = 'base' | 'initial_system' | 'intention';
+type PromptCategory = 'base' | 'intention';
 
 export interface PromptLookupParams {
   tenantId?: string | null;
@@ -126,13 +126,9 @@ export class PromptService {
     return rec;
   }
 
+  // Simplified: getInitialSystemPrompt now just calls getBasePrompt
   async getInitialSystemPrompt(agentKey: string, params: PromptLookupParams = {}): Promise<PromptRecord | null> {
-    const key = this.buildCacheKey(['initial_system', agentKey, params.tenantId, params.locale]);
-    const cached = this.getFromCache(key);
-    if (cached !== undefined) return cached;
-    const rec = await this.fallbackLookup(agentKey, 'initial_system', params);
-    this.setCache(key, rec);
-    return rec;
+    return this.getBasePrompt(agentKey, params);
   }
 
   async getIntentionPrompt(agentKey: string, q: IntentionLookupParams): Promise<PromptRecord | null> {

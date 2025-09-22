@@ -1,28 +1,14 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import { ConversationLogEntry } from '../lib/logger';
-import { 
-  ELASTICSEARCH_ENABLED,
-  testConnection
-} from '../lib/elasticSearchClient';
 
 // Get file logging setting from environment variable
 export const FILE_LOGGING_ENABLED = 
   typeof process !== 'undefined' && process.env.FILE_LOGGING_ENABLED !== 'false';
 
-// Global state to prevent multiple connection checks
-let globalConnectionState: {
-  isChecking: boolean;
-  isConnected: boolean;
-  lastCheckTime: number;
-  promise: Promise<boolean> | null;
-} = {
-  isChecking: false,
-  isConnected: false,
-  lastCheckTime: 0,
-  promise: null
-};
+// Elasticsearch is disabled - always return false
+export const ELASTICSEARCH_ENABLED = false;
 
-const CONNECTION_CHECK_CACHE_MS = 30000; // Cache connection status for 30 seconds
+// Elasticsearch is disabled, so no connection state needed
 
 /**
  * Simple function to estimate token count from text
@@ -48,13 +34,13 @@ function debounce<T extends (...args: any[]) => any>(
 }
 
 /**
- * Hook for logging conversation data to Elasticsearch and/or file
+ * Hook for logging conversation data to file (Elasticsearch disabled)
  */
 export function useConversationLogger() {
   const [isLogging, setIsLogging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [isInitializing, setIsInitializing] = useState<boolean>(ELASTICSEARCH_ENABLED);
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
 
   // Refs to track recent logs and prevent duplicates
   const recentLogsRef = useRef<Set<string>>(new Set());
@@ -65,71 +51,6 @@ export function useConversationLogger() {
   const MIN_LOG_INTERVAL = 100; // Minimum 100ms between similar logs
   const DUPLICATE_WINDOW = 5000; // 5 seconds to consider logs as duplicates
   const MAX_CONCURRENT_LOGS = 3; // Maximum concurrent log requests
-
-  // Initialize Elasticsearch connection check on first load if enabled
-  useEffect(() => {
-    const checkConnection = async () => {
-      // Skip initialization if Elasticsearch is disabled
-      if (!ELASTICSEARCH_ENABLED) {
-        setIsInitializing(false);
-        setIsConnected(false);
-        return;
-      }
-      
-      const now = Date.now();
-      
-      // Use cached result if available and recent
-      if (globalConnectionState.lastCheckTime > 0 && 
-          (now - globalConnectionState.lastCheckTime) < CONNECTION_CHECK_CACHE_MS) {
-
-        setIsConnected(globalConnectionState.isConnected);
-        setIsInitializing(false);
-        return;
-      }
-      
-      // If already checking, wait for existing promise
-      if (globalConnectionState.isChecking && globalConnectionState.promise) {
-
-        try {
-          const result = await globalConnectionState.promise;
-          setIsConnected(result);
-        } catch (err) {
-          console.error('Failed to get cached Elasticsearch status:', err);
-          setIsConnected(false);
-        }
-        setIsInitializing(false);
-        return;
-      }
-      
-      // Perform new connection check
-      try {
-        setIsInitializing(true);
-        globalConnectionState.isChecking = true;
-        globalConnectionState.lastCheckTime = now;
-        
-
-        
-        // Create and store promise for other instances to use
-        globalConnectionState.promise = testConnection();
-        const connected = await globalConnectionState.promise;
-        
-        // Update global state
-        globalConnectionState.isConnected = connected;
-        setIsConnected(connected);
-      } catch (err) {
-        console.error('Failed to check Elasticsearch status:', err);
-        setError(`Failed to check Elasticsearch status: ${err}`);
-        globalConnectionState.isConnected = false;
-        setIsConnected(false);
-      } finally {
-        globalConnectionState.isChecking = false;
-        globalConnectionState.promise = null;
-        setIsInitializing(false);
-      }
-    };
-    
-    checkConnection();
-  }, []);
 
   // Cleanup function to remove old entries from tracking
   const cleanupOldEntries = useCallback(() => {
@@ -245,11 +166,27 @@ export function useConversationLogger() {
 
     
     try {
-      // Use API endpoint which handles both logging methods
-      await fetch('/api/log-conversation', {
+      // Use the same logging endpoint as ChatInterface.tsx
+      await fetch('/api/log/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry)
+        body: JSON.stringify({
+          session_id: entry.sessionId,
+          role: entry.type === 'user_message' ? 'user' : 
+                entry.type === 'assistant_response' ? 'assistant' : 'system',
+          type: 'text',
+          content: entry.message || null,
+          content_tokens: entry.tokenUsage?.promptTokens || null,
+          response_tokens: entry.tokenUsage?.completionTokens || null,
+          total_tokens: entry.tokenUsage?.totalTokens || null,
+          channel: 'normal', // Default channel for conversation logs
+          meta: {
+            conversation_type: entry.type,
+            audio_duration: entry.audioDuration || entry.tokenUsage?.audioDuration || null,
+            raw_metadata: entry.rawMetadata || null,
+            timestamp: entry.timestamp
+          }
+        })
       });
       
       // Mark as successfully processed

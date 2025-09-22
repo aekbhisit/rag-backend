@@ -175,12 +175,12 @@ export default function AgentChatInterface({
     setTimeout(scrollToBottom, 50);
 
     try {
-      // Simple keyword trigger: open Taxi page
-      if (/\b(taxi|want taxi|เรียกแท็กซี่|อยากได้แท็กซี่)\b/i.test(content)) {
+      // Simple keyword trigger: open Taxi page (broadened)
+      if (/(taxi|แท็กซี่)/i.test(content)) {
         try {
           await handleBotUIFunctionCall({
             name: 'navigatePage',
-            arguments: JSON.stringify({ pageName: 'taxi' })
+            arguments: JSON.stringify({ pageName: 'travel', path: '/travel/taxi' })
           } as any);
         } catch {}
       }

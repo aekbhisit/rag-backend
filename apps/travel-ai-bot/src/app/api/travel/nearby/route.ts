@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 function getBackendUrl(): string {
-  const base = process.env.RAG_BASE_URL || 'http://localhost:3001';
+  const base = process.env.RAG_BASE_URL || 'http://localhost:3100';
   return base.replace(/\/$/, '');
 }
 
 function getTenantId(req?: NextRequest): string {
   const fromHeader = req?.headers.get('x-tenant-id') || '';
-  const envTenant = process.env.RAG_TENANT_ID || '';
+  const envTenant = process.env.NEXT_PUBLIC_RAG_TENANT_ID || '';
   return (fromHeader || envTenant);
 }
 

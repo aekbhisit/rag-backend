@@ -153,11 +153,10 @@ export function buildAgentsTestAdminRouter(pool: Pool) {
       // Resolve AI config via existing service
       const aiConfig = await masterService.getTenantAiConfig(tenantId as string);
 
-      // Load prompts
-      const sysPromptRec = await promptService.getInitialSystemPrompt(agentKey, { tenantId });
-      const basePromptRec = !sysPromptRec ? await promptService.getBasePrompt(agentKey, { tenantId }) : null;
+      // Load system prompt (simplified: only use base category)
+      const promptRec = await promptService.getBasePrompt(agentKey, { tenantId });
       const guidance = `\n\nTOOLS USAGE GUIDELINES:\n- For crawl: pass the target URL in 'url' (or provide any field containing a full https URL).\n- For search: pass the search text in 'query'. Optionally include keywords like brand or site (e.g., 'site:example.com').\n- Prefer Thai or English to match the user's language.\n- When a user asks for packages/options/pricing for a brand, construct a focused search query (e.g., 'ShopUp packages pricing site:shopup.com').\n- After a tool returns data, extract concise answers (e.g., phone numbers) and respond clearly.`;
-      const systemPrompt = (sysPromptRec?.content || basePromptRec?.content || `You are the agent "${agentKey}". Answer helpfully and execute tools when appropriate.`) + guidance;
+      const systemPrompt = (promptRec?.content || `You are the agent "${agentKey}". Answer helpfully and execute tools when appropriate.`) + guidance;
 
       // Helper: sanitize OpenAI function parameters schema
       function sanitizeParameters(params: any): any {

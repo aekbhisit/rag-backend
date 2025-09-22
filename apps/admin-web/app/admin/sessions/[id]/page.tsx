@@ -9,7 +9,15 @@ import { useAuth } from "../../../../components/AuthProvider";
 export default function SessionDetailPage() {
   const params = useParams();
   const id = (params?.id as string) || '';
-  const [base, setBase] = React.useState(BACKEND_URL);
+  // Prefer runtime origin to avoid stale env pointing to wrong port
+  const [base, setBase] = React.useState(
+    typeof window !== 'undefined' ? window.location.origin : (BACKEND_URL || '')
+  );
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setBase(window.location.origin);
+    }
+  }, []);
   const [session, setSession] = React.useState<any>(null);
   const [messages, setMessages] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -18,6 +26,7 @@ export default function SessionDetailPage() {
   const [tools, setTools] = React.useState<Record<string, any[]>>({});
   const [promptByMsg, setPromptByMsg] = React.useState<Record<string, any | null>>({});
   const [fetching, setFetching] = React.useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
 
   const load = async () => {
     setLoading(true);
@@ -35,37 +44,39 @@ export default function SessionDetailPage() {
 
   React.useEffect(() => { if (id) load(); }, [id]);
 
-  // Auto-fetch details for all messages
-  React.useEffect(() => {
-    (async () => {
-      for (const m of messages) {
-        const key = m.id as string;
-        if (!citations[key] && !tools[key] && !promptByMsg[key] && !fetching[key]) {
-          await fetchDetails(key);
-        }
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages]);
+  // Removed auto-fetching of per-message details to avoid unnecessary requests.
 
   const fetchDetails = async (msgId: string) => {
     const key = msgId;
     setFetching(prev => ({ ...prev, [key]: true }));
     try {
       const tenantId = getTenantId();
-      const [citesRes, toolsRes, promptRes] = await Promise.all([
+      const [citesRes, toolsRes] = await Promise.all([
         fetch(`${base}/api/admin/messages/${encodeURIComponent(msgId)}/citations`, { headers: { 'X-Tenant-ID': tenantId } }),
-        fetch(`${base}/api/admin/messages/${encodeURIComponent(msgId)}/tool-calls`, { headers: { 'X-Tenant-ID': tenantId } }),
-        fetch(`${base}/api/admin/messages/${encodeURIComponent(msgId)}/prompt`, { headers: { 'X-Tenant-ID': tenantId } })
+        fetch(`${base}/api/admin/messages/${encodeURIComponent(msgId)}/tool-calls`, { headers: { 'X-Tenant-ID': tenantId } })
       ]);
       const citesJson = citesRes.ok ? await citesRes.json() : { items: [] };
       const toolsJson = toolsRes.ok ? await toolsRes.json() : { items: [] };
-      const promptJson = promptRes.ok ? await promptRes.json() : null;
       setCitations(prev => ({ ...prev, [key]: citesJson.items || [] }));
       setTools(prev => ({ ...prev, [key]: toolsJson.items || [] }));
-      setPromptByMsg(prev => ({ ...prev, [key]: promptJson }));
+      // Do not fetch prompt by default; fetch on demand via fetchPrompt
     } finally {
       setFetching(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const fetchPrompt = async (msgId: string) => {
+    const tenantId = getTenantId();
+    try {
+      const res = await fetch(`${base}/api/admin/messages/${encodeURIComponent(msgId)}/prompt`, { headers: { 'X-Tenant-ID': tenantId } });
+      if (!res.ok) {
+        setPromptByMsg(prev => ({ ...prev, [msgId]: null }));
+        return;
+      }
+      const json = await res.json();
+      setPromptByMsg(prev => ({ ...prev, [msgId]: json }));
+    } catch {
+      setPromptByMsg(prev => ({ ...prev, [msgId]: null }));
     }
   };
 
@@ -120,7 +131,10 @@ export default function SessionDetailPage() {
             const cites = citations[key] || [];
             const tcs = tools[key] || [];
             const pr = promptByMsg[key];
+            const channel = (m.meta && m.meta.channel) || session?.channel || 'normal';
+            const chipCls = isUser ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700';
 
+            const hasDetails = (citations[key]?.length || 0) > 0 || (tools[key]?.length || 0) > 0 || !!promptByMsg[key];
             return (
               <div key={key} className={`flex ${align}`}>
                 <div className={`max-w-[70%] rounded-2xl shadow-sm ${bubble}`}>
@@ -135,6 +149,19 @@ export default function SessionDetailPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      {/* Channel badge */}
+                      <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full ${chipCls} align-middle leading-none shrink-0`} title={channel}>
+                        {channel === 'realtime' ? (
+                          // Microphone icon (stroke currentColor) - smaller to match visual weight
+                          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-3 h-3 block pointer-events-none" style={{ transform: 'translateY(0px)' }}><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"/></svg>
+                        ) : channel === 'human' ? (
+                          // User group icon
+                          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 block pointer-events-none" style={{ transform: 'translateY(0px)' }}><path strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9 9 0 1 0-6 0M15 11.25a3 3 0 1 0-6 0"/></svg>
+                        ) : (
+                          // Chat bubble icon - properly centered path
+                          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-3 h-3 block pointer-events-none" style={{ transform: 'translateY(0px)' }}><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"/></svg>
+                        )}
+                      </span>
                       <span className="opacity-80">{formatDateForTable(m.created_at, userTimezone)}</span>
                     </div>
                   </div>
@@ -148,6 +175,45 @@ export default function SessionDetailPage() {
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7l7-4z"/></svg>
                         <span>tokens {m.total_tokens ?? 0}</span>
                       </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] leading-none cursor-pointer select-none ${isUser ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}
+                        onClick={() => {
+                          const next = !expanded[key];
+                          setExpanded(prev => ({ ...prev, [key]: next }));
+                          if (next && !fetching[key] && !hasDetails) {
+                            fetchDetails(key);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            const next = !expanded[key];
+                            setExpanded(prev => ({ ...prev, [key]: next }));
+                            if (next && !fetching[key] && !hasDetails) {
+                              fetchDetails(key);
+                            }
+                          }
+                        }}
+                        aria-label={expanded[key] ? 'Hide details' : 'Show details'}
+                        title={expanded[key] ? 'Hide details' : 'Show details'}
+                      >
+                        {expanded[key] ? (
+                          // Eye with slash (hide)
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c1.62 0 3.157.37 4.528 1.03M21.542 12c-.445 1.418-1.19 2.69-2.16 3.746M4 4l16 16" />
+                          </svg>
+                        ) : (
+                          // Eye (show)
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                      </span>
+                      {fetching[key] && <span className="opacity-70">Loading…</span>}
                       {typeof m.latency_ms === 'number' && (
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${isUser ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'}`}>
                           {/* clock icon */}
@@ -161,6 +227,8 @@ export default function SessionDetailPage() {
                   {/* Details */}
                   {
                     <div className={`px-3 pb-3 text-[12px] ${isUser ? 'text-blue-50' : 'text-gray-700'} space-y-3`}>
+                      {!expanded[key] ? null : (
+                        <div className="space-y-3">
                       {!!tcs.length && (
                         <div>
                           <div className="font-medium mb-1">Tool Calls</div>
@@ -190,7 +258,16 @@ export default function SessionDetailPage() {
                           </ul>
                         </div>
                       )}
-                      {pr && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              className={`h-6 px-2 rounded border ${isUser ? 'border-white/30 hover:bg-white/10' : 'hover:bg-[color:var(--surface-hover)]'}`}
+                              onClick={() => fetchPrompt(key)}
+                              title="Load prompt"
+                            >
+                              Load prompt
+                            </button>
+                          </div>
+                          {pr && (
                         <div>
                           <div className="font-medium mb-1">Prompt</div>
                           <div className="grid gap-1">
@@ -200,7 +277,8 @@ export default function SessionDetailPage() {
                           </div>
                         </div>
                       )}
-                      {fetching[key] && <div className="opacity-70">Loading details…</div>}
+                        </div>
+                      )}
                     </div>
                   }
                 </div>

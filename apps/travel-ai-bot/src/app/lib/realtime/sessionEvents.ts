@@ -51,22 +51,40 @@ export interface SessionEventDeps {
 }
 
 export function registerSessionEventHandlers(session: any, deps: SessionEventDeps) {
+  // Guard session.update while audio plays to avoid cannot_update_voice
+  const audioActiveRef: Ref<boolean> = { current: false };
+  let pendingUpdateTimer: any = null;
+  const scheduleSafeUpdateSession = () => {
+    try { if (pendingUpdateTimer) clearTimeout(pendingUpdateTimer); } catch {}
+    const attempt = () => {
+      if (audioActiveRef.current) { pendingUpdateTimer = setTimeout(attempt, 400); return; }
+      try { deps.updateSession(); } catch {}
+    };
+    pendingUpdateTimer = setTimeout(attempt, 50);
+  };
   // Error handler
   (session as any).on('error', (err: any) => {
-    const errorMessage = err?.message || (err as any)?.error?.message || err?.type || 'Session error';
+    const code = err?.error?.code || err?.code || 'unknown';
+    const message = err?.error?.message || err?.message || 'Session error';
+    const eventId = err?.error?.event_id || err?.event_id || null;
     try {
       console.log('[SDK-Realtime] ❌ Detailed error analysis:', {
         timestamp: new Date().toISOString(),
         event: 'error',
-        message: err?.message || 'Unknown error',
-        type: err?.type || 'unknown',
-        code: err?.code || 'unknown',
-        name: err?.name || 'Error',
+        code,
+        message,
+        event_id: eventId,
+        raw: err
       });
       console.error('[SDK] Session error:', err);
     } catch {}
-    deps.setError(errorMessage);
-    deps.onError?.(new Error(errorMessage));
+    // Soft-ignore voice update conflicts to avoid noisy errors during transfer/audio playback
+    if (code === 'cannot_update_voice') {
+      console.warn('[SDK-Realtime] ⚠️ Ignoring cannot_update_voice during active audio/transfer');
+      return;
+    }
+    deps.setError(message);
+    deps.onError?.(new Error(message));
   });
 
   // Agent handoff
@@ -134,7 +152,7 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
       } catch (e) { console.warn('[SDK-Realtime] ⚠️ Failed to register agents on connect', e); }
       try { (session as any).mute?.(true); } catch {}
       try { deps.setMicEnabled?.(false); } catch {}
-      deps.updateSession();
+      scheduleSafeUpdateSession();
     } catch {}
   });
 
@@ -149,6 +167,11 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
 
   // Transport events
   ;(session as any).on('transport_event', async (event: any) => {
+    // Track audio buffer state
+    try {
+      if (event.type === 'output_audio_buffer.started') { audioActiveRef.current = true; }
+      if (event.type === 'output_audio_buffer.stopped') { audioActiveRef.current = false; }
+    } catch {}
     if (event.type == 'response.done') {
       try {
         console.log('[SDK-Realtime] 🚌 transport_event:', {
@@ -251,6 +274,8 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
             hasOutput: !!event.response?.output?.length, voice: event.response?.voice || 'unknown', appliedVoice: deps.appliedVoiceRef.current || 'unknown'
           });
         } catch {}
+        // Allow session.update shortly after audio completes
+        setTimeout(() => { audioActiveRef.current = false; }, 150);
         // Reset response state
         try {
           // Mark not active and unlock via queue controller public refs
@@ -337,6 +362,12 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
         source: selectedAgentConfig.instructions ? 'instructions' : (selectedAgentConfig.systemPrompt ? 'systemPrompt' : 'none'),
         toolsCount: selectedAgentConfig.tools?.length || 0,
         toolNames: selectedAgentConfig.tools?.map((t: any) => t.function?.name || t.name) || [],
+        toolDescriptions: selectedAgentConfig.tools?.map((t: any) => t.function?.description || t.description || '') || [],
+        toolSchemas: (selectedAgentConfig.tools || []).map((t: any) => ({
+          name: t?.function?.name || t?.name,
+          description: t?.function?.description || t?.description || '',
+          parameters: t?.function?.parameters || t?.parameters || {}
+        })),
         downstreamAgents: selectedAgentConfig.downstreamAgents?.map((a: any) => a.name) || []
       });
     }

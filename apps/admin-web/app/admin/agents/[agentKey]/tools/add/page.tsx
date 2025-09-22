@@ -58,7 +58,6 @@ interface ExportedToolConfig {
   tool_key: string;
   tool_name: string;
   tool_description: string;
-  alias: string;
   enabled: boolean;
   position: number;
   arg_defaults: Record<string, any>;
@@ -582,7 +581,6 @@ export default function AddAgentToolPage() {
   const [error, setError] = useState('');
   
   const [toolConfig, setToolConfig] = useState({
-    alias: '',
     enabled: true,
     position: 0,
     arg_defaults: {} as Record<string, any>,
@@ -824,7 +822,7 @@ export default function AddAgentToolPage() {
 
     return {
       method,
-      url: `http://localhost:3001${baseUrl}`,
+      url: `${BACKEND_URL}${baseUrl}`,
       headers: {
         'Content-Type': 'application/json',
         'X-User-ID': 'test-user'
@@ -886,7 +884,6 @@ export default function AddAgentToolPage() {
       const toolData = {
         agent_key: agentKey,
         tool_key: selectedTool,
-        alias: toolConfig.alias,
         enabled: toolConfig.enabled,
         position: toolConfig.position,
         arg_defaults: toolConfig.arg_defaults,
@@ -918,7 +915,6 @@ export default function AddAgentToolPage() {
       tool_key: selectedTool,
       tool_name: selectedToolDef.name,
       tool_description: selectedToolDef.description,
-      alias: toolConfig.alias,
       enabled: toolConfig.enabled,
       position: toolConfig.position,
       arg_defaults: toolConfig.arg_defaults,
@@ -972,7 +968,6 @@ export default function AddAgentToolPage() {
         
         // Set tool configuration
         setToolConfig({
-          alias: importData.alias || '',
           enabled: importData.enabled !== undefined ? importData.enabled : true,
           position: importData.position || 0,
           arg_defaults: importData.arg_defaults || {},

@@ -32,7 +32,7 @@ export default function TestPage() {
           <button 
             onClick={async () => {
               try {
-                const response = await fetch('http://localhost:3001/api/admin/agents-master/conversations', {
+                const response = await fetch(`${BACKEND_URL}/api/admin/agents-master/conversations`, {
                   headers: {
                     'X-Tenant-ID': '00000000-0000-0000-0000-000000000000',
                     'X-User-ID': 'test-user',

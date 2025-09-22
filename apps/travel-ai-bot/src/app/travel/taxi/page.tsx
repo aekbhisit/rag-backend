@@ -3,8 +3,49 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import ChatInterface from "@/app/components/chat/ChatInterface";
+import { useActionContext, ActionType } from "@/botActionFramework";
+import { ActionProvider } from "@/botActionFramework/ActionContext";
 
 type TaxiTransportPageProps = { embedded?: boolean };
+
+// Child registrar component so the hook is used inside the provider tree
+function TaxiExtractRegistrar({ items }: { items: Array<{ id: string; title: string; body: string }> }) {
+  const actionContext = useActionContext();
+  useEffect(() => {
+    const handlerId = 'taxi-extract-content';
+    actionContext.registerAction(
+      ActionType.EXTRACT_CONTENT,
+      handlerId,
+      async (payload: any) => {
+        try {
+          const detail = !!payload?.detail;
+          const max = typeof payload?.limit === 'number' ? Math.max(1, Math.floor(payload.limit)) : 20;
+          const scope = (typeof payload?.scope === 'string' && payload.scope) ? payload.scope : 'taxi';
+          // Prioritize key cards that contain starting fare info (e.g., Metered Taxi / แท็กซี่มิเตอร์)
+          const scoreOf = (it: { title: string; body: string }) => {
+            const t = String(it.title || '').toLowerCase();
+            const b = String(it.body || '').toLowerCase();
+            let s = 0;
+            if (t.includes('metered') || t.includes('มิเตอร์')) s += 5;
+            if (t.includes('taxi') || t.includes('แท็กซี่')) s += 3;
+            if (b.includes('35 thb') || b.includes('35') || b.includes('ราคา') || b.includes('fare')) s += 4;
+            return s;
+          };
+          const sorted = [...(items || [])].sort((a, b) => scoreOf(b) - scoreOf(a));
+          const rows = sorted.slice(0, max).map((it) => {
+            const lines = String(it.body || '').split(/\r?\n+/).filter(Boolean);
+            return { id: it.id, title: it.title, body: detail ? it.body : (lines[0] || it.body || '') };
+          });
+          return { success: true, scope: `${scope}:list`, data: rows } as any;
+        } catch (e: any) {
+          return { success: false, error: e?.message || 'Failed to extract taxi content' } as any;
+        }
+      }
+    );
+    return () => { try { actionContext.unregisterAction(ActionType.EXTRACT_CONTENT, handlerId); } catch {} };
+  }, [actionContext, items]);
+  return null;
+}
 
 export default function TaxiTransportPage({ embedded = false }: TaxiTransportPageProps) {
   const [currentLanguage, setCurrentLanguage] = useState<'en' | 'th'>('en');
@@ -101,10 +142,14 @@ export default function TaxiTransportPage({ embedded = false }: TaxiTransportPag
     ensureCategoryAndLoad();
   }, []);
 
+  // Hook moved to TaxiExtractRegistrar
+
   // Embedded-only content (no header/sidebar chat)
   if (embedded) {
     return (
-      <div className="bg-white">
+      <ActionProvider>
+      <TaxiExtractRegistrar items={items} />
+      <div className="bg-white ai-extract-scope">
         <div className="px-6 py-2 border-b border-stone-200 bg-white">
           <nav className="ta-breadcrumb" aria-label="Breadcrumb">
             <ol className="flex items-center text-sm text-orange-900">
@@ -149,10 +194,13 @@ export default function TaxiTransportPage({ embedded = false }: TaxiTransportPag
           )}
         </div>
       </div>
+      </ActionProvider>
     );
   }
 
   return (
+    <ActionProvider>
+    <TaxiExtractRegistrar items={items} />
     <main className="min-h-screen bg-stone-50">
       <div className="sticky top-0 z-40 bg-white border-b border-stone-200 shadow-sm">
         <div className="px-6 py-4 flex items-center justify-between">
@@ -182,7 +230,7 @@ export default function TaxiTransportPage({ embedded = false }: TaxiTransportPag
             <p className="text-sm text-stone-600">{currentLanguage==='th'?'ข้อมูลแท็กซี่ แอปเรียกรถ ค่าบริการ และคำแนะนำความปลอดภัย':'Taxi, ride-hailing apps, fares, and safety tips'}</p>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 ai-extract-scope">
             {loading && (
               <div className="text-sm text-stone-600">{currentLanguage==='th'?'กำลังโหลด...':'Loading...'}</div>
             )}
@@ -223,6 +271,7 @@ export default function TaxiTransportPage({ embedded = false }: TaxiTransportPag
         </aside>
       </div>
     </main>
+    </ActionProvider>
   );
 }
 

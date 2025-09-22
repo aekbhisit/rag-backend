@@ -1,4 +1,4 @@
-export type TextStreamEventName = 'open' | 'error' | 'response_start' | 'delta' | 'response_done' | 'agent_transfer' | 'debug';
+export type TextStreamEventName = 'open' | 'error' | 'response_start' | 'delta' | 'response_done' | 'agent_transfer' | 'debug' | 'bot_action';
 
 export interface TextStreamEventHandlers {
   onOpen?: () => void;
@@ -8,6 +8,7 @@ export interface TextStreamEventHandlers {
   onResponseDone?: (finalText: string, agentName?: string) => void;
   onAgentTransfer?: (agentName: string) => void;
   onDebug?: (info: any) => void;
+  onBotAction?: (data: any) => void;
 }
 
 export class TextStreamTransport {
@@ -64,6 +65,13 @@ export class TextStreamTransport {
         try {
           const data = safeJson(e.data);
           this.handlers.onDebug?.(data);
+        } catch {}
+      });
+
+      es.addEventListener('bot_action', (e: MessageEvent) => {
+        try {
+          const data = safeJson(e.data);
+          this.handlers.onBotAction?.(data);
         } catch {}
       });
     } catch (err) {

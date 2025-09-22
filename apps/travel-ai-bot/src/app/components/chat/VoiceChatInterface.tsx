@@ -12,10 +12,18 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useSDKRealtimeSession } from '@/app/hooks/useSDKRealtimeSession';
 import { UniversalMessage } from '@/app/types';
 import { useMessageHistory } from './MessageHistory';
-import { MicrophoneIcon, SpeakerWaveIcon, SpeakerXMarkIcon, UserIcon, CpuChipIcon, UserGroupIcon, TrashIcon, ArrowsRightLeftIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
+import { SpeakerWaveIcon, SpeakerXMarkIcon, UserIcon, CpuChipIcon, UserGroupIcon, TrashIcon, ArrowsRightLeftIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 import { getOrCreateDbSession, clearCurrentSession } from '@/app/lib/sharedSessionManager';
 import { useDbAgentSets } from '@/app/hooks/useDbAgentSets';
 import { allAgentSets, defaultAgentSetKey } from '@/app/agents';
+import { logMessage as logToDb } from '@/app/lib/loggerClient';
+
+// Custom microphone icon component
+const MicrophoneIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+  </svg>
+);
 
 interface VoiceChatInterfaceProps {
   sessionId: string;
@@ -93,6 +101,27 @@ export default function VoiceChatInterface({
   // Track whether we've already requested mic permission (prompt only once)
   const [micPermissionRequested, setMicPermissionRequested] = useState(false);
   const [dbSessionId, setDbSessionId] = useState<string>('');
+  const getStableSessionId = useCallback(() => {
+    const sessionId = dbSessionId || currentSessionId;
+    console.log('[VoiceChatInterface] getStableSessionId called:', { dbSessionId, currentSessionId, result: sessionId });
+    return sessionId;
+  }, [dbSessionId, currentSessionId]);
+  // Dedup guards for DB logging
+  const loggedUserKeysRef = useRef<Set<string>>(new Set());
+  const loggedAssistantKeysRef = useRef<Set<string>>(new Set());
+  const shouldLogOnce = useCallback((store: React.MutableRefObject<Set<string>>, key: string) => {
+    try {
+      const k = key.trim();
+      if (!k) return false;
+      if (store.current.has(k)) return false;
+      // Cap set size to avoid unbounded growth
+      if (store.current.size > 200) {
+        store.current.clear();
+      }
+      store.current.add(k);
+      return true;
+    } catch { return true; }
+  }, []);
 
   // UX placeholders
   const userSpeechPlaceholderIdRef = useRef<string | null>(null);
@@ -128,13 +157,32 @@ export default function VoiceChatInterface({
     setCurrentLanguage(newBaseLanguageCode);
   }, [baseLanguage]);
 
+  // Handle browser close/refresh - end session
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (dbSessionId) {
+        // Use sendBeacon for reliable delivery even when page is closing
+        const formData = new FormData();
+        formData.append('tenantId', 'acc44cdb-8da5-4226-9569-1233a39f564f');
+        navigator.sendBeacon('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(dbSessionId) + '/end', formData);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [dbSessionId]);
+
   // Local speech removed: all transcription comes from server only during PTT
 
   // Initialize shared database session for voice mode
   useEffect(() => {
     const initializeVoiceSession = async () => {
       try {
+        console.log('[VoiceChat] Initializing voice session for frontend ID:', currentSessionId);
         const voiceDbSessionId = await getOrCreateDbSession(currentSessionId, 'voice');
+        console.log('[VoiceChat] Got database session ID:', voiceDbSessionId);
         setDbSessionId(voiceDbSessionId);
         // Session initialized silently
       } catch (err) {
@@ -145,6 +193,11 @@ export default function VoiceChatInterface({
 
     initializeVoiceSession();
   }, [currentSessionId]);
+
+  // Reset dedup stores when backend session changes
+  useEffect(() => {
+    try { loggedUserKeysRef.current.clear(); loggedAssistantKeysRef.current.clear(); } catch {}
+  }, [dbSessionId]);
 
 
   // Keep a ref to the current messages to avoid stale closure issues
@@ -251,6 +304,9 @@ export default function VoiceChatInterface({
       !(m.metadata as any)?.deleted
     );
 
+    // If an identical user message already exists recently, skip creating/logging another
+    const hasSameUser = [...(messagesRef.current || [])].some(m => m.metadata.source === 'user' && (m.content || '').trim() === content);
+
     if (transcribing) {
       // Update the existing placeholder with the final text
       updateMessage({
@@ -262,8 +318,19 @@ export default function VoiceChatInterface({
         }
       });
       userSpeechPlaceholderIdRef.current = null;
+      // Log final transcribed user message to DB (shared client) with dedup
+      try {
+        if (hasSameUser) return;
+        const key = `${dbSessionId || currentSessionId}|user|${content}`;
+        if (shouldLogOnce(loggedUserKeysRef, key)) {
+          logToDb({ sessionId: dbSessionId || currentSessionId, role: 'user', type: 'text', content, channel: 'realtime', meta: { is_internal: false, input: 'voice_transcript' } }).catch(() => {});
+        }
+      } catch {}
     } else {
       // Create a new message if no placeholder exists
+      if (hasSameUser) {
+        return;
+      }
       const userFinal: UniversalMessage = {
         id: generateMessageId(),
         sessionId,
@@ -277,6 +344,13 @@ export default function VoiceChatInterface({
         }
       };
       addMessage(userFinal);
+      // Log created user message to DB (shared client) with dedup
+      try {
+        const key = `${dbSessionId || currentSessionId}|user|${content}`;
+        if (shouldLogOnce(loggedUserKeysRef, key)) {
+          logToDb({ sessionId: dbSessionId || currentSessionId, role: 'user', type: 'text', content, channel: 'realtime', meta: { is_internal: false, input: 'voice_transcript' } }).catch(() => {});
+        }
+      } catch {}
     }
   }, [currentLanguage, updateMessage, addMessage]);
 
@@ -320,7 +394,7 @@ export default function VoiceChatInterface({
   } = useSDKRealtimeSession({
     allAgentConfigs: dynamicAgentSets[activeAgentSetKeyState] || [],
     selectedAgentName: currentAgent?.name || selectedAgentName,
-    sessionId: currentSessionId,
+    sessionId: dbSessionId || currentSessionId,
     onMessage: handleSDKMessage,
     onTranscript: handleSDKTranscript,
     onTranscriptDelta: handleSDKTranscriptDelta,
@@ -491,6 +565,13 @@ export default function VoiceChatInterface({
           } as any
         });
       }
+      // Log assistant final reply to DB (shared client) with dedup
+      try {
+        const key = `${dbSessionId || currentSessionId}|assistant|${(text || '').trim()}`;
+        if (shouldLogOnce(loggedAssistantKeysRef, key)) {
+          logToDb({ sessionId: dbSessionId || currentSessionId, role: 'assistant', type: 'text', content: (text || '').trim(), channel: 'realtime', meta: { agentName: agentName || currentAgent?.name || selectedAgentName } }).catch(() => {});
+        }
+      } catch {}
       // Reset placeholder flag when response is done
       placeholderCreatedForCurrentResponseRef.current = false;
     },
@@ -506,7 +587,7 @@ export default function VoiceChatInterface({
     // Connect when agent is ready and either not initialized yet OR agent has changed
     enabled: realtimeEnabled && !!currentAgent && !agentSetsLoading,
     acceptResponses: realtimeEnabled, // do not emit any responses until user interacts
-    muteAudio: !realtimeEnabled, // keep audio muted until realtime is enabled; allow audio playback for responses
+    muteAudio: !isAudioEnabled, // mute audio only when user explicitly disables it
     shouldAcceptResponseStart: () => allowResponseStartRef.current,
     onUserVoiceItemCreated: (initialText?: string) => {
       // If our latest user speech placeholder exists and is empty, set transcribing text
@@ -532,6 +613,39 @@ export default function VoiceChatInterface({
 
   // Map SDK states to existing interface
   const sessionStatus = isConnecting ? 'CONNECTING' : isConnected ? 'CONNECTED' : 'DISCONNECTED';
+
+  // Ensure audio is properly unmuted when connected
+  useEffect(() => {
+    console.log('[VoiceChatInterface] Audio state changed:', {
+      sessionStatus,
+      isAudioEnabled,
+      muteAudio: !isAudioEnabled
+    });
+    
+    if (sessionStatus === 'CONNECTED' && isAudioEnabled) {
+      console.log('[VoiceChatInterface] Connection established, ensuring audio is unmuted...');
+      try { sdkMute?.(false); } catch { }
+    }
+  }, [sessionStatus, isAudioEnabled, sdkMute]);
+
+  // Log session ID changes for debugging
+  useEffect(() => {
+    console.log('[VoiceChatInterface] Session ID changed:', {
+      currentSessionId,
+      dbSessionId,
+      stableSessionId: getStableSessionId()
+    });
+  }, [currentSessionId, dbSessionId, getStableSessionId]);
+
+  // Update SDK hook's database session ID when it changes
+  useEffect(() => {
+    if (dbSessionId && dbSessionId !== currentSessionId) {
+      console.log('[VoiceChatInterface] Updating SDK hook database session ID:', dbSessionId);
+      // Force the SDK hook to use the new database session ID
+      // This is a workaround since the SDK hook doesn't expose a way to update its dbSessionIdRef
+      // We'll rely on the sessionId parameter we pass to the hook
+    }
+  }, [dbSessionId, currentSessionId]);
 
   // Handle push-to-talk
   const handlePTTStart = useCallback(async () => {
@@ -732,20 +846,7 @@ export default function VoiceChatInterface({
         allowResponseStartRef.current = true;
       }
 
-      // Persist typed user text to backend immediately
-      try {
-        fetch('/api/log/messages', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: dbSessionId,
-            role: 'user',
-            type: 'text',
-            content: text.trim(),
-            channel: 'realtime',
-            meta: { is_internal: false }
-          })
-        }).catch(() => { });
-      } catch { }
+      // Do not log here to avoid duplicate with SDK hook; SDK will log the user message
     }
   }, [sdkSendMessage, dbSessionId, realtimeEnabled]);
 
@@ -851,29 +952,84 @@ export default function VoiceChatInterface({
           {messages.length > 0 && (
             <button
               onClick={async () => {
-                if (confirm('Clear all messages? This cannot be undone.')) {
-                  clearMessages();
-                  // Reset tracking
-
-                  // Clear session storage to reset conversation history
-                  try {
-                    clearCurrentSession();
-                  } catch (error) {
+                try { if (!confirm('Clear all messages and start a new voice session?')) return; } catch { return; }
+                
+                // End the current session in the database
+                try {
+                  console.log('[VoiceChatInterface] Trash button clicked');
+                  console.log('[VoiceChatInterface] currentSessionId:', currentSessionId);
+                  console.log('[VoiceChatInterface] dbSessionId:', dbSessionId);
+                  console.log('[VoiceChatInterface] dbSessionId type:', typeof dbSessionId);
+                  
+                  if (dbSessionId && dbSessionId !== currentSessionId) {
+                    console.log('[VoiceChatInterface] Calling session end API for database session:', dbSessionId);
+                    const response = await fetch('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(dbSessionId) + '/end', {
+                      method: 'POST',
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Tenant-ID': 'acc44cdb-8da5-4226-9569-1233a39f564f'
+                      }
+                    });
+                    const result = await response.json();
+                    console.log('[VoiceChatInterface] Session end API response:', response.status, result);
+                    if (response.ok) {
+                      console.log('[VoiceChatInterface] Current session ended successfully:', dbSessionId);
+                    } else {
+                      console.error('[VoiceChatInterface] Failed to end session:', result);
+                    }
+                  } else {
+                    console.warn('[VoiceChatInterface] No valid dbSessionId to end. dbSessionId:', dbSessionId, 'currentSessionId:', currentSessionId);
                   }
-
-                  // Generate new session ID to force completely fresh Realtime session
-                  const newSessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                  setCurrentSessionId(newSessionId);
-
-                  // Disconnect and reconnect the Realtime session to clear conversation history
-                  if (sdkDisconnect) {
-                    sdkDisconnect();
-                    // The session will reconnect automatically with a fresh conversation
-                  }
+                } catch (err) {
+                  console.error('[VoiceChatInterface] Failed to end current session:', err);
                 }
+                
+                clearMessages();
+                try { clearCurrentSession(); } catch {}
+                
+                // Clear dedup keys for new session
+                loggedUserKeysRef.current.clear();
+                loggedAssistantKeysRef.current.clear();
+                console.log('[VoiceChatInterface] Cleared dedup keys for new session');
+                
+                // Reset realtime state to allow reconnection
+                console.log('[VoiceChatInterface] Resetting realtime state...');
+                setRealtimeEnabled(false);
+                setIsPTTActive(false);
+                
+                // Ensure audio is enabled for the new session
+                setIsAudioEnabled(true);
+                
+                // Disconnect SDK first to reset state
+                console.log('[VoiceChatInterface] Disconnecting SDK to reset state...');
+                try { sdkDisconnect?.(); } catch {}
+                
+                // Small delay to ensure state is reset
+                console.log('[VoiceChatInterface] Waiting for state reset...');
+                await new Promise(resolve => setTimeout(resolve, 100));
+                console.log('[VoiceChatInterface] State reset complete, creating new session...');
+                
+                const newSessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                console.log('[VoiceChatInterface] Creating new session ID:', newSessionId);
+                setCurrentSessionId(newSessionId);
+                try {
+                  const newDbId = await getOrCreateDbSession(newSessionId, 'voice');
+                  console.log('[VoiceChatInterface] New database session ID:', newDbId);
+                  setDbSessionId(newDbId);
+                } catch (err) {
+                  console.error('[VoiceChatInterface] Failed to create database session, using frontend ID:', err);
+                  setDbSessionId(newSessionId);
+                }
+                // Reset active agent selection to defaults/props
+                console.log('[VoiceChatInterface] Resetting agent state...');
+                setActiveAgentSetKeyState(defaultAgentSetKey);
+                setActiveAgentNameState(providedAgentName || null);
+                
+                // Wait a bit for agent state to be updated
+                await new Promise(resolve => setTimeout(resolve, 50));
               }}
               className="p-2 rounded-md bg-white text-gray-400 hover:text-red-600 transition-colors"
-              title="Clear all messages"
+              title="Clear all messages and start a new session"
             >
               <TrashIcon className="w-4 h-4" />
             </button>
@@ -927,7 +1083,9 @@ export default function VoiceChatInterface({
       >
         {sortedMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-amber-800" style={{ minHeight: '300px' }}>
-            <div className="text-4xl mb-4">🎤</div>
+            <div className="text-4xl mb-4">
+              <MicrophoneIcon className="w-16 h-16 mx-auto text-amber-600" />
+            </div>
             <p className="text-lg font-medium mb-2 text-orange-900">Voice Chat Mode</p>
             <p className="text-sm text-center text-amber-800 mb-4">
               {sessionStatus === 'CONNECTED'
@@ -1000,16 +1158,22 @@ export default function VoiceChatInterface({
                   ) : (
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   )}
-                  {message.metadata.channel === 'realtime' && message.metadata.source === 'user' && (
-                    <span className="text-xs opacity-75 block mt-1">🎤 Voice input</span>
-                  )}
-                  {message.metadata.channel === 'realtime' && message.metadata.source === 'ai' && !((message.metadata as any)?.isStreaming) && (
-                    <span className="text-xs opacity-75 block mt-1">🔊 Voice response</span>
-                  )}
+                  {/* Channel icon inline with timestamp (handled below) */}
                 </div>
-                <div className={`text-xs text-amber-700 mt-1 ${message.metadata.source === 'user' ? 'text-right' : 'text-left'
-                  }`}>
+                <div className={`text-xs text-amber-700 mt-1 ${message.metadata.source === 'user' ? 'text-right' : 'text-left'}`}>
                   {formatTime(message.timestamp)}
+                  {(() => {
+                    const ch = (message.metadata as any)?.channel || 'realtime';
+                    return (
+                      <span className="inline-block ml-1 align-text-bottom">
+                        {ch === 'realtime' ? (
+                          <MicrophoneIcon className="w-3.5 h-3.5 inline" />
+                        ) : (
+                          <ChatBubbleLeftRightIcon className="w-3.5 h-3.5 inline" />
+                        )}
+                      </span>
+                    );
+                  })()}
                   {message.metadata.agentName && (
                     <span className="ml-2 text-amber-600">• {message.metadata.agentName}</span>
                   )}
@@ -1026,7 +1190,26 @@ export default function VoiceChatInterface({
       <div className="p-4 border-t border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50">
         {(() => {
           const isEnabled = sessionStatus === 'CONNECTED';
-          const canConnect = !realtimeEnabled && sessionStatus === 'DISCONNECTED' && !!currentAgent;
+          // More forgiving condition: allow connection if we're disconnected and not in realtime mode
+          // even if currentAgent is not immediately available (it will be loaded shortly)
+          const canConnect = !realtimeEnabled && sessionStatus === 'DISCONNECTED' && (!agentSetsLoading);
+          
+          // Debug logging for button state
+          // Log only when values change to avoid spam
+          const lastBtnStateRef = (window as any).__VCI_LAST_BTN_STATE__ || { key: '' };
+          const btnKey = JSON.stringify({ sessionStatus, realtimeEnabled, hasAgent: !!currentAgent, agentSetsLoading, isEnabled, canConnect });
+          if (lastBtnStateRef.key !== btnKey) {
+            console.log('[VoiceChatInterface] Button state:', {
+              sessionStatus,
+              realtimeEnabled,
+              currentAgent: !!currentAgent,
+              agentSetsLoading,
+              isEnabled,
+              canConnect
+            });
+            (window as any).__VCI_LAST_BTN_STATE__ = { key: btnKey };
+          }
+          
           return (
             <div className="flex flex-col items-center justify-center gap-3" style={{ minHeight: 120 }}>
               <button
@@ -1040,7 +1223,24 @@ export default function VoiceChatInterface({
 
                   // Handle connect logic if needed
                   if (canConnect) {
+                    console.log('[VoiceChatInterface] Connect button clicked, enabling realtime...');
+                    console.log('[VoiceChatInterface] Current state before connect:', {
+                      sessionStatus,
+                      realtimeEnabled,
+                      currentAgent: !!currentAgent,
+                      agentSetsLoading,
+                      isConnected,
+                      isConnecting
+                    });
                     setRealtimeEnabled(true);
+                  } else {
+                    console.log('[VoiceChatInterface] Connect button clicked but canConnect is false:', {
+                      sessionStatus,
+                      realtimeEnabled,
+                      currentAgent: !!currentAgent,
+                      agentSetsLoading,
+                      canConnect
+                    });
                   }
                 }}
                 aria-disabled={!isEnabled && !canConnect}

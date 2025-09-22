@@ -3,6 +3,7 @@ import { UniversalMessage, ConversationContext, ChannelConfig } from '@/app/type
 import { TextStreamTransport } from '../textstream/transport';
 import { buildTextStreamUrl } from '../textstream/sessionAuth';
 import { TextResponseMerger } from '../textstream/responseQueue';
+import { handleFunctionCall as handleBotUIFunctionCall } from '@/botActionFramework';
 
 export class TextStreamChannel extends BaseChannel {
   private transport: TextStreamTransport | null = null;
@@ -67,6 +68,19 @@ export class TextStreamChannel extends BaseChannel {
         onAgentTransfer: (agentName) => {
           console.log('[TextStreamChannel] agent_transfer:', agentName);
         },
+        onBotAction: async (data) => {
+          try {
+            console.log('[TextStreamChannel] bot_action received', data);
+            if (data?.name === 'navigate' && typeof data?.uri === 'string') {
+              const args = { pageName: 'travel', path: data.uri };
+              console.log('[TextStreamChannel] bot_action navigate args', args);
+              await handleBotUIFunctionCall({ name: 'navigatePage', arguments: JSON.stringify(args) } as any);
+              console.log('[TextStreamChannel] bot_action navigate executed');
+            }
+          } catch (e) {
+            console.warn('[TextStreamChannel] bot_action handler failed', e);
+          }
+        }
       });
       this.transport.open(url);
 

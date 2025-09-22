@@ -256,7 +256,6 @@ CURRENT LANGUAGE SETTING: \`${language}\`
       session: {
         modalities: ["text", "audio"],
         instructions: enhancedSystemPrompt,
-        voice: "sage",
         input_audio_transcription: { model: "whisper-1" },
         // input_audio_transcription: { model: "gpt-4o-transcribe" },
         // input_audio_transcription: { model: "gpt-4o-mini-transcribe" },

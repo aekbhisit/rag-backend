@@ -1,6 +1,6 @@
 import { RealtimeAgent } from '@openai/agents/realtime';
 import { createVoiceModeAgent } from '@/app/lib/sdk-agent-wrapper';
-import { CORE_SCHEMAS, UI_SCHEMAS } from '@/app/agents/core/functions';
+// Do NOT inject extra schemas in voice mode. Use only DB-provided tools for parity with text mode.
 import { AgentConfig } from '@/app/types';
 import { UniversalMessage } from '@/app/types';
 
@@ -49,40 +49,47 @@ export function createAllVoiceAgents(
       } as AgentConfig & { downstreamAgents: Array<{ name: string; publicDescription?: string }> };
     });
 
-    // 2) Inject core and UI schemas just like text mode, with voice-mode restrictions
-    const coreAndUiSchemas = [...CORE_SCHEMAS, ...UI_SCHEMAS];
-    // Voice mode: avoid exposing generic transfer tools to the model to prevent confusion
-    const SKIP_TOOL_NAMES = new Set(['transferAgents', 'transferBack', 'intentionChange']);
-    // Restrict certain tools to specific agents only (from DB design)
+    // 2) Voice mode tool policy: load ONLY DB tools; do not inject schema tools here
+    //    We will add dynamic transfer_to_* tools per downstream agents to enable handoff.
     const ONLY_AGENT_FOR_TOOL: Record<string, string> = {
       placeKnowledgeSearch: 'placeGuide',
     };
 
     const agentsWithCoreFunctions = agentsWithDownstream.map(agentConfig => {
       const existingToolNames = new Set((agentConfig.tools || []).map((t: any) => t.name || t.function?.name));
-      const newTools = coreAndUiSchemas.filter(schema => {
-        const toolName = (schema as any).name || (schema as any).function?.name;
-        if (!toolName) return false;
-        // Skip generic transfer tools in voice mode
-        if (SKIP_TOOL_NAMES.has(toolName)) return false;
-        // Enforce per-agent restriction
-        const onlyAgent = ONLY_AGENT_FOR_TOOL[toolName as string];
-        if (onlyAgent && agentConfig.name !== onlyAgent) return false;
-        return !existingToolNames.has(toolName);
-      });
+      const newTools: any[] = [];
 
-      // Also filter out any existing instances of the skipped tools and enforce per-agent restriction on DB-provided tools
+      // Keep DB-provided tools intact (text-mode parity); only enforce per-agent restriction
       const filteredExisting = (agentConfig.tools || []).filter((t: any) => {
         const nm = t.name || t.function?.name;
-        if (SKIP_TOOL_NAMES.has(nm)) return false;
         const onlyAgent = ONLY_AGENT_FOR_TOOL[nm as string];
         if (onlyAgent && agentConfig.name !== onlyAgent) return false;
         return true;
       });
 
+      // Dynamic transfer_to tools for each downstream agent (not persisted in DB)
+      const transferTools = agentsWithDownstream
+        .find(a => a.name === agentConfig.name)?.downstreamAgents
+        .map(d => ({
+          function: {
+            name: `transfer_to_${d.name}`,
+            description: `Transfer conversation to agent ${d.name}`,
+            parameters: {
+              type: 'object',
+              properties: {
+                rationale_for_transfer: { type: 'string' },
+                conversation_context: { type: 'string' },
+                destination_agent: { type: 'string' }
+              },
+              required: []
+            }
+          }
+        })) || [];
+
+      // Compose final tool list: DB tools + dynamic transfer_to_*
       return {
         ...agentConfig,
-        tools: [...filteredExisting, ...newTools]
+        tools: [...filteredExisting, ...newTools, ...transferTools]
       } as AgentConfig;
     });
 

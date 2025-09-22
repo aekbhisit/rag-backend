@@ -18,8 +18,10 @@ export function buildSessionsRouter(_pool: Pool) {
       const channel = typeof req.query.channel === 'string' ? req.query.channel : undefined;
       const from = typeof req.query.from === 'string' ? req.query.from : undefined;
       const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+      const sort = typeof req.query.sort === 'string' ? req.query.sort : 'started_at';
+      const order = (typeof req.query.order === 'string' ? req.query.order : 'desc') as 'asc' | 'desc';
 
-      const { items, total } = await repo.list(tenantId, { userId, status, channel, from, to }, page, size);
+      const { items, total } = await repo.list(tenantId, { userId, status, channel, from, to }, page, size, sort, order);
       res.json({ items, total, page, size });
     } catch (e) { next(e); }
   });
@@ -47,7 +49,15 @@ export function buildSessionsRouter(_pool: Pool) {
 
   router.post('/:id/end', async (req, res, next) => {
     try {
-      const tenantId = getTenantIdFromReq(req);
+      // Try to get tenant ID from header first, then from body (for sendBeacon compatibility)
+      let tenantId = getTenantIdFromReq(req);
+      if (!tenantId && req.body && req.body.tenantId) {
+        tenantId = req.body.tenantId;
+      }
+      if (!tenantId) {
+        return res.status(400).json({ error: 'Missing tenant ID' });
+      }
+      
       const id = req.params.id;
       if (!id) return res.status(400).json({ error: 'Missing id' });
       await repo.end(tenantId, id);
@@ -65,6 +75,32 @@ export function buildSessionsRouter(_pool: Pool) {
       const sort = (typeof req.query.sort === 'string' ? req.query.sort : 'asc') as 'asc' | 'desc';
       const data = await repo.listMessages(tenantId, id, page, size, sort);
       return res.json({ ...data, page, size });
+    } catch (e) { next(e); }
+  });
+
+  router.delete('/:id', async (req, res, next) => {
+    try {
+      const tenantId = getTenantIdFromReq(req);
+      const id = req.params.id;
+      if (!id) return res.status(400).json({ error: 'Missing id' });
+      
+      // Check if session exists first
+      const session = await repo.getById(tenantId, id);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      
+      await repo.delete(tenantId, id);
+      return res.json({ ok: true });
+    } catch (e) { next(e); }
+  });
+
+  router.post('/cleanup', async (req, res, next) => {
+    try {
+      const tenantId = getTenantIdFromReq(req);
+      const hoursOld = Number(req.body?.hoursOld || 24);
+      const endedCount = await repo.endOldSessions(tenantId, hoursOld);
+      return res.json({ ok: true, endedCount });
     } catch (e) { next(e); }
   });
 

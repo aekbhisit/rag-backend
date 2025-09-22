@@ -67,7 +67,11 @@ class SharedSessionManager {
       
       // Create new DB session
       console.log(`[SessionManager] 🆕 Creating new session for ${mode} mode...`);
+      console.log(`[SessionManager] Frontend session ID: ${frontendSessionId}`);
+      
       const collector = createCollector();
+      console.log(`[SessionManager] Created collector with baseUrl: ${(collector as any).baseUrl}`);
+      
       const session = await collector.createSession({
         channel: mode === 'voice' ? 'realtime' : 'normal',
         status: 'active',
@@ -95,7 +99,8 @@ class SharedSessionManager {
         throw new Error('Failed to create session: no ID returned');
       }
     } catch (err) {
-      console.warn(`[SessionManager] ❌ Failed to create session, using frontend session:`, err);
+      console.error(`[SessionManager] ❌ Failed to create session for ${mode} mode:`, err);
+      console.log(`[SessionManager] 🔄 Falling back to frontend session ID: ${frontendSessionId}`);
       
       // Fallback to frontend session
       const fallbackSession: SessionInfo = {

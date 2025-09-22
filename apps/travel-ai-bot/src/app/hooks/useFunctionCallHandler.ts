@@ -440,11 +440,66 @@ export function useFunctionCallHandler({
     } else if (isBotUIAction(functionCallParams.name)) {
       console.log(`[FC] ▶ executing bot UI action via framework: ${functionCallParams.name}`);
       try {
-        const result = await handleBotUIFunctionCall({
+        let result = await handleBotUIFunctionCall({
           name: functionCallParams.name,
           call_id: functionCallParams.call_id,
           arguments: functionCallParams.arguments,
         });
+        // Voice-mode robustness: if extractContent returns no handler/empty data, fall back to DOM scraping
+        if (functionCallParams.name === 'extractContent') {
+          try {
+            const parsedArgs = (() => { try { return JSON.parse(functionCallParams.arguments || '{}'); } catch { return {}; } })();
+            const noUsefulData = !result || result.success !== true || (
+              !(Array.isArray((result as any)?.data) && (result as any).data.length > 0) &&
+              !(Array.isArray((result as any)?.blocks) && (result as any).blocks.length > 0)
+            );
+            if (noUsefulData) {
+              const scopeRoot = document.querySelector('.ai-extract-scope') || document.body;
+              const blocks: Array<{ type: string; text?: string; items?: string[] }> = [];
+              const walker = document.createTreeWalker(scopeRoot, NodeFilter.SHOW_ELEMENT);
+              const items: string[] = [];
+              const texts: string[] = [];
+              while (walker.nextNode()) {
+                const el = walker.currentNode as HTMLElement;
+                const tag = el.tagName.toLowerCase();
+                if (["script","style","noscript"].includes(tag)) continue;
+                if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
+                  const t = el.textContent?.trim(); if (t) blocks.push({ type: 'heading', text: t });
+                } else if (tag === 'li') {
+                  const t = el.textContent?.trim(); if (t) items.push(t);
+                } else if (tag === 'table') {
+                  try {
+                    const rows: string[] = [];
+                    (el as HTMLTableElement).querySelectorAll('tr').forEach(tr => {
+                      const cells = Array.from(tr.querySelectorAll('th,td')).map(td => (td.textContent||'').trim()).filter(Boolean);
+                      if (cells.length) rows.push(cells.join(' | '));
+                    });
+                    if (rows.length) blocks.push({ type: 'table', items: rows });
+                  } catch {}
+                } else if (tag === 'dl') {
+                  try {
+                    const pairs: string[] = [];
+                    const dts = Array.from(el.querySelectorAll('dt'));
+                    const dds = Array.from(el.querySelectorAll('dd'));
+                    const len = Math.max(dts.length, dds.length);
+                    for (let i=0;i<len;i++) {
+                      const k = (dts[i]?.textContent||'').trim();
+                      const v = (dds[i]?.textContent||'').trim();
+                      if (k || v) pairs.push(`${k}: ${v}`.trim());
+                    }
+                    if (pairs.length) blocks.push({ type: 'definition_list', items: pairs });
+                  } catch {}
+                } else if (["p","div","section","article"].includes(tag)) {
+                  const t = el.textContent?.trim(); if (t && t.length > 0 && t.length < 2000) texts.push(t);
+                }
+              }
+              if (items.length) blocks.push({ type: 'list', items });
+              texts.slice(0, 20).forEach(t => blocks.push({ type: 'text', text: t }));
+              result = { success: true, scope: parsedArgs?.scope || null, blocks } as any;
+              console.log('[FC] ℹ️ extractContent fallback used (voice mode)');
+            }
+          } catch {}
+        }
         // Echo function_call_output back to model
         sendClientEvent({
           type: "conversation.item.create",
@@ -458,6 +513,75 @@ export function useFunctionCallHandler({
         safeCreateResponse("(after bot ui action)");
       } catch (err) {
         console.error(`[FC] ❌ bot UI action failed: ${functionCallParams.name}`, err);
+      // Fallbacks to ensure parity with text mode
+      try {
+        const args = JSON.parse(functionCallParams.arguments || '{}');
+        let fallbackResult: any = null;
+        if (functionCallParams.name === 'navigate' && typeof args?.uri === 'string') {
+          try {
+            fallbackResult = await handleBotUIFunctionCall({
+              name: 'navigatePage',
+              call_id: functionCallParams.call_id,
+              arguments: JSON.stringify({ pageName: 'travel', path: args.uri })
+            } as any);
+          } catch {}
+        } else if (functionCallParams.name === 'extractContent') {
+          try {
+            const scopeRoot = document.querySelector('.ai-extract-scope') || document.body;
+            const blocks: Array<{ type: string; text?: string; items?: string[] }> = [];
+            const walker = document.createTreeWalker(scopeRoot, NodeFilter.SHOW_ELEMENT);
+            const items: string[] = [];
+            const texts: string[] = [];
+            while (walker.nextNode()) {
+              const el = walker.currentNode as HTMLElement;
+              const tag = el.tagName.toLowerCase();
+              if (["script","style","noscript"].includes(tag)) continue;
+              if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
+                const t = el.textContent?.trim(); if (t) blocks.push({ type: 'heading', text: t });
+              } else if (tag === 'li') {
+                const t = el.textContent?.trim(); if (t) items.push(t);
+              } else if (tag === 'table') {
+                try {
+                  const rows: string[] = [];
+                  (el as HTMLTableElement).querySelectorAll('tr').forEach(tr => {
+                    const cells = Array.from(tr.querySelectorAll('th,td')).map(td => (td.textContent||'').trim()).filter(Boolean);
+                    if (cells.length) rows.push(cells.join(' | '));
+                  });
+                  if (rows.length) blocks.push({ type: 'table', items: rows });
+                } catch {}
+              } else if (tag === 'dl') {
+                try {
+                  const pairs: string[] = [];
+                  const dts = Array.from(el.querySelectorAll('dt'));
+                  const dds = Array.from(el.querySelectorAll('dd'));
+                  const len = Math.max(dts.length, dds.length);
+                  for (let i=0;i<len;i++) {
+                    const k = (dts[i]?.textContent||'').trim();
+                    const v = (dds[i]?.textContent||'').trim();
+                    if (k || v) pairs.push(`${k}: ${v}`.trim());
+                  }
+                  if (pairs.length) blocks.push({ type: 'definition_list', items: pairs });
+                } catch {}
+              } else if (["p","div","section","article"].includes(tag)) {
+                const t = el.textContent?.trim(); if (t && t.length > 0 && t.length < 2000) texts.push(t);
+              }
+            }
+            if (items.length) blocks.push({ type: 'list', items });
+            texts.slice(0, 20).forEach(t => blocks.push({ type: 'text', text: t }));
+            fallbackResult = { success: true, scope: args?.scope || null, blocks };
+          } catch (e) {
+            fallbackResult = { success: false, error: (e as any)?.message || 'extract fallback failed' };
+          }
+        }
+        if (fallbackResult) {
+          sendClientEvent({
+            type: 'conversation.item.create',
+            item: { type: 'function_call_output', call_id: functionCallParams.call_id, output: JSON.stringify(fallbackResult) }
+          });
+          safeCreateResponse('(after bot ui action fallback)');
+          return;
+        }
+      } catch {}
       }
     } else {
       console.log(`[FC] ▶ unknown tool, using fallback: ${functionCallParams.name}`);

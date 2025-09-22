@@ -134,6 +134,54 @@ export default function RequestDetailPage() {
               </span>
             )}
           </div>
+          
+          {/* Answer Source Section */}
+          <div className="text-sm mt-2">
+            <b>Answer Source:</b>{' '}
+            {(item.context_details || []).length === 0 ? (
+              <span>—</span>
+            ) : (
+              <div className="mt-1 space-y-1">
+                {(item.context_details || []).map((context: any) => (
+                  <div key={context.id} className="flex items-center gap-2">
+                    <a 
+                      href={`/admin/contexts/edit/${encodeURIComponent(context.id)}`} 
+                      className="underline text-[color:var(--primary)] hover:text-[color:var(--primary-hover)]" 
+                      target="_blank" 
+                      rel="noreferrer"
+                    >
+                      {context.title}
+                    </a>
+                    <span className="text-xs text-gray-500">({context.type})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Context Source Section */}
+          <div className="text-sm mt-2">
+            <b>Context Source:</b>{' '}
+            {(item.context_details || []).length === 0 ? (
+              <span>—</span>
+            ) : (
+              <div className="mt-1 space-y-1">
+                {(item.context_details || []).map((context: any) => (
+                  <div key={context.id} className="flex items-center gap-2">
+                    <a 
+                      href={`/admin/contexts/edit/${encodeURIComponent(context.id)}`} 
+                      className="underline text-[color:var(--primary)] hover:text-[color:var(--primary-hover)]" 
+                      target="_blank" 
+                      rel="noreferrer"
+                    >
+                      {context.title}
+                    </a>
+                    <span className="text-xs text-gray-500">({context.type})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {usage.length > 0 && (() => {
             const getTokens = (u: any) => (u?.usage_total_tokens ?? u?.usage?.total_tokens ?? '—');
             const getCost = (u: any) => {

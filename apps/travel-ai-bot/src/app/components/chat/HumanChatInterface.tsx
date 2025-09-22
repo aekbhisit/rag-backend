@@ -100,7 +100,9 @@ export default function HumanChatInterface({ sessionId, messages, addMessage, cl
       <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-amber-800" style={{ minHeight: '40vh' }}>
-            <div className="text-3xl mb-3">👥</div>
+            <div className="text-3xl mb-3">
+              <UserGroupIcon className="w-12 h-12 mx-auto text-amber-600" />
+            </div>
             <p className="text-sm text-center text-amber-800">Your messages will be forwarded to human support agents.</p>
           </div>
         ) : (

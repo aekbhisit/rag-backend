@@ -108,6 +108,10 @@ export default function AgentsAdminPage() {
                       <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h2l1 2h12l1-2h2M6 19h12" /></svg>
                       Tools
                     </Link>
+                    <Link href={`/admin/agents/${encodeURIComponent(r.agent_key)}/core-tools`} className="inline-flex items-center gap-1 px-1.5 py-1 bg-amber-100 text-amber-800 border rounded text-xs whitespace-nowrap min-w-0">
+                      <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                      Core Tools
+                    </Link>
                     <Link href={`/admin/agents/${encodeURIComponent(r.agent_key)}/navigation-pages`} className="inline-flex items-center gap-1 px-1.5 py-1 bg-purple-100 text-purple-800 border rounded text-xs whitespace-nowrap min-w-0">
                       <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
                       Nav

@@ -1,3 +1,29 @@
+const store: Map<string, any> = new Map();
+
+export function putUiToolResult(key: string, value: any) {
+  store.set(key, { value, ts: Date.now() });
+}
+
+export async function waitForUiToolResult(key: string, timeoutMs: number): Promise<any | null> {
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (store.has(key)) {
+        const v = store.get(key);
+        store.delete(key);
+        resolve(v?.value ?? null);
+        return;
+      }
+      if (Date.now() - start >= timeoutMs) {
+        resolve(null);
+        return;
+      }
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
 type Ref<T> = { current: T };
 
 export interface TextSessionEventDeps {

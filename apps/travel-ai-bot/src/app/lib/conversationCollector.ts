@@ -23,9 +23,9 @@ export class ConversationCollector {
   private readonly tenantId: string;
 
   constructor(opts?: { baseUrl?: string; tenantId?: string }) {
-    this.baseUrl = (opts?.baseUrl || process.env.RAG_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
-    // Use NEXT_PUBLIC_ version for client-side access, fallback to server-side version
-    this.tenantId = opts?.tenantId || process.env.NEXT_PUBLIC_RAG_TENANT_ID || process.env.RAG_TENANT_ID || '';
+    this.baseUrl = (opts?.baseUrl || process.env.RAG_BASE_URL || 'http://localhost:3100').replace(/\/$/, '');
+    // Use NEXT_PUBLIC_ version for client-side access only
+    this.tenantId = opts?.tenantId || process.env.NEXT_PUBLIC_RAG_TENANT_ID || '';
     
     // Debug environment variables (only in development)
     if (process.env.NODE_ENV === 'development') {
@@ -50,6 +50,9 @@ export class ConversationCollector {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
+    console.log('[ConversationCollector] Creating session with body:', body);
+    console.log('[ConversationCollector] Using baseUrl:', this.baseUrl);
+    
     try {
       const res = await fetch(`${this.baseUrl}/api/admin/sessions`, {
         method: 'POST',
@@ -59,13 +62,23 @@ export class ConversationCollector {
       });
       clearTimeout(timeoutId);
       
-      if (!res.ok) throw new Error(`createSession failed: ${res.status} ${res.statusText}`);
-      return res.json();
+      console.log('[ConversationCollector] Session creation response:', res.status, res.statusText);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('[ConversationCollector] Session creation failed:', errorText);
+        throw new Error(`createSession failed: ${res.status} ${res.statusText} - ${errorText}`);
+      }
+      
+      const result = await res.json();
+      console.log('[ConversationCollector] Session created successfully:', result);
+      return result;
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(`createSession timed out after 10 seconds. Check if backend is running at ${this.baseUrl}`);
       }
+      console.error('[ConversationCollector] Session creation error:', error);
       throw error;
     }
   }
@@ -122,12 +135,13 @@ export class ConversationCollector {
 
 export function createCollector() {
   // Fallback tenant ID if environment variables are not available
-  const fallbackTenantId = 'acc44cdb-8da5-4226-9569-1233a39f564f';
-  const tenantId = process.env.NEXT_PUBLIC_RAG_TENANT_ID || process.env.RAG_TENANT_ID || fallbackTenantId;
+  // Use the same fallback as backend default to keep Admin and Logger in sync
+  const fallbackTenantId = '00000000-0000-0000-0000-000000000000';
+  const tenantId = process.env.NEXT_PUBLIC_RAG_TENANT_ID || fallbackTenantId;
   
   return new ConversationCollector({
     tenantId,
-    baseUrl: process.env.RAG_BASE_URL || 'http://localhost:3001'
+    baseUrl: process.env.RAG_BASE_URL || 'http://localhost:3100'
   });
 }
 

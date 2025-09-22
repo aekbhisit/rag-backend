@@ -138,15 +138,15 @@ export class ConversationLogger {
   
   /**
    * Read logs from API for a specific date
+   * Note: This method is deprecated as we now use database logging
+   * The backend API would need to implement date-based querying
    */
   async readLogsFromAPI(dateString: string): Promise<ConversationLogEntry[]> {
     try {
-      const response = await fetch(`/api/log-conversation?date=${dateString}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch logs: ${response.status}`);
-      }
-      const data = await response.json();
-      return data.logs || [];
+      // For now, return empty array as the backend doesn't have date-based querying
+      // In a real implementation, you'd call the backend API to get messages by date
+      console.warn(`[ConversationLogger] readLogsFromAPI is deprecated. Backend API needs date-based querying for ${dateString}`);
+      return [];
     } catch (error) {
       console.error(`Failed to read logs from API: ${error}`);
       return [];

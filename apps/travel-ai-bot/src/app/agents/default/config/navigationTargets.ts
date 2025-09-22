@@ -22,8 +22,8 @@ export const DEFAULT_AGENT_PAGE_HINTS: Record<string, PageHint> = {
   taxi: {
     title: 'Taxi & Transfers',
     description: 'Request a taxi, book airport transfers, or hire a day tour taxi.',
-    keywords: ['taxi', 'cab', 'transfer', 'airport', 'ride'],
-    examples: ['I want taxi', 'Book airport taxi', 'Call a cab to the hotel'],
+    keywords: ['taxi', 'cab', 'transfer', 'airport', 'ride', 'แท็กซี่', 'แทกซี่', 'เรียกแท็กซี่', 'รถแท็กซี่'],
+    examples: ['I want taxi', 'Book airport taxi', 'Call a cab to the hotel', 'ดูข้อมูล taxi', 'ดูข้อมูลแท็กซี่', 'อยากได้แท็กซี่', 'เรียกแท็กซี่'],
     priority: 0.95,
   },
   tours: {

@@ -60,7 +60,9 @@ export class SessionsRepository {
       to?: string;
     },
     page: number = 1,
-    size: number = 50
+    size: number = 50,
+    sortField: string = 'started_at',
+    sortOrder: 'asc' | 'desc' = 'desc'
   ): Promise<{ items: (SessionRow & { message_count: number; total_tokens: number })[]; total: number }> {
     const params: any[] = [tenantId];
     const where: string[] = ['s.tenant_id = $1'];
@@ -72,6 +74,11 @@ export class SessionsRepository {
     if (filters.to) { params.push(filters.to); where.push(`s.started_at <= $${params.length}`); }
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    // Validate and sanitize sort field
+    const allowedSortFields = ['started_at', 'ended_at', 'user_id', 'channel', 'status', 'message_count', 'total_tokens'];
+    const safeSortField = allowedSortFields.includes(sortField) ? sortField : 'started_at';
+    const safeSortOrder = sortOrder === 'asc' ? 'ASC' : 'DESC';
 
     const limit = Math.max(1, Math.min(size, 200));
     const offset = Math.max(0, (Math.max(1, page) - 1) * limit);
@@ -89,7 +96,7 @@ export class SessionsRepository {
          COALESCE((SELECT SUM(m2.total_tokens) FROM messages m2 WHERE m2.session_id = s.id), 0) AS total_tokens
        FROM sessions s
        ${whereSql}
-       ORDER BY s.started_at DESC
+       ORDER BY s.${safeSortField} ${safeSortOrder}
        LIMIT $${params.length - 1} OFFSET $${params.length}
       `,
       params
@@ -127,6 +134,55 @@ export class SessionsRepository {
       [tenantId, sessionId, limit, offset]
     );
     return { items: rows as MessageRow[], total: totalQ.rows[0]?.cnt || 0 };
+  }
+
+  async delete(tenantId: string, id: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Delete all related data first
+      await client.query(
+        `DELETE FROM rag_citations WHERE message_id IN (SELECT id FROM messages WHERE session_id = $1 AND tenant_id = $2)`,
+        [id, tenantId]
+      );
+      
+      await client.query(
+        `DELETE FROM tool_calls WHERE message_id IN (SELECT id FROM messages WHERE session_id = $1 AND tenant_id = $2)`,
+        [id, tenantId]
+      );
+      
+      await client.query(
+        `DELETE FROM messages WHERE session_id = $1 AND tenant_id = $2`,
+        [id, tenantId]
+      );
+      
+      // Finally delete the session
+      await client.query(
+        `DELETE FROM sessions WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId]
+      );
+      
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async endOldSessions(tenantId: string, hoursOld: number = 24): Promise<number> {
+    const { rows } = await this.pool.query(
+      `UPDATE sessions 
+       SET status = 'ended', ended_at = now() 
+       WHERE tenant_id = $1 
+       AND status = 'active' 
+       AND started_at < now() - ($2 || ' hours')::interval
+       RETURNING id`,
+      [tenantId, hoursOld]
+    );
+    return rows.length;
   }
 }
 

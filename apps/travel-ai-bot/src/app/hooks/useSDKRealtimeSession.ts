@@ -16,6 +16,7 @@ import { fetchEphemeralKey } from '@/app/lib/realtime/sessionAuth';
 import { AgentConfig } from '@/app/types';
 import { UniversalMessage } from '@/app/types';
 import { getOrCreateDbSession } from '@/app/lib/sharedSessionManager';
+import { logMessage as logToDb } from '@/app/lib/loggerClient';
       // Register handlers
 interface UseSDKRealtimeSessionProps {
   // Multi-agent configuration (OpenAI approach)
@@ -240,11 +241,11 @@ export function useSDKRealtimeSession({
 
   // ===== DB session initialization =====
   useEffect(() => {
-    if (dbSessionIdRef.current) return;
-
     const initializeDbSession = async () => {
       try {
+        console.log('[SDK] Initializing database session for sessionId:', sessionId);
         const dbSessionId = await getOrCreateDbSession(sessionId, 'voice');
+        console.log('[SDK] Database session created/retrieved:', dbSessionId);
         dbSessionIdRef.current = dbSessionId;
       } catch (err) {
         console.warn('[SDK] Failed to get session, using frontend session:', err);
@@ -301,15 +302,25 @@ export function useSDKRealtimeSession({
 
   // ===== Connect flow =====
   const connect = useCallback(async () => {
+    console.log('[SDK-Realtime] Connect function called:', {
+      enabled,
+      hasAttempted: hasAttemptedConnectionRef.current,
+      agentsCount: allSDKAgents.length,
+      hasAgentConfig: !!currentAgentConfig
+    });
+    
     if (!enabled) {
+      console.log('[SDK-Realtime] Connect aborted: not enabled');
       return;
     }
 
     if (hasAttemptedConnectionRef.current) {
+      console.log('[SDK-Realtime] Connect aborted: already attempted');
       return;
     }
 
     if (!allSDKAgents.length || !currentAgentConfig) {
+      console.log('[SDK-Realtime] Connect aborted: no agent config available');
       setError('No agent configurations available');
       return;
     }
@@ -488,6 +499,19 @@ export function useSDKRealtimeSession({
     }
 
     try {
+      // If assistant is speaking, stop playback and clear buffers (guarded) before sending new text
+      const isAudioPlaying = (() => {
+        try { return !!(audioElementRef.current && !audioElementRef.current.paused); } catch { return false; }
+      })();
+      const hasActiveResponse = !!(activeResponseIdRef.current);
+      const shouldInterrupt = isResponseActiveRef.current || hasActiveResponse || isAudioPlaying || !!currentResponseRef.current;
+      if (shouldInterrupt) {
+        try { (sessionRef.current as any).interrupt?.(); } catch { }
+        try { if (isResponseActiveRef.current || hasActiveResponse) { sendEventSafe({ type: 'response.cancel' }); } } catch { }
+        try { sendEventSafe({ type: 'output_audio_buffer.clear' }); } catch { }
+        try { sendEventSafe({ type: 'input_audio_buffer.clear' }); } catch { }
+      }
+
       // Enable agent runs when user sends a message
       allowAgentRunsRef.current = true;
 
@@ -513,23 +537,8 @@ export function useSDKRealtimeSession({
       // Send through SDK
       await (sessionRef.current as any).sendMessage(message);
 
-      // Log to database
-      try {
-        await fetch('/api/log/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: dbSessionIdRef.current,
-            role: 'user',
-            type: 'text',
-            content: message,
-            channel: 'realtime',
-            meta: { is_internal: false }
-          })
-        });
-      } catch (err) {
-        console.warn('[SDK] Failed to log user message:', err);
-      }
+      // Log to database (shared logger)
+      try { await logToDb({ sessionId: dbSessionIdRef.current, role: 'user', type: 'text', content: message, channel: 'realtime', meta: { is_internal: false, input: 'voice_text' } }); } catch (err) { console.warn('[SDK] Failed to log user message:', err); }
 
     } catch (err) {
       console.error('[SDK] Failed to send message:', err);
@@ -637,7 +646,7 @@ export function useSDKRealtimeSession({
   }, [isPTTUserSpeaking, onError]);
 
   // Disconnect session
-  const disconnect = useCallback(() => {
+  const disconnect = useCallback(async () => {
     if (!sessionRef.current) return;
 
     try {
@@ -653,12 +662,35 @@ export function useSDKRealtimeSession({
       sessionRef.current = null;
       setSession(null);
       setIsConnected(false);
+      setIsConnecting(false);
       setIsVoiceActive(false);
+      
+      // Reset connection attempt flag to allow reconnection
+      hasAttemptedConnectionRef.current = false;
+
+      // End the session in the database
+      try {
+        if (dbSessionIdRef.current) {
+          console.log('[SDK] Ending database session:', dbSessionIdRef.current);
+          await fetch('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(dbSessionIdRef.current) + '/end', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Tenant-ID': 'acc44cdb-8da5-4226-9569-1233a39f564f'
+            }
+          });
+          console.log('[SDK] Session ended in database:', dbSessionIdRef.current);
+        } else {
+          console.warn('[SDK] No database session ID to end');
+        }
+      } catch (err) {
+        console.warn('[SDK] Failed to end session in database:', err);
+      }
     } catch (err) {
       console.error('[SDK] Failed to disconnect:', err);
       setError(err instanceof Error ? err.message : 'Failed to disconnect');
     }
-  }, []);
+  }, [sessionId]);
 
   // Update session when PTT state changes
   useEffect(() => {
@@ -686,15 +718,25 @@ export function useSDKRealtimeSession({
 
   // Auto-connect when dependencies are ready
   useEffect(() => {
-    if (enabled &&
-      !isConnected &&
-      !isConnecting &&
-      currentAgentConfig?.tools &&
-      currentAgentConfig.tools.length > 0) {
-      console.log('[SDK-Realtime] 🔄 Auto-connecting with agent:', currentAgentConfig.name);
+    const snapshot = {
+      enabled,
+      isConnected,
+      isConnecting,
+      hasTools: !!(currentAgentConfig?.tools && currentAgentConfig.tools.length > 0),
+      agentName: currentAgentConfig?.name || ''
+    };
+    const last = (window as any).__SDK_RT_AUTO_CONN__ || { key: '' };
+    const key = JSON.stringify(snapshot);
+    if (last.key !== key) {
+      console.log('[SDK-Realtime] Auto-connect check:', snapshot);
+      (window as any).__SDK_RT_AUTO_CONN__ = { key };
+    }
+    
+    if (snapshot.enabled && !snapshot.isConnected && !snapshot.isConnecting && snapshot.hasTools) {
+      console.log('[SDK-Realtime] 🔄 Auto-connecting with agent:', snapshot.agentName);
       connect();
     }
-  }, [enabled, isConnected, isConnecting, currentAgentConfig?.tools?.length, connect]);
+  }, [enabled, isConnected, isConnecting, currentAgentConfig?.tools?.length, currentAgentConfig?.name, connect]);
 
   // Cleanup on unmount
   useEffect(() => {

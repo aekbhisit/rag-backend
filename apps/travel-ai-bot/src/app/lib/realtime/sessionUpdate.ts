@@ -54,6 +54,29 @@ export async function updateRealtimeSession(
   } catch {}
 
   try {
+    // Build enriched instructions similar to text-mode
+    let enrichedInstructions: string | undefined;
+    try {
+      const info = getAgentInstructions();
+      const base = info?.instructions || '';
+      const language = (transcriptionLanguage || 'en').split('-')[0];
+      const path = typeof window !== 'undefined' ? (window.location?.pathname || '') : '';
+      const locationHint = path ? `\nCurrent page path: ${path}` : '';
+      let guidance = '';
+      if (path) {
+        const parts = path.split('/').filter(Boolean);
+        const isSpecific = parts.length >= 2; // e.g. /travel/taxi
+        if (isSpecific) {
+          guidance = `\nIf the Current page path points to a specific travel page, DO NOT call navigate again. Prefer using the extractContent tool with an appropriate scope to read on-screen content and answer.`;
+        } else {
+          guidance = `\nIf the Current page path is a generic hub (e.g., /travel) and the user asks to view specific information, PREFER calling the navigate tool to the most relevant in-app page. After navigation, you may call extractContent if needed to answer.`;
+        }
+      }
+      enrichedInstructions = base
+        ? `${base}\n\n[Channel=realtime, Language=${language}]${locationHint}${guidance}`
+        : `You are a helpful assistant. Channel=realtime. Language=${language}.${locationHint}${guidance}`;
+    } catch {}
+
     const sessionPayload: any = {
       type: 'session.update',
       session: {
@@ -61,7 +84,8 @@ export async function updateRealtimeSession(
         input_audio_transcription: {
           model: 'gpt-4o-mini-transcribe',
           language: transcriptionLanguage,
-        }
+        },
+        ...(enrichedInstructions ? { instructions: enrichedInstructions } : {})
       }
     };
 

@@ -7,12 +7,10 @@ export function buildPublicPromptsRouter() {
   router.get('/agents/:agentKey/prompt', async (req, res) => {
     try {
       const { agentKey } = req.params;
-      const { category, locale, tenantId } = req.query as any;
-      if (!agentKey || !category) return res.status(400).json({ error: 'agentKey and category required' });
-      if (category !== 'base' && category !== 'initial_system') return res.status(400).json({ error: 'invalid category' });
-      const rec = category === 'base'
-        ? await promptService.getBasePrompt(agentKey, { tenantId: tenantId || undefined, locale: locale || undefined })
-        : await promptService.getInitialSystemPrompt(agentKey, { tenantId: tenantId || undefined, locale: locale || undefined });
+      const { locale, tenantId } = req.query as any;
+      if (!agentKey) return res.status(400).json({ error: 'agentKey required' });
+      // Simplified: always use base category (system prompt)
+      const rec = await promptService.getBasePrompt(agentKey, { tenantId: tenantId || undefined, locale: locale || undefined });
       if (!rec) return res.status(404).json({ error: 'not found' });
       res.json({ id: rec.id, content: rec.content, version: rec.version, metadata: rec.metadata, locale: rec.locale });
     } catch (e) {

@@ -125,7 +125,7 @@ export function buildCategoriesRouter(pool: Pool) {
   // Delete category
   router.delete('/:id', async (req, res, next) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = getTenantIdFromReq(req);
       const deleted = await repo.delete(tenantId, req.params.id);
       
       if (!deleted) {
@@ -145,6 +145,14 @@ export function buildCategoriesRouter(pool: Pool) {
       } catch {}
       res.status(204).send();
     } catch (e) { 
+      console.error('Error in DELETE categories route:', {
+        error: e,
+        stack: e instanceof Error ? e.stack : undefined,
+        tenantId: req.header('X-Tenant-ID'),
+        categoryId: req.params.id,
+        method: req.method,
+        url: req.url
+      });
       next(e); 
     }
   });

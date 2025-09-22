@@ -68,7 +68,7 @@ export default function AgentPromptsTabPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="w-full p-6 space-y-6">
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-600">
         <a href="/admin" className="underline">Admin</a>

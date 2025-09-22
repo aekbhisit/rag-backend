@@ -3,20 +3,28 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { UniversalMessage } from '@/app/types';
-import { PaperAirplaneIcon, UserIcon, CpuChipIcon, UserGroupIcon, TrashIcon, ArrowsRightLeftIcon, MapPinIcon, TruckIcon, HomeIcon, ShieldCheckIcon, ChatBubbleLeftRightIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
+import { PaperAirplaneIcon, UserIcon, CpuChipIcon, UserGroupIcon, TrashIcon, ArrowsRightLeftIcon, MapPinIcon, TruckIcon, HomeIcon, ShieldCheckIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 import { useMessageHistory } from './MessageHistory';
 import HumanChatInterface from './HumanChatInterface';
 import VoiceChatInterface from './VoiceChatInterface';
 
 import { allAgentSets, defaultAgentSetKey } from '@/app/agents';
 import { useDbAgentSets } from '@/app/hooks/useDbAgentSets';
-import { getOrCreateDbSession } from '@/app/lib/sharedSessionManager';
+import { getOrCreateDbSession, clearCurrentSession } from '@/app/lib/sharedSessionManager';
 import { useTenantAiConfig } from '@/app/hooks/useTenantAiConfig';
 import { TextStreamTransport } from '@/app/lib/textstream/transport';
 import { buildTextStreamUrl } from '@/app/lib/textstream/sessionAuth';
 import { TextResponseMerger } from '@/app/lib/textstream/responseQueue';
+// Lazy-resolve to avoid SSR import issues; we will require() inside handlers
 import { logMessage } from '@/app/lib/loggerClient';
 import { callAgentCompletions } from '@/app/lib/callCompletions';
+
+// Custom microphone icon component
+const MicrophoneIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+  </svg>
+);
 
 interface ChatInterfaceProps {
   sessionId: string;
@@ -54,6 +62,18 @@ export default function ChatInterface({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseTransportRef = useRef<TextStreamTransport | null>(null);
+  const sseServerLoggedRef = useRef<boolean>(false);
+  const loggedAssistantKeysRef = useRef<Set<string>>(new Set());
+  const shouldLogOnce = useCallback((store: React.MutableRefObject<Set<string>>, key: string) => {
+    try {
+      const k = key.trim();
+      if (!k) return false;
+      if (store.current.has(k)) return false;
+      if (store.current.size > 200) store.current.clear();
+      store.current.add(k);
+      return true;
+    } catch { return true; }
+  }, []);
 
   // Persist active agent across messages (updated on transfer)
   const [activeAgentSetKeyState, setActiveAgentSetKeyState] = useState<string>(providedAgentSetKey || defaultAgentSetKey);
@@ -107,6 +127,29 @@ export default function ChatInterface({
     
     initializeSession();
   }, []); // Only run once on mount
+
+  // Reset assistant dedup when conversation changes
+  useEffect(() => {
+    try { loggedAssistantKeysRef.current.clear(); } catch {}
+  }, [conversationId]);
+
+  // Handle browser close/refresh - end session
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (conversationId) {
+        // Use sendBeacon for reliable delivery even when page is closing
+        // Note: sendBeacon doesn't support custom headers, so we'll use a different approach
+        const formData = new FormData();
+        formData.append('tenantId', 'acc44cdb-8da5-4226-9569-1233a39f564f');
+        navigator.sendBeacon('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(conversationId) + '/end', formData);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [conversationId]);
 
 
 
@@ -235,13 +278,25 @@ export default function ChatInterface({
         addMessage(placeholder);
 
         const merger = new TextResponseMerger();
+        // Detect language from user input (Thai chars → 'th'), else use baseLanguage
+        const langForMessage = /[\u0E00-\u0E7F]/.test(content) ? 'th' : baseLanguage;
+        const currentPath = ((): string | null => {
+          try {
+            if (typeof window === 'undefined') return null;
+            const url = new URL(window.location.href);
+            const content = url.searchParams.get('content');
+            if (content) return content;
+            return url.pathname;
+          } catch { return null; }
+        })();
         const url = buildTextStreamUrl({
           sessionId: conversationId || sessionId,
           agentSetKey: setKey,
           agentName: agentConfig?.name,
           agentKey: agentConfig?.key,
-          language: baseLanguage,
-          text: content.trim()
+          language: langForMessage,
+          text: content.trim(),
+          currentPath
         });
 
         const transport = new TextStreamTransport({
@@ -260,10 +315,11 @@ export default function ChatInterface({
           },
           onResponseStart: () => {
             console.log('[SSE] event: response_start');
+            try { sseServerLoggedRef.current = false; } catch {}
             // already created placeholder
           },
           onDelta: (delta) => {
-            console.debug('[SSE] event: delta', preview(delta));
+            // console.debug('[SSE] event: delta', preview(delta));
             const merged = merger.append(delta);
             const existing = {
               ...placeholder,
@@ -272,17 +328,110 @@ export default function ChatInterface({
             } as UniversalMessage;
             updateMessage(existing);
           },
+          onBotAction: async (data: any) => {
+            try {
+              console.log('[SSE] event: bot_action', data);
+              if (data?.name === 'navigate' && typeof data?.uri === 'string') {
+                const args = { pageName: 'travel', path: data.uri };
+                console.log('[SSE] bot_action navigate args', args);
+                const mod = ((): any => { try { return require('@/botActionFramework'); } catch { return null; } })();
+                const fn = mod?.handleFunctionCall;
+                const result = typeof fn === 'function' ? await fn({ name: 'navigatePage', arguments: JSON.stringify(args) } as any) : null;
+                console.log('[SSE] bot_action navigate result', result);
+              } else if (data?.name === 'extractContent') {
+                // Client-side DOM extractor scoped by .ai-extract-scope
+                const scopeRoot = document.querySelector('.ai-extract-scope') || document.body;
+                console.log('[SSE] extractContent scope root', scopeRoot === document.body ? 'document.body' : '.ai-extract-scope');
+                const blocks: Array<{ type: string; text?: string; items?: string[] }> = [];
+                try {
+                  const walker = document.createTreeWalker(scopeRoot, NodeFilter.SHOW_ELEMENT);
+                  const items: string[] = [];
+                  const texts: string[] = [];
+                  while (walker.nextNode()) {
+                    const el = walker.currentNode as HTMLElement;
+                    const tag = el.tagName.toLowerCase();
+                    if (['script','style','noscript'].includes(tag)) continue;
+                    if (['h1','h2','h3','h4','h5','h6'].includes(tag)) {
+                      const t = el.textContent?.trim(); if (t) blocks.push({ type: 'heading', text: t });
+                    } else if (tag === 'li') {
+                      const t = el.textContent?.trim(); if (t) items.push(t);
+                    } else if (tag === 'table') {
+                      try {
+                        const rows: string[] = [];
+                        el.querySelectorAll('tr').forEach(tr => {
+                          const cells = Array.from(tr.querySelectorAll('th,td')).map(td => (td.textContent||'').trim()).filter(Boolean);
+                          if (cells.length) rows.push(cells.join(' | '));
+                        });
+                        if (rows.length) blocks.push({ type: 'table', items: rows });
+                      } catch {}
+                    } else if (tag === 'dl') {
+                      try {
+                        const pairs: string[] = [];
+                        const dts = Array.from(el.querySelectorAll('dt'));
+                        const dds = Array.from(el.querySelectorAll('dd'));
+                        const len = Math.max(dts.length, dds.length);
+                        for (let i=0;i<len;i++) {
+                          const k = (dts[i]?.textContent||'').trim();
+                          const v = (dds[i]?.textContent||'').trim();
+                          if (k || v) pairs.push(`${k}: ${v}`.trim());
+                        }
+                        if (pairs.length) blocks.push({ type: 'definition_list', items: pairs });
+                      } catch {}
+                    } else if (['p','div','section','article'].includes(tag)) {
+                      const t = el.textContent?.trim(); if (t && t.length > 0 && t.length < 2000) texts.push(t);
+                    }
+                  }
+                  if (items.length) blocks.push({ type: 'list', items });
+                  texts.slice(0, 20).forEach(t => blocks.push({ type: 'text', text: t }));
+                  console.log('[SSE] extractContent collected', { headings: blocks.filter(b => b.type==='heading').length, lists: blocks.filter(b => b.type==='list').length, texts: blocks.filter(b => b.type==='text').length });
+                } catch (e) {
+                  console.warn('[SSE] extractContent DOM walk failed', e);
+                }
+                const result = { success: true, scope: data?.scope || null, blocks };
+                console.log('[SSE] bot_action extractContent result (client)', result);
+                try {
+                  console.log('[SSE] posting tool-result', { key: data?.toolCallId, blocksCount: blocks.length });
+                  const r = await fetch('/api/ui/tool-result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: data?.toolCallId, result }) });
+                  console.log('[SSE] post tool-result status', r.status);
+                } catch (e) { console.warn('[SSE] post tool-result failed', e); }
+              } else if (data?.name === 'selectItem') {
+                const mod = ((): any => { try { return require('@/botActionFramework'); } catch { return null; } })();
+                const fn = mod?.handleFunctionCall;
+                const result = typeof fn === 'function' ? await fn({ name: 'selectItem', arguments: JSON.stringify(data || {}) } as any) : null;
+                console.log('[SSE] bot_action selectItem result', result);
+              }
+            } catch (err) {
+              console.warn('[SSE] bot_action handler failed', err);
+            }
+          },
           onResponseDone: async (finalText, agentName) => {
             console.log('[SSE] event: response_done', { agentName, text: preview(finalText) });
+            const trimmed = (finalText || '').trim();
+            if (!trimmed) {
+              // Remove placeholder instead of rendering an empty assistant bubble
+              try {
+                updateMessage({
+                  ...placeholder,
+                  metadata: { ...placeholder.metadata, isStreaming: false, deleted: true, agentName: agentName || (activeAgentNameState || 'welcomeAgent') }
+                } as UniversalMessage);
+              } catch {}
+              setIsLoading(false);
+              return;
+            }
             const existing = {
               ...placeholder,
-              content: finalText,
+              content: trimmed,
               metadata: { ...placeholder.metadata, isStreaming: false, agentName: agentName || (activeAgentNameState || 'welcomeAgent') }
             } as UniversalMessage;
             updateMessage(existing);
             setIsLoading(false);
-            // Log assistant response to backend
-            await logMessage({ sessionId: conversationId, role: 'assistant', type: 'text', content: finalText, channel: 'normal', meta: { agentName: agentName || (activeAgentNameState || '') } });
+            // Log assistant response to backend unless server already logged via agent-completions
+            if (!sseServerLoggedRef.current) {
+              const key = `${conversationId}|assistant|${(finalText || '').trim()}`;
+              if (shouldLogOnce(loggedAssistantKeysRef, key)) {
+                await logMessage({ sessionId: conversationId, role: 'assistant', type: 'text', content: (finalText || '').trim(), channel: 'normal', meta: { agentName: agentName || (activeAgentNameState || '') } });
+              }
+            }
           },
           onAgentTransfer: (name) => {
             console.log('[SSE] event: agent_transfer', { agentName: name });
@@ -300,6 +449,7 @@ export default function ChatInterface({
                 console.log('[SSE][debug] tool_calls_summary', info);
               } else if (info?.type === 'agent_completions_start' || info?.type === 'agent_completions_result' || info?.type === 'agent_completions_error') {
                 console.log('[SSE][debug] agent_completions', info);
+                if (info?.type === 'agent_completions_result') { sseServerLoggedRef.current = true; }
               } else {
                 console.log('[SSE][debug]', info);
               }
@@ -865,9 +1015,6 @@ export default function ChatInterface({
           metadata: { source: 'ai', channel: localChannel, language: 'en', agentName: agentConfig?.name || targetName }
         };
         addMessage(aiMessage);
-        
-        // Log assistant response to backend
-        await logMessage({ sessionId: conversationId, role: 'assistant', type: 'text', content: assistantContent, channel: localChannel, meta: { agentName: agentConfig?.name || targetName } });
       } else {
         console.log(`[ChatInterface] ⚠️ No assistant content to display - this might be the issue!`);
       }
@@ -999,9 +1146,49 @@ export default function ChatInterface({
         <div className="flex space-x-2">
           {messages.length > 0 && (
             <button
-              onClick={() => { if (confirm('Clear all messages?')) clearMessages(); }}
+              onClick={async () => {
+                try { if (!confirm('Clear all messages and start a new session?')) return; } catch { return; }
+                try { sseTransportRef.current?.close(); } catch {}
+                
+                // End the current session in the database
+                try {
+                  console.log('[ChatInterface] Trash button clicked, conversationId:', conversationId);
+                  if (conversationId) {
+                    console.log('[ChatInterface] Calling session end API for:', conversationId);
+                    const response = await fetch('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(conversationId) + '/end', {
+                      method: 'POST',
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Tenant-ID': 'acc44cdb-8da5-4226-9569-1233a39f564f'
+                      }
+                    });
+                    const result = await response.json();
+                    console.log('[ChatInterface] Session end API response:', response.status, result);
+                    if (response.ok) {
+                      console.log('[ChatInterface] Current session ended successfully:', conversationId);
+                    } else {
+                      console.error('[ChatInterface] Failed to end session:', result);
+                    }
+                  } else {
+                    console.warn('[ChatInterface] No conversationId to end');
+                  }
+                } catch (err) {
+                  console.error('[ChatInterface] Failed to end current session:', err);
+                }
+                
+                clearMessages();
+                try { clearCurrentSession(); } catch {}
+                try {
+                  const newId = await getOrCreateDbSession(sessionId, 'text');
+                  setConversationId(newId);
+                } catch {
+                  setConversationId(sessionId);
+                }
+                setActiveAgentSetKeyState(providedAgentSetKey || defaultAgentSetKey);
+                setActiveAgentNameState(providedAgentName || null);
+              }}
               className="p-2 rounded-md bg-white text-gray-400 hover:text-red-600 transition-colors"
-              title="Clear all messages"
+              title="Clear all messages and start a new session"
             >
               <TrashIcon className="w-4 h-4" />
             </button>
@@ -1031,7 +1218,13 @@ export default function ChatInterface({
       <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-amber-800" style={{ minHeight: '40vh' }}>
-            <div className="text-3xl mb-3">{activeChannel === 'human' ? '👥' : '💬'}</div>
+            <div className="text-3xl mb-3">
+              {activeChannel === 'human' ? (
+                <UserGroupIcon className="w-12 h-12 mx-auto text-amber-600" />
+              ) : (
+                <ChatBubbleLeftRightIcon className="w-12 h-12 mx-auto text-amber-600" />
+              )}
+            </div>
             <p className="text-sm text-center text-amber-800">
               {activeChannel === 'human' ? 'Your messages will be forwarded to human support agents.' : 'Send a message to begin chatting with the AI assistant'}
             </p>
@@ -1067,9 +1260,9 @@ export default function ChatInterface({
                         <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                       )}
                       <div className="flex items-center space-x-1 mt-1" aria-label="loading">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite' }} />
-                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite', animationDelay: '0.15s' }} />
-                        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite', animationDelay: '0.3s' }} />
+                        <span className="inline-block w-2 h-2 rounded-full animate-bounce" style={{ background: '#a16207' }} />
+                        <span className="inline-block w-2 h-2 rounded-full animate-bounce" style={{ background: '#a16207', animationDelay: '0.1s' }} />
+                        <span className="inline-block w-2 h-2 rounded-full animate-bounce" style={{ background: '#a16207', animationDelay: '0.2s' }} />
                       </div>
                     </div>
                   ) : (
@@ -1077,7 +1270,15 @@ export default function ChatInterface({
                   )}
                 </div>
                 <div className={`text-xs mt-1 ${message.metadata.source === 'user' ? 'text-right' : 'text-left'}`} style={{ color: 'var(--ta-muted)' }}>
-                  {formatTime(message.timestamp)}{message.metadata.agentName && (<span className="ml-2" style={{ color: 'var(--ta-muted)' }}>• {message.metadata.agentName}</span>)}
+                  {formatTime(message.timestamp)}
+                  {(() => {
+                    const ch = (message.metadata as any)?.channel || 'normal';
+                    const Icon = getChannelInfo(ch).icon;
+                    return <Icon className="w-3.5 h-3.5 inline ml-1 align-text-bottom" />;
+                  })()}
+                  {message.metadata.agentName && (
+                    <span className="ml-2" style={{ color: 'var(--ta-muted)' }}>• {message.metadata.agentName}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1094,9 +1295,9 @@ export default function ChatInterface({
             <div className="flex-1 max-w-xs lg:max-w-md">
               <div className="inline-block p-3 rounded-lg bg-gradient-to-br from-orange-50 to-amber-100 border border-orange-200 shadow-sm">
                 <div className="flex items-center space-x-1" aria-label="loading">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite' }} />
-                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite', animationDelay: '0.15s' }} />
-                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: '#a16207', animation: 'vcPulse 1s infinite', animationDelay: '0.3s' }} />
+                  <span className="inline-block w-2 h-2 rounded-full animate-bounce" style={{ background: '#a16207' }} />
+                  <span className="inline-block w-2 h-2 rounded-full animate-bounce" style={{ background: '#a16207', animationDelay: '0.1s' }} />
+                  <span className="inline-block w-2 h-2 rounded-full animate-bounce" style={{ background: '#a16207', animationDelay: '0.2s' }} />
                 </div>
               </div>
             </div>

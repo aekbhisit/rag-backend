@@ -18,7 +18,12 @@ export async function POST(req: NextRequest) {
       response_tokens: providedResponseTokens,
       total_tokens: providedTotalTokens,
       model: providedModel,
-      latency_ms: providedLatencyMs
+      latency_ms: providedLatencyMs,
+      // Optional prompt/citation attachments
+      prompt_template,
+      prompt_params,
+      tools_declared,
+      citations
     } = body || {};
 
     if (!session_id || !role || !type) {
@@ -119,6 +124,27 @@ export async function POST(req: NextRequest) {
             ...(meta || {})
           }
         });
+      // Attach prompt/citations if provided
+      try {
+        if (saved?.id && (prompt_template || tools_declared || prompt_params)) {
+          await collector.attachPrompt(String(saved.id), {
+            template: String(prompt_template || ''),
+            params: prompt_params ?? undefined,
+            tools_declared: tools_declared ?? undefined
+          } as any);
+        }
+        if (saved?.id && Array.isArray(citations) && citations.length > 0) {
+          const items = citations.map((c: any) => ({
+            chunk_id: String(c?.chunk_id || c?.context_id || ''),
+            source_type: String(c?.source_type || 'context'),
+            source_uri: c?.source_uri ?? null,
+            score: typeof c?.score === 'number' ? c.score : null,
+            highlight: c?.highlight ?? null,
+            metadata: c?.metadata ?? {}
+          }));
+          await collector.logCitations(String(saved.id), items);
+        }
+      } catch {}
       console.log('[MsgLogAPI] Saved message:', {
         id: saved?.id,
         role: saved?.role,
@@ -130,51 +156,69 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ ok: true, message: saved }, { status: 201 });
     } catch (firstError: any) {
-      // If message creation failed (e.g., missing session), create a new session,
-      // map the provided session_id to the newly created backend session id, and retry once.
-      if (firstError?.message?.includes('500')) {
-        try {
-          const newSession = await collector.createSession({
-            channel: (channel as any) || 'normal',
-            status: 'active',
-            meta: { 
+      // If message creation failed (commonly because the session doesn't exist yet),
+      // create a new session, map the provided session_id to it, and retry once.
+      console.warn('[MsgLogAPI] createMessage failed, attempting session auto-create + retry:', firstError?.message || firstError);
+      try {
+        const newSession = await collector.createSession({
+          channel: (channel as any) || 'normal',
+          status: 'active',
+          meta: { 
+            original_session_id: session_id,
+            auto_created: true,
+            ...(meta || {})
+          }
+        });
+        try { setMappedBackendSessionId(session_id, newSession.id); } catch {}
+        
+        const saved = await collector.createMessage({
+            session_id: newSession.id,
+            role,
+            type,
+            content: contentStr || null,
+            content_tokens: resolvedContentTokens,
+            response_tokens: resolvedResponseTokens,
+            total_tokens: resolvedTotalTokens,
+            ...(resolvedModel ? { model: resolvedModel } : {}),
+            ...(typeof resolvedLatencyMs === 'number' ? { latency_ms: resolvedLatencyMs } : {}),
+            meta: {
+              channel,
               original_session_id: session_id,
-              auto_created: true,
+              estimated_tokens: usingEstimated,
+              token_breakdown: tokenStats,
+              usage_source: usingEstimated ? 'estimated' : 'provided',
               ...(meta || {})
             }
           });
-          // Map frontend -> backend session for future logs
-          try { setMappedBackendSessionId(session_id, newSession.id); } catch {}
-          
-          const saved = await collector.createMessage({
-              session_id: newSession.id,
-              role,
-              type,
-              content: contentStr || null,
-              content_tokens: resolvedContentTokens,
-              response_tokens: resolvedResponseTokens,
-              total_tokens: resolvedTotalTokens,
-              ...(resolvedModel ? { model: resolvedModel } : {}),
-              ...(typeof resolvedLatencyMs === 'number' ? { latency_ms: resolvedLatencyMs } : {}),
-              meta: {
-                channel,
-                original_session_id: session_id,
-                estimated_tokens: usingEstimated,
-                token_breakdown: tokenStats,
-                usage_source: usingEstimated ? 'estimated' : 'provided',
-                ...(meta || {})
-              }
-            });
-          return NextResponse.json({ 
-            ok: true, 
-            message: saved,
-            note: `Created new session ${newSession.id} for original session ${session_id}`
-          }, { status: 201 });
-        } catch (secondError: any) {
-          throw secondError;
-        }
-      } else {
-        throw firstError;
+        // Attach prompt/citations if provided
+        try {
+          if (saved?.id && (prompt_template || tools_declared || prompt_params)) {
+            await collector.attachPrompt(String(saved.id), {
+              template: String(prompt_template || ''),
+              params: prompt_params ?? undefined,
+              tools_declared: tools_declared ?? undefined
+            } as any);
+          }
+          if (saved?.id && Array.isArray(citations) && citations.length > 0) {
+            const items = citations.map((c: any) => ({
+              chunk_id: String(c?.chunk_id || c?.context_id || ''),
+              source_type: String(c?.source_type || 'context'),
+              source_uri: c?.source_uri ?? null,
+              score: typeof c?.score === 'number' ? c.score : null,
+              highlight: c?.highlight ?? null,
+              metadata: c?.metadata ?? {}
+            }));
+            await collector.logCitations(String(saved.id), items);
+          }
+        } catch {}
+        return NextResponse.json({ 
+          ok: true, 
+          message: saved,
+          note: `Created new session ${newSession.id} for original session ${session_id}`
+        }, { status: 201 });
+      } catch (secondError: any) {
+        console.error('[MsgLogAPI] Fallback session create + retry failed:', secondError);
+        throw secondError;
       }
     }
   } catch (err: any) {

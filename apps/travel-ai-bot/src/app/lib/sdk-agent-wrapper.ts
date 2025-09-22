@@ -114,18 +114,85 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
   if (!agentConfig.tools || !Array.isArray(agentConfig.tools)) {
     return new RealtimeAgent({
       name: agentConfig.name,
-      voice: (agentConfig as any).voice || selectVoiceForAgent(agentConfig.name),
+      // Avoid per-agent voice to prevent voice updates during playback; use session default
       instructions: agentConfig.systemPrompt || ''
     });
   }
 
+  // Normalize DB tools (text-mode parity): fill missing function fields for common UI tools
+  const NORMALIZE = (toolIn: any) => {
+    try {
+      const t = { ...(toolIn || {}) };
+      const fn = t.function || {};
+      const rawCandidates = [
+        t.tool_key, t.toolKey, t.key, t.name, fn?.name
+      ].filter(Boolean).map((v: any) => String(v));
+      const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const candidates = rawCandidates.map(toSlug);
+      const key = candidates[0] || '';
+      const nameLike = candidates.find(Boolean) || '';
+      const out = { ...t } as any;
+      const ensure = (name: string, description: string, parameters: any) => {
+        out.function = out.function || {};
+        out.function.name = name;
+        out.function.description = out.function.description || description;
+        out.function.parameters = out.function.parameters || parameters;
+      };
+      if (key.includes('ui.navigate') || nameLike === 'navigate' || candidates.includes('uinavigate')) {
+        ensure('navigate', 'Navigate within the app by path or uri', {
+          type: 'object',
+          properties: { uri: { type: 'string', description: 'Path to navigate, e.g., /travel/taxi' } },
+          required: ['uri']
+        });
+      } else if (key.includes('ui.navigatetomain') || nameLike === 'navigatetomain' || candidates.includes('uinavigatetomain')) {
+        ensure('navigateToMain', 'Navigate to the main app page', { type: 'object', properties: {}, required: [] });
+      } else if (key.includes('ui.navigatetoprevious') || nameLike === 'navigatetoprevious' || candidates.includes('uinavigatetoprevious')) {
+        ensure('navigateToPrevious', 'Navigate to previous page', { type: 'object', properties: { steps: { type: 'number' } }, required: [] });
+      } else if (key.includes('ui.extractcontent') || nameLike === 'extractcontent' || candidates.includes('uiextractcontent')) {
+        ensure('extractContent', 'Extract visible content from current page scope', {
+          type: 'object',
+          properties: {
+            scope: { type: 'string', description: 'Logical scope/category (e.g., taxi)' },
+            limit: { type: 'number', description: 'Max items to include' },
+            detail: { type: 'boolean', description: 'Return full text instead of summary' }
+          },
+          required: []
+        });
+      } else if (key.includes('ui.selectitem') || nameLike === 'selectitem' || candidates.includes('uiselectitem')) {
+        ensure('selectItem', 'Select an item in the UI by id or text', {
+          type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: []
+        });
+      } else if (key.includes('ui.toast') || nameLike === 'toast' || candidates.includes('uitoast')) {
+        ensure('toast', 'Show a toast notification', {
+          type: 'object', properties: { message: { type: 'string' }, status: { type: 'string' } }, required: ['message']
+        });
+      } else if (nameLike.startsWith('transfer_to') || key.includes('core.transfer_to') || candidates.includes('transfer_to')) {
+        // Preserve DB-provided transfer_to_* function name
+        const transferName = (fn?.name || t.name || 'transfer_to_unknown');
+        ensure(transferName, 'Transfer the conversation to a specific agent', {
+          type: 'object',
+          properties: {
+            rationale_for_transfer: { type: 'string' },
+            conversation_context: { type: 'string' },
+            destination_agent: { type: 'string' }
+          },
+          required: []
+        });
+      }
+      return out;
+    } catch { return toolIn; }
+  };
+
+  const normalizedTools = (agentConfig.tools || []).map(NORMALIZE);
+
   // Debug: Log tools being processed (once per agent)
   if (!TOOLS_LOGGED_AGENTS.has(agentConfig.name)) {
     console.log(`[SDK-Voice] 🔍 Processing tools for ${agentConfig.name}:`, {
-      totalTools: agentConfig.tools?.length || 0,
-      toolNames: agentConfig.tools?.map((t: any) => t.function?.name || t.name) || [],
-      rawTools: agentConfig.tools?.map((t: any) => ({
+      totalTools: normalizedTools?.length || 0,
+      toolNames: normalizedTools?.map((t: any) => t.function?.name || t.name) || [],
+      rawTools: normalizedTools?.map((t: any) => ({
         name: t.function?.name || t.name,
+        key: t.tool_key || t.toolKey || t.key || null,
         type: t.type,
         hasFunction: !!t.function,
         hasName: !!t.name,
@@ -136,7 +203,7 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
   }
 
   // Convert database tools to SDK tool format
-  const sdkTools = agentConfig.tools.map((dbTool: any) => {
+  const sdkTools = normalizedTools.map((dbTool: any) => {
     const toolName = dbTool.function?.name || dbTool.name || 'unnamed';
     const description = dbTool.function?.description || dbTool.description || '';
     const parameters = dbTool.function?.parameters || dbTool.parameters || {
@@ -280,7 +347,7 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
 
   return new RealtimeAgent({
     name: agentConfig.name,
-    voice: (agentConfig as any).voice || selectVoiceForAgent(agentConfig.name),
+    // Avoid per-agent voice to prevent mid-audio voice updates; rely on session default
     instructions: agentConfig.instructions || agentConfig.systemPrompt || '',
     tools: sdkTools
   });
