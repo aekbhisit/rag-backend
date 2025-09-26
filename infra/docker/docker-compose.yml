@@ -10,6 +10,7 @@ services:
     volumes:
       - postgres17_data:/var/lib/postgresql/data
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ../../infra/import/rag_assistant.sql:/docker-entrypoint-initdb.d/rag_assistant.sql:ro
     networks:
       - rag-network
 

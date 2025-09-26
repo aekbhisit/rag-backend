@@ -1,0 +1,413 @@
+version: '3.8'
+
+services:
+  # Main RAG Backend Application
+  rag-backend:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    container_name: rag-backend
+    user: "1000:1000"  # Non-root user
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # MinIO
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      # Bootstrap
+      TENANT_ID: ${TENANT_ID}
+      TENANT_NAME: ${TENANT_NAME}
+      TENANT_CONTACT_EMAIL: ${TENANT_CONTACT_EMAIL}
+      TENANT_CODE: ${TENANT_CODE}
+      TENANT_SLUG: ${TENANT_SLUG}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_NAME: ${ADMIN_NAME}
+    volumes:
+      - ./data/logs:/app/logs:rw,noexec,nosuid
+      - ./data/uploads:/app/uploads:rw,noexec,nosuid
+      - ./data/temp:/app/temp:rw,noexec,nosuid
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /app/node_modules:noexec,nosuid,size=500m
+    ulimits:
+      nproc: 100
+      nofile:
+        soft: 1024
+        hard: 2048
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Web (Next.js)
+  admin-web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.admin-web
+    container_name: rag-admin-web
+    user: "1000:1000"  # Non-root user
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Frontend will call the backend via Nginx on the same domain
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://rag-backend:3001
+      NEXT_TELEMETRY_DISABLED: 1
+    depends_on:
+      rag-backend:
+        condition: service_started
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /app/node_modules:noexec,nosuid,size=500m
+    ulimits:
+      nproc: 50
+      nofile:
+        soft: 1024
+        hard: 2048
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database
+  postgres:
+    build: ./postgres
+    container_name: rag-postgres
+    user: "999:999"  # postgres user
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data:rw,noexec,nosuid
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./data/backups:/backups:rw,noexec,nosuid
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /var/lib/postgresql/data:noexec,nosuid,size=10g
+    ulimits:
+      nproc: 50
+      nofile:
+        soft: 1024
+        hard: 2048
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    user: "999:999"  # redis user
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - ./data/redis:/data:rw,noexec,nosuid
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /data:noexec,nosuid,size=1g
+    ulimits:
+      nproc: 50
+      nofile:
+        soft: 1024
+        hard: 2048
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: rag-minio
+    user: "1000:1000"  # minio user
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
+    volumes:
+      - ./data/minio:/data:rw,noexec,nosuid
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /data:noexec,nosuid,size=5g
+    ulimits:
+      nproc: 50
+      nofile:
+        soft: 1024
+        hard: 2048
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: rag-nginx
+    user: "101:101"  # nginx user
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./data/ssl:/etc/nginx/ssl:ro
+      - ./data/logs/nginx:/var/log/nginx:rw,noexec,nosuid
+    depends_on:
+      - rag-backend
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /var/cache/nginx:noexec,nosuid,size=100m
+    ulimits:
+      nproc: 50
+      nofile:
+        soft: 1024
+        hard: 2048
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # Backup Service (Cron-based)
+  backup:
+    image: postgres:17-alpine
+    container_name: rag-backup
+    user: "999:999"  # postgres user
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - ./data/backups:/backups:rw,noexec,nosuid
+      - ./scripts/backup:/scripts:ro
+    command: >
+      sh -c "
+        apk add --no-cache postgresql-client bash &&
+        chmod +x /scripts/backup.sh &&
+        echo '0 2 * * * /scripts/backup.sh' | crontab - &&
+        crond -f
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    ulimits:
+      nproc: 10
+      nofile:
+        soft: 1024
+        hard: 2048
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # Malware Detection Service
+  malware-detector:
+    image: alpine:latest
+    container_name: rag-malware-detector
+    user: "1000:1000"
+    restart: unless-stopped
+    command: >
+      sh -c "
+        apk add --no-cache bash curl docker-cli &&
+        while true; do
+          for container in rag-backend rag-admin-web rag-postgres rag-redis rag-minio; do
+            if docker exec $$container ps aux 2>/dev/null | grep -E '(kdevtmpfsi|minerd|xmrig|cpuminer|ccminer|stratum)' > /dev/null; then
+              echo \"ALERT: Malware detected in $$container\"
+              docker stop $$container
+              echo \"$$(date): Malware detected in $$container\" >> /var/log/malware.log
+            fi
+          done
+          sleep 300
+        done
+      "
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/logs:/var/log:rw,noexec,nosuid
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+volumes:
+  # All data is stored in local ./data directory for easy management
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/minio
+
+networks:
+  rag-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
