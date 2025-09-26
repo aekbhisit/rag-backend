@@ -14,11 +14,15 @@
   "scripts": {
     "echo-name": "node -e \"console.log(require('./package.json').name)\"",
     "dev:admin": "pnpm --filter @rag/admin-web run dev",
+    "dev:travel": "pnpm --filter realtime-examples run dev",
     "dev:backend": "NODE_ENV=development pnpm --filter @rag/backend run dev",
     "dev:backend:local": "SKIP_ADAPTERS_INIT=true pnpm --filter @rag/backend run dev",
+    "dev:all": "concurrently \"pnpm run dev:backend:local\" \"pnpm run dev:admin\" \"pnpm run dev:travel\"",
     "build:admin": "pnpm --filter @rag/admin-web run build",
     "build:backend": "pnpm --filter @rag/backend run build",
+    "build:travel": "pnpm --filter realtime-examples run build",
     "start:admin": "pnpm --filter @rag/admin-web run start",
+    "start:travel": "pnpm --filter realtime-examples run start",
     "start:backend": "node apps/backend/dist/index.js",
     "build:shared": "pnpm --filter @rag/shared run build",
     "clean": "rimraf **/dist",
@@ -26,9 +30,10 @@
     "infra:down": "docker compose -f infra/docker/docker-compose.yml down -v"
   },
   "devDependencies": {
+    "@types/node": "^20.14.2",
+    "concurrently": "^9.2.1",
     "rimraf": "^5.0.5",
-    "typescript": "^5.5.4",
-    "@types/node": "^20.14.2"
+    "typescript": "^5.5.4"
   },
   "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748",
   "dependencies": {

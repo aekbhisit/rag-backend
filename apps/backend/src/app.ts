@@ -27,12 +27,12 @@ export async function createApp() {
   app.use(cors({
     origin: true,
     methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type','X-Tenant-ID','Accept','Authorization','Cache-Control','Pragma'],
+    allowedHeaders: ['Content-Type','X-Tenant-ID','X-User-ID','Accept','Authorization','Cache-Control','Pragma'],
   }));
   app.options('*', cors({
     origin: true,
     methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type','X-Tenant-ID','Accept','Authorization','Cache-Control','Pragma'],
+    allowedHeaders: ['Content-Type','X-Tenant-ID','X-User-ID','Accept','Authorization','Cache-Control','Pragma'],
   }));
   app.use(express.json({ limit: '50mb' }));
   app.use(morgan('dev'));
@@ -323,6 +323,36 @@ export async function createApp() {
   app.use('/api/admin/users', buildUsersRouter(getPostgresPool()));
   app.use('/api/admin/settings', buildSettingsRouter(getPostgresPool()));
   app.use('/api/admin/error-logs', buildErrorLogsRouter(getPostgresPool()));
+  try {
+    const { buildAgentsAdminRouter } = await import('./routes/admin/agents');
+    app.use('/api/admin', buildAgentsAdminRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount agents admin routes:', error);
+  }
+  try {
+    const { buildAgentsMasterAdminRouter } = await import('./routes/admin/agentsMaster');
+    app.use('/api/admin', buildAgentsMasterAdminRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount agents master admin routes:', error);
+  }
+  try {
+    const { buildAgentsTestAdminRouter } = await import('./routes/admin/agentsTest');
+    app.use('/api/admin', buildAgentsTestAdminRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount agents test routes:', error);
+  }
+  try {
+    const { buildToolTestAdminRouter } = await import('./routes/admin/toolTest');
+    app.use('/api/admin', buildToolTestAdminRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount tool test admin routes:', error);
+  }
+  try {
+    const { buildNavigationPagesRouter } = await import('./routes/admin/navigation-pages');
+    app.use('/api/admin/navigation-pages', buildNavigationPagesRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount navigation pages admin routes:', error);
+  }
   const { buildAuthRouter } = await import('./routes/admin/auth');
   app.use('/api/admin/auth', buildAuthRouter(getPostgresPool()));
   const { buildDashboardRouter } = await import('./routes/admin/dashboard');
@@ -374,6 +404,14 @@ export async function createApp() {
     app.use('/api', buildPublicRetrieveRouter());
   } catch (error) {
     console.error('Failed to load public retrieve routes:', error);
+  }
+
+  // Public prompts endpoints
+  try {
+    const { buildPublicPromptsRouter } = await import('./routes/public/prompts');
+    app.use('/api', buildPublicPromptsRouter());
+  } catch (error) {
+    console.error('Failed to load public prompts routes:', error);
   }
 
   // Public API docs
