@@ -124,13 +124,13 @@ export default function NavigationPagesPage() {
 
       if (response.ok) {
         setPages(pages.filter(p => p.id !== id));
-        toast.success('Navigation page deleted successfully');
+        alert('Navigation page deleted successfully');
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to delete navigation page');
+        alert(error.error || 'Failed to delete navigation page');
       }
     } catch (error) {
-      toast.error('Error deleting navigation page');
+      alert('Error deleting navigation page');
     }
   };
 
@@ -342,7 +342,6 @@ export default function NavigationPagesPage() {
               </div>
               <div className="flex items-center space-x-2">
                 <Switch
-                  id="is_active"
                   checked={formData.is_active || false}
                   onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
                 />
@@ -376,10 +375,10 @@ export default function NavigationPagesPage() {
                 <div>
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     {page.title}
-                    <Badge variant={page.is_active ? "default" : "secondary"}>
+                    <Badge variant={page.is_active ? "default" : "info"}>
                       {page.is_active ? "Active" : "Inactive"}
                     </Badge>
-                    <Badge variant="outline">Priority: {page.priority}</Badge>
+                    <Badge variant="info">Priority: {page.priority}</Badge>
                   </h3>
                   <p className="text-sm text-gray-600">
                     /travel/{page.page_slug}
@@ -415,7 +414,7 @@ export default function NavigationPagesPage() {
                   <h4 className="font-medium mb-2">Keywords</h4>
                   <div className="flex flex-wrap gap-1">
                     {page.keywords.map((keyword, index) => (
-                      <Badge key={`page-${page.id}-keyword-${index}-${keyword}`} variant="secondary" className="text-xs">
+                      <Badge key={`page-${page.id}-keyword-${index}-${keyword}`} variant="info" className="text-xs">
                         {keyword}
                       </Badge>
                     ))}

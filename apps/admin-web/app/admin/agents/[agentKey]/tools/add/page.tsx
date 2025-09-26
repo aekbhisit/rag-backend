@@ -60,6 +60,7 @@ interface ExportedToolConfig {
   tool_description: string;
   enabled: boolean;
   position: number;
+  alias?: string;
   arg_defaults: Record<string, any>;
   arg_templates: Record<string, any>;
   guardrails: Record<string, any>;
@@ -583,6 +584,7 @@ export default function AddAgentToolPage() {
   const [toolConfig, setToolConfig] = useState({
     enabled: true,
     position: 0,
+    alias: '',
     arg_defaults: {} as Record<string, any>,
     arg_templates: {} as Record<string, any>,
     guardrails: {} as Record<string, any>,
@@ -917,6 +919,7 @@ export default function AddAgentToolPage() {
       tool_description: selectedToolDef.description,
       enabled: toolConfig.enabled,
       position: toolConfig.position,
+      alias: toolConfig.alias,
       arg_defaults: toolConfig.arg_defaults,
       arg_templates: toolConfig.arg_templates,
       guardrails: toolConfig.guardrails,
@@ -970,6 +973,7 @@ export default function AddAgentToolPage() {
         setToolConfig({
           enabled: importData.enabled !== undefined ? importData.enabled : true,
           position: importData.position || 0,
+          alias: importData.alias || '',
           arg_defaults: importData.arg_defaults || {},
           arg_templates: importData.arg_templates || {},
           guardrails: importData.guardrails || {},
