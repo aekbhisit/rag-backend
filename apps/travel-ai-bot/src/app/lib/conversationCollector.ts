@@ -139,9 +139,15 @@ export function createCollector() {
   const fallbackTenantId = '00000000-0000-0000-0000-000000000000';
   const tenantId = process.env.NEXT_PUBLIC_RAG_TENANT_ID || fallbackTenantId;
   
+  // Use the correct backend URL - try multiple environment variables
+  const baseUrl = process.env.RAG_BASE_URL || 
+                  process.env.BACKEND_URL || 
+                  process.env.NEXT_PUBLIC_BACKEND_URL || 
+                  'http://localhost:3001';
+  
   return new ConversationCollector({
     tenantId,
-    baseUrl: process.env.RAG_BASE_URL || 'http://localhost:3100'
+    baseUrl
   });
 }
 
