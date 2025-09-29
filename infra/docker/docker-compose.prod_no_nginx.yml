@@ -186,69 +186,6 @@ services:
       timeout: 20s
       retries: 3
 
-
-  # SQL Import Service
-  sql-import:
-    image: postgres:17-alpine
-    container_name: rag-sql-import
-    restart: "no"
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_HOST: postgres
-    volumes:
-      - ../import:/import:ro
-      - ./scripts:/scripts:ro
-    command: >
-      sh -c "
-        apk add --no-cache postgresql-client bash &&
-        cp /scripts/import-sql.sh /usr/local/bin/import-sql.sh &&
-        chmod +x /usr/local/bin/import-sql.sh &&
-        /usr/local/bin/import-sql.sh
-      "
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - rag-network
-
-  # Backup Service (Cron-based)
-  backup:
-    image: postgres:17-alpine
-    container_name: rag-backup
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_HOST: postgres
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
-    volumes:
-      - ./data/backups:/backups
-      - ./scripts:/scripts:ro
-    command: >
-      sh -c "
-        apk add --no-cache postgresql-client bash &&
-        cp /scripts/backup.sh /usr/local/bin/backup.sh &&
-        chmod +x /usr/local/bin/backup.sh &&
-        echo '0 2 * * * /usr/local/bin/backup.sh' | crontab - &&
-        crond -f
-      "
-    depends_on:
-      postgres:
-        condition: service_healthy
-      sql-import:
-        condition: service_completed_successfully
-      rag-backend:
-        condition: service_started
-      admin-web:
-        condition: service_started
-      travel-ai-bot:
-        condition: service_started
-    networks:
-      - rag-network
-
 volumes:
   # All data is stored in local ./data directory for easy management
   postgres_data:
