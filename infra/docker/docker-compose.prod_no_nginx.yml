@@ -41,8 +41,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      sql-import:
-        condition: service_completed_successfully
       redis:
         condition: service_started
       minio:
