@@ -132,7 +132,6 @@ services:
       - ./data/postgres:/var/lib/postgresql/data
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
       - ./data/backups:/backups
-      - ../import:/docker-entrypoint-initdb.d/import:ro
     ports:
       - "5432:5432"  # Expose PostgreSQL to external connections
     networks:
