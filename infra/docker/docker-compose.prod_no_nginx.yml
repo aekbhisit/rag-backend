@@ -32,6 +32,8 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_NAME: ${ADMIN_NAME}
+      # Tenant configuration
+      NEXT_PUBLIC_RAG_TENANT_ID: ${NEXT_PUBLIC_RAG_TENANT_ID}
     volumes:
       - ./data/logs:/app/logs
       - ./data/uploads:/app/uploads
@@ -98,8 +100,6 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       # Tenant configuration
       NEXT_PUBLIC_RAG_TENANT_ID: ${NEXT_PUBLIC_RAG_TENANT_ID}
-      # OpenAI configuration
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
       # Next.js configuration
       NEXT_TELEMETRY_DISABLED: ${NEXT_TELEMETRY_DISABLED}
     ports:
