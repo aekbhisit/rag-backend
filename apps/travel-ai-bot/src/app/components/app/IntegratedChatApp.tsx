@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { useConfiguration } from "@/app/lib/config";
 import { LanguageProvider, useLanguage } from "@/app/contexts/LanguageContext";
-import { SessionRegistryProvider } from "../contexts/SessionRegistryContext";
+import { SessionRegistryProvider } from "@/app/contexts/SessionRegistryContext";
 import { EventProvider } from "@/app/contexts/EventContext";
-import ChatInterface from "./chat/ChatInterface";
+import ChatInterface from "@/app/components/chat/ChatInterface";
 import { usePersistedChannel } from "@/app/hooks/usePersistedChannel";
 
 // Inner component that uses the language context

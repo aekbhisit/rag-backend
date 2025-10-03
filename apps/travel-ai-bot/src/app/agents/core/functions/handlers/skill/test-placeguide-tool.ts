@@ -1,101 +1,18 @@
 #!/usr/bin/env ts-node
 
 /**
- * Utility script to (re)register placeKnowledgeSearch tool in registry and
- * assign it to the placeGuide agent, then test execution.
+ * Test script for placeGuide tool registration and execution
+ * Tests the complete flow: placeGuide agent → placeKnowledgeSearch tool → RAG place search
  */
 
-async function upsertRegistryAndAssign(): Promise<void> {
-  const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
-  const API = `${BASE}/api/admin`;
-
-  // 1) Upsert tool into tool_registry
-  // Use a skill.* key so it appears under Skill Tools in Admin UI
-  const toolKey = 'skill.rag.place';
-  const registryBody = {
-    tool_key: toolKey,
-    name: 'Rag Place',
-    category: 'skill',
-    runtime: 'server',
-    handler_key: 'skill.rag.place',
-    input_schema: {
-      type: 'object',
-      properties: {
-        searchQuery: { type: 'string', description: 'Query text (e.g., cafe near me)' },
-        category: { type: 'string' },
-        lat: { type: 'number' },
-        long: { type: 'number' },
-        maxDistanceKm: { type: 'number' },
-        maxResults: { type: 'number' }
-      },
-      required: ['searchQuery']
-    },
-    description: 'Search for places using RAG with location-based filtering',
-    default_settings: {},
-    permissions: {},
-    is_enabled: true
-  };
-  await fetch(`${API}/tool-registry`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(registryBody) }).catch(() => {});
-
-  // 2) Ensure placeGuide agent exists
-  await fetch(`${API}/agents/placeGuide`).then(async r => {
-    if (!r.ok) {
-      await fetch(`${API}/agents`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent_key: 'placeGuide', name: 'placeGuide', public_description: 'Place information and recommendations', is_enabled: true })
-      });
-    }
-  });
-
-  // 3) Assign tool to placeGuide if missing
-  const toolsRes = await fetch(`${API}/agents/placeGuide/tools`);
-  const existing = toolsRes.ok ? await toolsRes.json() : [];
-  const has = Array.isArray(existing) && existing.some((t: any) => t.tool_key === toolKey || t.function_name === 'placeKnowledgeSearch');
-  if (!has) {
-    const payload = {
-      tool_key: toolKey,
-      alias: 'Rag Place',
-      enabled: true,
-      position: Array.isArray(existing) ? existing.length : 0,
-      function_name: 'placeKnowledgeSearch',
-      function_description: 'Search places using knowledge + RAG with location awareness',
-      function_parameters: registryBody.input_schema,
-      parameter_mapping: {
-        searchQuery: 'searchQuery',
-        category: 'category',
-        lat: 'lat',
-        long: 'long',
-        maxDistanceKm: 'maxDistanceKm',
-        maxResults: 'maxResults'
-      },
-      overrides: { skill_id: 'skill.rag.place' },
-      arg_defaults: {},
-      arg_templates: {},
-      guardrails: {}
-    };
-    await fetch(`${API}/agents/placeGuide/tools`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  } else {
-    // Ensure alias is set on existing mapping
-    const row = (existing as any[]).find((t: any) => t.tool_key === toolKey || t.function_name === 'placeKnowledgeSearch');
-    if (row && (!row.alias || String(row.alias).trim() === '')) {
-      await fetch(`${API}/agents/placeGuide/tools/${encodeURIComponent(row.id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alias: 'Rag Place' })
-      }).catch(() => {});
-    }
-  }
-}
-
 async function testPlaceGuideTool(): Promise<void> {
-  await upsertRegistryAndAssign();
   console.log('🧪 Testing placeGuide Tool Registration and Execution');
   console.log('='.repeat(60));
 
   // Test 1: Check if placeGuide agent has tools
   console.log('\n📋 Test 1: Check placeGuide Agent Tools');
   try {
-    const response = await fetch('http://localhost:3001/api/admin/agents/placeGuide/tools');
+    const response = await fetch('http://localhost:3100/api/admin/agents/placeGuide/tools');
     const tools = await response.json();
     
     console.log('✅ placeGuide tools retrieved successfully');
@@ -123,7 +40,7 @@ async function testPlaceGuideTool(): Promise<void> {
       maxResults: 3
     };
 
-    const response = await fetch('http://localhost:3001/api/admin/tool-test/execute', {
+    const response = await fetch('http://localhost:3100/api/admin/tool-test/execute', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

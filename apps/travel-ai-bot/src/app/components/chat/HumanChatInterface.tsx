@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { getApiUrl } from '@/app/lib/apiHelper';
 import { UniversalMessage } from '@/app/types';
 import { PaperAirplaneIcon, UserIcon, UserGroupIcon, CpuChipIcon, TrashIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
 
@@ -60,12 +61,12 @@ export default function HumanChatInterface({ sessionId, messages, addMessage, cl
     addMessage(ack);
 
     try {
-      await fetch('/api/log/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, role: 'user', type: 'text', content: text, channel: 'human', meta: { language: baseLanguage, is_internal: false } }) });
-      await fetch('/api/log/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, role: 'system', type: 'system', content: ack.content, channel: 'human', meta: { language: baseLanguage, is_internal: false } }) });
+      await fetch(getApiUrl('/api/messages'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, role: 'user', type: 'text', content: text, channel: 'human', meta: { language: baseLanguage, is_internal: false } }) });
+      await fetch(getApiUrl('/api/messages'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, role: 'system', type: 'system', content: ack.content, channel: 'human', meta: { language: baseLanguage, is_internal: false } }) });
     } catch {}
 
     try {
-      await fetch('/api/line/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      await fetch(getApiUrl('/api/line/push'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
     } catch {
       const errMsg: UniversalMessage = { id: generateMessageId(), sessionId, timestamp: new Date().toISOString(), type: 'system', content: 'We could not forward your message to LINE at the moment. Please try again.', metadata: { source: 'ai', channel: 'human', language: baseLanguage } };
       addMessage(errMsg);

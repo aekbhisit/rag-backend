@@ -730,7 +730,7 @@ export function useHandleServerEvent({
                 const cid = outputItem.id;
                 const content = outputItem.content && outputItem.content[0];
                 const text = content?.transcript || content?.text || '';
-                console.log(`[RealtimeDEBUG] assistant message item: id=${cid}, text_preview="${(text||'').slice(0,80)}${(text||'').length>80?'…':''}`);
+                console.log(`[RealtimeDEBUG] assistant message item: id=${cid}, text_preview="${(text||'').slice(0,80)}${(text||'').length>80?'…':''}"`);
               }
             } catch {}
             if (
@@ -742,15 +742,6 @@ export function useHandleServerEvent({
                 console.log(`[RealtimeFC] ▶ function_call detected: name=${outputItem.name}, call_id=${outputItem.call_id || 'n/a'}`);
                 const previewArgs = typeof outputItem.arguments === 'string' ? outputItem.arguments.slice(0, 200) : JSON.stringify(outputItem.arguments).slice(0, 200);
                 console.log(`[RealtimeFC] ▶ arguments (preview): ${previewArgs}${(previewArgs || '').length === 200 ? '…' : ''}`);
-                // Lookup and log function description from current agent tools
-                try {
-                  const activeAgent = (serverEvent as any)?.response?.agent_name || selectedAgentName;
-                  const agentCfg = (selectedAgentConfigSet || []).find((a: any) => a.name === activeAgent) || null;
-                  const toolSchemas = Array.isArray(agentCfg?.tools) ? agentCfg!.tools : [];
-                  const toolSchema = (toolSchemas as any[]).find((t: any) => (t?.function?.name || t?.name) === outputItem.name);
-                  const desc = toolSchema?.function?.description || toolSchema?.description || '';
-                  console.log(`[RealtimeFC] ▶ description: ${desc || '(none)'}`);
-                } catch {}
               } catch {}
               // First try to handle with Thai resort handler if available
               if (handleThaiResortFunction) {
@@ -843,73 +834,6 @@ export function useHandleServerEvent({
             );
           }
         }
-
-        // === Voice auto-extract fallback (parity with text mode) ===
-        try {
-          const output = (serverEvent.response?.output || []) as any[];
-          const hasExtractCall = output.some((it: any) => it?.type === 'function_call' && (it?.name === 'extractContent'));
-          const path = (typeof window !== 'undefined' && window.location) ? window.location.pathname : '';
-          const isSpecificPage = (() => { try { const parts = path.split('/').filter(Boolean); return parts.length >= 2; } catch { return false; } })();
-          const now = Date.now();
-          const last = (window as any).__VOICE_EXTRACT_FALLBACK_TS__ || 0;
-          const tooRecent = (now - last) < 2000;
-          if (!hasExtractCall && isSpecificPage && !tooRecent) {
-            (window as any).__VOICE_EXTRACT_FALLBACK_TS__ = now;
-            console.log('[Voice-Fallback] ▶ running client DOM extract');
-            const scopeRoot = document.querySelector('.ai-extract-scope') || document.body;
-            const blocks: Array<{ type: string; text?: string; items?: string[] }> = [];
-            try {
-              const walker = document.createTreeWalker(scopeRoot, NodeFilter.SHOW_ELEMENT);
-              const items: string[] = [];
-              const texts: string[] = [];
-              while (walker.nextNode()) {
-                const el = walker.currentNode as HTMLElement;
-                const tag = el.tagName.toLowerCase();
-                if (["script","style","noscript"].includes(tag)) continue;
-                if (["h1","h2","h3","h4","h5","h6"].includes(tag)) { const t = el.textContent?.trim(); if (t) blocks.push({ type: 'heading', text: t }); }
-                else if (tag === 'li') { const t = el.textContent?.trim(); if (t) items.push(t); }
-                else if (tag === 'table') {
-                  try {
-                    const rows: string[] = [];
-                    (el as HTMLTableElement).querySelectorAll('tr').forEach(tr => {
-                      const cells = Array.from(tr.querySelectorAll('th,td')).map(td => (td.textContent||'').trim()).filter(Boolean);
-                      if (cells.length) rows.push(cells.join(' | '));
-                    });
-                    if (rows.length) blocks.push({ type: 'table', items: rows });
-                  } catch {}
-                } else if (tag === 'dl') {
-                  try {
-                    const pairs: string[] = [];
-                    const dts = Array.from(el.querySelectorAll('dt'));
-                    const dds = Array.from(el.querySelectorAll('dd'));
-                    const len = Math.max(dts.length, dds.length);
-                    for (let i=0;i<len;i++) {
-                      const k = (dts[i]?.textContent||'').trim();
-                      const v = (dds[i]?.textContent||'').trim();
-                      if (k || v) pairs.push(`${k}: ${v}`.trim());
-                    }
-                    if (pairs.length) blocks.push({ type: 'definition_list', items: pairs });
-                  } catch {}
-                } else if (["p","div","section","article"].includes(tag)) { const t = el.textContent?.trim(); if (t && t.length > 0 && t.length < 2000) texts.push(t); }
-              }
-              if (items.length) blocks.push({ type: 'list', items });
-              texts.slice(0, 30).forEach(t => blocks.push({ type: 'text', text: t }));
-            } catch (e) { console.warn('[Voice-Fallback] DOM walk failed', e); }
-            const lines: string[] = [];
-            for (const b of blocks) {
-              if (b.type === 'heading' && b.text) lines.push(`# ${b.text}`);
-              else if ((b.type === 'list' || b.type === 'table' || b.type === 'definition_list') && Array.isArray(b.items)) { for (const it of b.items) { if (typeof it === 'string') lines.push(`- ${it}`); } }
-              else if (b.type === 'text' && b.text) lines.push(b.text);
-            }
-            const contextText = lines.join('\n').slice(0, 5000);
-            console.log('[Voice-Fallback] contextText preview:', contextText.slice(0, 200));
-            sendClientEvent({
-              type: 'conversation.item.create',
-              item: { type: 'message', role: 'system', content: [{ type: 'text', text: `Use the on-screen content below to answer directly. Do not say you are checking.\n\n${contextText}` }] }
-            }, "after_voice_auto_extract");
-            debouncedSafeResponse(sendClientEvent, { reason: 'voice_auto_extract_fallback' }, 'after_voice_auto_extract');
-          }
-        } catch (e) { console.warn('[Voice-Fallback] failed', e); }
         break;
       }
 

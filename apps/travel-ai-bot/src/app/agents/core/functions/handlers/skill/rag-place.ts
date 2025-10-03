@@ -1,3 +1,5 @@
+import { getApiUrl } from '@/app/lib/apiHelper';
+
 export interface RagPlaceArgs {
   searchQuery?: string;
   category?: string;
@@ -6,7 +8,7 @@ export interface RagPlaceArgs {
   maxDistanceKm?: number;
   maxResults?: number;
   // Optional overrides injected via DB mapping/overrides
-  endpointUrl?: string; // e.g., "/api/rag/place" or full URL
+  endpointUrl?: string; // e.g., "/services/rag/place" or full URL
   tenantId?: string;
   headers?: Record<string, string>;
   distance_weight?: number;
@@ -35,11 +37,14 @@ export const ragPlaceSearchHandler = async (args: RagPlaceArgs) => {
       prompt_params: null as any,
     };
     // Compute target endpoint
-    const baseUrl = (typeof process !== 'undefined' ? ((process as any)?.env?.NEXT_PUBLIC_APP_URL || (process as any)?.env?.APP_URL) : '') || 'http://localhost:3200';
+    // Use direct backend URL for chat handlers
+    const baseUrl = (typeof process !== 'undefined'
+      ? ((process as any)?.env?.NEXT_PUBLIC_BACKEND_URL || (process as any)?.env?.BACKEND_URL)
+      : '') || 'http://localhost:3100';
     const defaultUrl = `${baseUrl}`.replace(/\/$/, '') + `/api/rag/place`;
     const url = (args?.endpointUrl && args.endpointUrl.startsWith('http'))
       ? args.endpointUrl
-      : (args?.endpointUrl ? `${baseUrl}`.replace(/\/$/, '') + `${args.endpointUrl.startsWith('/') ? '' : '/'}${args.endpointUrl}` : defaultUrl);
+      : (args?.endpointUrl ? `${baseUrl}`.replace(/\/$/, '') + `${String(args.endpointUrl).startsWith('/') ? '' : '/'}${args.endpointUrl}` : defaultUrl);
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(args?.headers || {}) };
     if (args?.tenantId && !headers['x-tenant-id']) headers['x-tenant-id'] = args.tenantId;

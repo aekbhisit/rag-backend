@@ -21,13 +21,13 @@ export default function TourDetail({ tourIdOrSlug, embedded = false }: TourDetai
   const [tour, setTour] = useState<TourContext | null>(null);
 
   const fetchById = async (id: string) => {
-    const res = await fetch(`/api/contexts/${encodeURIComponent(id)}`);
+    const res = await fetch(`/services/contexts/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error(`context ${res.status}`);
     return await res.json();
   };
 
   const fetchBySlug = async (slug: string) => {
-    const res = await fetch(`/api/contexts?type=place&category=tours&page_size=100`);
+    const res = await fetch(`/services/contexts?type=place&category=tours&page_size=100`);
     if (!res.ok) throw new Error(`contexts ${res.status}`);
     const data = await res.json();
     const items: TourContext[] = Array.isArray(data?.items) ? data.items : [];

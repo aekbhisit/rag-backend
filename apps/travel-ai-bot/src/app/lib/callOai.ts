@@ -1,5 +1,6 @@
 import { zodResponseFormat } from "openai/helpers/zod";
 import { GuardrailOutputZod, GuardrailOutput } from "@/app/types";
+import { getApiUrl } from './apiHelper';
 
 
 export async function runGuardrailClassifier(message: string): Promise<GuardrailOutput> {
@@ -22,7 +23,7 @@ export async function runGuardrailClassifier(message: string): Promise<Guardrail
     },
   ];
 
-  const response = await fetch("/api/chat/completions", {
+  const response = await fetch(getApiUrl("/api/chat/completions"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

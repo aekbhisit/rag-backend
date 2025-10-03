@@ -1,3 +1,5 @@
+import { getApiUrl } from '@/app/lib/apiHelper';
+
 export interface RagContextsArgs {
   query?: string;
   topK?: number;
@@ -10,13 +12,14 @@ export interface RagContextsArgs {
 export const ragContextsHandler = async (args: RagContextsArgs) => {
   const k = typeof args?.topK === 'number' ? args.topK : 5;
   try {
+    // Use direct backend URL for chat handlers
     const baseUrl = (typeof process !== 'undefined'
-      ? ((process as any)?.env?.NEXT_PUBLIC_APP_URL || (process as any)?.env?.APP_URL)
-      : '') || 'http://localhost:3200';
+      ? ((process as any)?.env?.NEXT_PUBLIC_BACKEND_URL || (process as any)?.env?.BACKEND_URL)
+      : '') || 'http://localhost:3100';
     const defaultUrl = `${baseUrl}`.replace(/\/$/, '') + `/api/rag/contexts`;
     const url = (args?.endpointUrl && args.endpointUrl.startsWith('http'))
       ? args.endpointUrl
-      : (args?.endpointUrl ? `${baseUrl}`.replace(/\/$/, '') + `${args.endpointUrl.startsWith('/') ? '' : '/'}${args.endpointUrl}` : defaultUrl);
+      : (args?.endpointUrl ? `${baseUrl}`.replace(/\/$/, '') + `${String(args.endpointUrl).startsWith('/') ? '' : '/'}${args.endpointUrl}` : defaultUrl);
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(args?.headers || {}) };
     if (args?.tenantId && !headers['x-tenant-id']) headers['x-tenant-id'] = args.tenantId;

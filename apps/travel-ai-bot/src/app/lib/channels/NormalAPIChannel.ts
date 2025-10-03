@@ -2,7 +2,7 @@ import { BaseChannel } from './BaseChannel';
 import { UniversalMessage, ConversationContext, ChannelConfig } from '@/app/types';
 
 export class NormalAPIChannel extends BaseChannel {
-  private apiEndpoint: string = '/api/chat/completions';
+  private apiEndpoint: string = '/services/chat/completions';
   
   constructor(config: ChannelConfig) {
     super(config);

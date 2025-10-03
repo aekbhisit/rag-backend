@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { useConfiguration } from "@/app/lib/config";
 import { LanguageProvider, useLanguage } from "@/app/contexts/LanguageContext";
-import { SessionRegistryProvider } from "../contexts/SessionRegistryContext";
+import { SessionRegistryProvider } from "@/app/contexts/SessionRegistryContext";
 import { EventProvider } from "@/app/contexts/EventContext";
 import { TranscriptProvider } from "@/app/contexts/TranscriptContext";
-import AgentChatInterface from "./chat/AgentChatInterface";
+import AgentChatInterface from "../chat/AgentChatInterface";
 import { useAgentSelection } from "@/app/hooks/useAgentSelection";
 import { useDbAgentSets } from "@/app/hooks/useDbAgentSets";
 import { ActionProvider } from "@/botActionFramework/ActionContext";
@@ -146,8 +146,8 @@ function AgentIntegratedChatAppContent() {
       console.warn('[AgentIntegratedChatApp] Could not access localStorage:', e);
     }
     
-    // Generate new session ID
-    const newSessionId = `agent-session-${Date.now()}`;
+    // Generate new session ID as UUID
+    const newSessionId = crypto.randomUUID();
     console.log('[AgentIntegratedChatApp] 🆕 Generated new session ID:', newSessionId);
     
     // Cache it in localStorage for future use

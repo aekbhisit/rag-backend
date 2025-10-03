@@ -1,24 +1,22 @@
 export const extractContentSchema = {
   name: 'extractContent',
-  description: 'Extract specific content from UI elements',
+  description: 'Extract structured content from the current screen (lists/cards/details) so you can answer or decide next steps. Use when user refers to items like "first package".',
   parameters: {
     type: 'object',
     properties: {
-      selector: {
+      scope: {
         type: 'string',
-        description: 'CSS selector for the element to extract content from'
+        description: "Logical area, e.g., 'tours', 'places', 'taxi', 'help'"
       },
-      attribute: {
-        type: 'string',
-        description: 'Attribute to extract (text, href, value, etc.)',
-        default: 'text'
+      limit: {
+        type: 'number',
+        description: 'Max items to return (default 10)'
       },
-      multiple: {
+      detail: {
         type: 'boolean',
-        description: 'Whether to extract from multiple elements',
-        default: false
+        description: 'Include detailed fields where available'
       }
     },
-    required: ['selector']
+    required: ['scope']
   }
 };

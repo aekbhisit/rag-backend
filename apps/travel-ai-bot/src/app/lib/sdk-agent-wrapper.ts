@@ -114,97 +114,31 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
   if (!agentConfig.tools || !Array.isArray(agentConfig.tools)) {
     return new RealtimeAgent({
       name: agentConfig.name,
-      // Avoid per-agent voice to prevent voice updates during playback; use session default
+      voice: (agentConfig as any).voice || selectVoiceForAgent(agentConfig.name),
       instructions: agentConfig.systemPrompt || ''
     });
   }
 
-  // Normalize DB tools (text-mode parity): fill missing function fields for common UI tools
-  const NORMALIZE = (toolIn: any) => {
-    try {
-      const t = { ...(toolIn || {}) };
-      const fn = t.function || {};
-      const rawCandidates = [
-        t.tool_key, t.toolKey, t.key, t.name, fn?.name
-      ].filter(Boolean).map((v: any) => String(v));
-      const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
-      const candidates = rawCandidates.map(toSlug);
-      const key = candidates[0] || '';
-      const nameLike = candidates.find(Boolean) || '';
-      const out = { ...t } as any;
-      const ensure = (name: string, description: string, parameters: any) => {
-        out.function = out.function || {};
-        out.function.name = name;
-        out.function.description = out.function.description || description;
-        out.function.parameters = out.function.parameters || parameters;
-      };
-      if (key.includes('ui.navigate') || nameLike === 'navigate' || candidates.includes('uinavigate')) {
-        ensure('navigate', 'Navigate within the app by path or uri', {
-          type: 'object',
-          properties: { uri: { type: 'string', description: 'Path to navigate, e.g., /travel/taxi' } },
-          required: ['uri']
-        });
-      } else if (key.includes('ui.navigatetomain') || nameLike === 'navigatetomain' || candidates.includes('uinavigatetomain')) {
-        ensure('navigateToMain', 'Navigate to the main app page', { type: 'object', properties: {}, required: [] });
-      } else if (key.includes('ui.navigatetoprevious') || nameLike === 'navigatetoprevious' || candidates.includes('uinavigatetoprevious')) {
-        ensure('navigateToPrevious', 'Navigate to previous page', { type: 'object', properties: { steps: { type: 'number' } }, required: [] });
-      } else if (key.includes('ui.extractcontent') || nameLike === 'extractcontent' || candidates.includes('uiextractcontent')) {
-        ensure('extractContent', 'Extract visible content from current page scope', {
-          type: 'object',
-          properties: {
-            scope: { type: 'string', description: 'Logical scope/category (e.g., taxi)' },
-            limit: { type: 'number', description: 'Max items to include' },
-            detail: { type: 'boolean', description: 'Return full text instead of summary' }
-          },
-          required: []
-        });
-      } else if (key.includes('ui.selectitem') || nameLike === 'selectitem' || candidates.includes('uiselectitem')) {
-        ensure('selectItem', 'Select an item in the UI by id or text', {
-          type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: []
-        });
-      } else if (key.includes('ui.toast') || nameLike === 'toast' || candidates.includes('uitoast')) {
-        ensure('toast', 'Show a toast notification', {
-          type: 'object', properties: { message: { type: 'string' }, status: { type: 'string' } }, required: ['message']
-        });
-      } else if (nameLike.startsWith('transfer_to') || key.includes('core.transfer_to') || candidates.includes('transfer_to')) {
-        // Preserve DB-provided transfer_to_* function name
-        const transferName = (fn?.name || t.name || 'transfer_to_unknown');
-        ensure(transferName, 'Transfer the conversation to a specific agent', {
-          type: 'object',
-          properties: {
-            rationale_for_transfer: { type: 'string' },
-            conversation_context: { type: 'string' },
-            destination_agent: { type: 'string' }
-          },
-          required: []
-        });
-      }
-      return out;
-    } catch { return toolIn; }
-  };
-
-  const normalizedTools = (agentConfig.tools || []).map(NORMALIZE);
-
   // Debug: Log tools being processed (once per agent)
   if (!TOOLS_LOGGED_AGENTS.has(agentConfig.name)) {
+    const toLog = Array.isArray(agentConfig.tools) ? agentConfig.tools : [];
     console.log(`[SDK-Voice] 🔍 Processing tools for ${agentConfig.name}:`, {
-      totalTools: normalizedTools?.length || 0,
-      toolNames: normalizedTools?.map((t: any) => t.function?.name || t.name) || [],
-      rawTools: normalizedTools?.map((t: any) => ({
+      totalTools: toLog.length || 0,
+      toolNames: toLog.map((t: any) => t.function?.name || t.name) || [],
+      rawTools: toLog.map((t: any) => ({
         name: t.function?.name || t.name,
-        key: t.tool_key || t.toolKey || t.key || null,
         type: t.type,
         hasFunction: !!t.function,
-        hasName: !!t.name,
-        isTransferAgents: (t.function?.name || t.name) === 'transferAgents'
+        hasName: !!t.name
       })) || []
     });
     TOOLS_LOGGED_AGENTS.add(agentConfig.name);
   }
 
-  // Convert database tools to SDK tool format
-  const sdkTools = normalizedTools.map((dbTool: any) => {
+  // Convert database tools to SDK tool format (DB-defined)
+  const dbSdkTools = (agentConfig.tools as any[]).map((dbTool: any) => {
     const toolName = dbTool.function?.name || dbTool.name || 'unnamed';
+    // No longer support legacy transferAgents; if present in DB tools, treat as normal unknown tool
     const description = dbTool.function?.description || dbTool.description || '';
     const parameters = dbTool.function?.parameters || dbTool.parameters || {
       type: 'object',
@@ -240,10 +174,6 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
           // Execute using multiple resolution strategies (text-mode parity)
           let handler: any = (agentConfig as any)?.toolLogic?.[resolvedName];
 
-          if (!handler && resolvedName === 'transferAgents') {
-            handler = (ALL_HANDLERS as any)?.transferAgents;
-          }
-
           if (!handler) {
             handler = (ALL_HANDLERS as any)?.[resolvedName];
           }
@@ -251,7 +181,7 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
           if (typeof handler !== 'function') {
             try {
               const skillKey: string | undefined = (agentConfig as any)?.functionSkillKeys?.[resolvedName];
-              if (skillKey) {
+              if (skillKey && skillKey.startsWith('skill.')) {
                 const mod = await import('@/app/agents/core/functions/handlers/skill');
                 const map = (mod as any)?.SKILL_KEY_TO_HANDLER || {};
                 if (typeof map[skillKey] === 'function') {
@@ -266,11 +196,16 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
 
           if (typeof handler !== 'function') {
             try {
-              const modUI = await import('@/app/agents/core/functions/handlers/ui');
-              const UI_HANDLERS = (modUI as any)?.UI_HANDLERS || {};
-              if (typeof UI_HANDLERS[resolvedName] === 'function') {
-                handler = UI_HANDLERS[resolvedName];
-                console.log(`[SDK-Voice] 🔧 Resolved ${resolvedName} via UI_HANDLERS`);
+              const skillKey: string | undefined = (agentConfig as any)?.functionSkillKeys?.[resolvedName];
+              if (skillKey && skillKey.startsWith('ui.')) {
+                const modUI = await import('@/app/agents/core/functions/handlers/ui');
+                const UI_HANDLERS = (modUI as any)?.UI_HANDLERS || {};
+                const uiName = skillKey.split('.')[1];
+                const candidate = UI_HANDLERS[resolvedName] || UI_HANDLERS[uiName];
+                if (typeof candidate === 'function') {
+                  handler = candidate;
+                  console.log(`[SDK-Voice] 🔧 Resolved ${resolvedName} via UI skill key: ${skillKey}`);
+                }
               }
             } catch (e) {
               console.warn('[SDK-Voice] ⚠️ Failed loading UI handlers for', resolvedName, e);
@@ -295,24 +230,22 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
           if (typeof handler === 'function') {
             console.log(`[SDK-Voice] 🔧 Executing ${resolvedName} via resolved handler`);
             let handlerInput = input;
-            if (resolvedName === 'transferAgents') {
-              const targetAgent = input.destination_agent || input.agent_name;
-              handlerInput = { ...input, destination_agent: targetAgent };
-              console.log(`[SDK-Voice] 🔧 Mapped transferAgents parameters:`, { originalInput: input, mappedInput: handlerInput, targetAgent });
-            }
-            // Auto-inject location for placeKnowledgeSearch if missing (text-mode parity)
-            if (resolvedName === 'placeKnowledgeSearch') {
-              try {
+            // Generic geo injection: if tool schema includes lat/long and they are missing, inject client location
+            try {
+              const schema: any = parameters;
+              const props: any = schema && typeof schema === 'object' ? (schema as any).properties : undefined;
+              const expectsGeo = !!(props && (props.lat || props.long));
+              if (expectsGeo) {
                 const needsLat = typeof handlerInput?.lat !== 'number';
                 const needsLong = typeof handlerInput?.long !== 'number';
                 if (needsLat || needsLong) {
                   const loc = await getClientLocationOrDefault();
                   handlerInput = { lat: loc.lat, long: loc.long, ...handlerInput };
-                  console.log('[SDK-Voice] 📍 Injected client location into placeKnowledgeSearch:', { lat: handlerInput.lat, long: handlerInput.long });
+                  console.log('[SDK-Voice] 📍 Injected client location for tool:', { tool: resolvedName, lat: handlerInput.lat, long: handlerInput.long });
                 }
-              } catch (e) {
-                console.warn('[SDK-Voice] ⚠️ Failed to inject location for placeKnowledgeSearch', e);
               }
+            } catch (e) {
+              console.warn('[SDK-Voice] ⚠️ Geo injection check failed', e);
             }
             const result = await handler(handlerInput, [] as any);
             return result;
@@ -330,7 +263,31 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
         }
       }
     });
-  });
+  }).filter(Boolean);
+
+  // Auto-generate transfer_to_{agent} tools for voice handoff based on downstreamAgents
+  const downstream: Array<{ name: string; publicDescription?: string }> = (agentConfig as any)?.downstreamAgents || [];
+  const autoHandoffTools = downstream.map((a) => tool({
+    name: `transfer_to_${a.name}`,
+    description: `Handoff to agent ${a.name}${a.publicDescription ? ` – ${a.publicDescription}` : ''}`,
+    parameters: {
+      type: 'object',
+      properties: {
+        rationale_for_transfer: { type: 'string' },
+        conversation_context: { type: 'string' },
+      },
+      required: [],
+      additionalProperties: true
+    } as any,
+    execute: async (input: any) => {
+      // Server/transport handles the actual handoff; local no-op with logging
+      console.log(`[SDK-Voice] 🔁 Requested handoff via transfer_to_${a.name}`, input);
+      return { ok: true } as any;
+    }
+  }));
+
+  // Merge tools: DB-defined + core transferAgents (if needed) + dynamic transfer_to_* handoffs
+  const sdkTools = [...dbSdkTools, ...autoHandoffTools];
 
   // Log the agent's system prompt for debugging (once per agent)
   const instructions = agentConfig.instructions || agentConfig.systemPrompt || '';
@@ -347,7 +304,7 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
 
   return new RealtimeAgent({
     name: agentConfig.name,
-    // Avoid per-agent voice to prevent mid-audio voice updates; rely on session default
+    voice: (agentConfig as any).voice || selectVoiceForAgent(agentConfig.name),
     instructions: agentConfig.instructions || agentConfig.systemPrompt || '',
     tools: sdkTools
   });

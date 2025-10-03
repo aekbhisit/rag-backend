@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import ChatInterface from "@/app/components/chat/ChatInterface";
 import { EventProvider } from "@/app/contexts/EventContext";
+import { getApiUrl } from '@/app/lib/apiHelper';
 
 export default function HelpPage(props: { embedded?: boolean }) {
   const embedded = !!props?.embedded;
@@ -27,14 +28,14 @@ export default function HelpPage(props: { embedded?: boolean }) {
         setLoading(true);
         setError("");
         // Ensure 'help' category exists
-        const catsRes = await fetch('/api/categories', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+        const catsRes = await fetch(getApiUrl('/api/categories'), { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
         const cats = await catsRes.json();
         const all = Array.isArray(cats?.items) ? cats.items : [];
         let help = all.find((c: any) => (c.slug || '').toLowerCase() === 'help');
         if (!help) {
-          const cRes = await fetch('/api/categories', {
+          const cRes = await fetch(getApiUrl('/api/categories'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any,
+            headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any,
             body: JSON.stringify({ name: 'Help', slug: 'help' })
           });
           if (cRes.ok) help = await cRes.json();
@@ -42,11 +43,11 @@ export default function HelpPage(props: { embedded?: boolean }) {
         if (!help?.id) throw new Error('Missing help category');
 
         // Load help articles
-        const res = await fetch('/api/contexts?type=text&category=help&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+        const res = await fetch('/services/contexts?type=text&category=help&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
         const data = await res.json();
         let list: any[] = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
 
-        const tenantId = (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '';
+        const tenantId = (process as any)?.env?.TENANT_ID || '';
         const seedKey = `seed:help:${tenantId || 'default'}`;
         const alreadySeeded = typeof window !== 'undefined' ? window.localStorage.getItem(seedKey) === '1' : false;
         const slugs = new Set(list.map((x: any) => String(x?.attributes?.slug || '').toLowerCase()).filter(Boolean));
@@ -88,16 +89,16 @@ export default function HelpPage(props: { embedded?: boolean }) {
               categories: [help.id],
               attributes: { slug: d.slug, tags: ['help'] }
             };
-            await fetch('/api/admin/contexts/import', {
+            await fetch('/services/contexts/import', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any,
+              headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any,
               body: JSON.stringify(payload)
             });
           }
           try { if (typeof window !== 'undefined') window.localStorage.setItem(seedKey, '1'); } catch {}
           
           // If we created new items, we need to refetch to get the updated list
-          const res2 = await fetch('/api/contexts?type=text&category=help&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+          const res2 = await fetch('/services/contexts?type=text&category=help&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
           const d2 = await res2.json();
           list = Array.isArray(d2?.items) ? d2.items : (Array.isArray(d2) ? d2 : []);
         }
@@ -224,7 +225,7 @@ export default function HelpPage(props: { embedded?: boolean }) {
           <div className="h-full flex flex-col">
             <div className="flex-1 min-h-0">
               <EventProvider>
-                <ChatInterface sessionId={`sess_${Date.now()}`} activeChannel={"normal"} onChannelSwitch={()=>{}} isProcessing={false} />
+                <ChatInterface sessionId={`crypto.randomUUID()`} activeChannel={"normal"} onChannelSwitch={()=>{}} isProcessing={false} />
               </EventProvider>
             </div>
           </div>

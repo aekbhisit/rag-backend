@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { AgentConfig } from '@/app/types';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+import { getApiUrl } from '@/app/lib/apiHelper';
 
 export function useDbAgentSets() {
   const [agentSets, setAgentSets] = useState<Record<string, AgentConfig[]>>({});
@@ -14,8 +13,8 @@ export function useDbAgentSets() {
     async function load() {
       try {
         setLoading(true); setError('');
-        // Fetch agent sets server-side through Next route to avoid exposing prompts publicly
-        const res = await fetch('/api/agent-sets', { cache: 'no-store' });
+        // Fetch agent sets from backend public API
+        const res = await fetch(getApiUrl('/api/agent-sets'), { cache: 'no-store' });
         if (!res.ok) throw new Error(`load agent-sets: ${res.status}`);
         const data = await res.json();
         const set = (data?.agentSets || {}) as Record<string, AgentConfig[]>;

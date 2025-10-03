@@ -17,6 +17,7 @@ import { AgentConfig } from '@/app/types';
 import { UniversalMessage } from '@/app/types';
 import { getOrCreateDbSession } from '@/app/lib/sharedSessionManager';
 import { logMessage as logToDb } from '@/app/lib/loggerClient';
+import { getApiUrl } from '@/app/lib/apiHelper';
       // Register handlers
 interface UseSDKRealtimeSessionProps {
   // Multi-agent configuration (OpenAI approach)
@@ -284,6 +285,23 @@ export function useSDKRealtimeSession({
     });
   }, [isPTTActive, selectedAgentName, transcriptionLanguage, sendEventSafe, safeCreateResponse, isConnected]);
 
+  // ===== Cancel any ongoing assistant output (audio + response) =====
+  const cancelAssistantOutput = useCallback(() => {
+    try {
+      // Stop current audio playback immediately on client
+      if (audioElementRef.current) {
+        try { audioElementRef.current.pause(); } catch {}
+        try { (audioElementRef.current as any).srcObject = (audioElementRef.current as any).srcObject; } catch {}
+      }
+      // Tell server to cancel the in-flight response and clear audio buffer
+      sendEventSafe({ type: 'response.cancel' });
+      sendEventSafe({ type: 'output_audio_buffer.clear' });
+      console.log('[SDK-Realtime] 🛑 Cancelled assistant output before new user input');
+    } catch (e) {
+      console.warn('[SDK-Realtime] ⚠️ cancelAssistantOutput failed:', e);
+    }
+  }, [sendEventSafe]);
+
   // ===== Mic control helper =====
   const setMicEnabled = useCallback((enabled: boolean) => {
     try {
@@ -499,18 +517,8 @@ export function useSDKRealtimeSession({
     }
 
     try {
-      // If assistant is speaking, stop playback and clear buffers (guarded) before sending new text
-      const isAudioPlaying = (() => {
-        try { return !!(audioElementRef.current && !audioElementRef.current.paused); } catch { return false; }
-      })();
-      const hasActiveResponse = !!(activeResponseIdRef.current);
-      const shouldInterrupt = isResponseActiveRef.current || hasActiveResponse || isAudioPlaying || !!currentResponseRef.current;
-      if (shouldInterrupt) {
-        try { (sessionRef.current as any).interrupt?.(); } catch { }
-        try { if (isResponseActiveRef.current || hasActiveResponse) { sendEventSafe({ type: 'response.cancel' }); } } catch { }
-        try { sendEventSafe({ type: 'output_audio_buffer.clear' }); } catch { }
-        try { sendEventSafe({ type: 'input_audio_buffer.clear' }); } catch { }
-      }
+      // Cancel any ongoing assistant speech before submitting a new user message
+      cancelAssistantOutput();
 
       // Enable agent runs when user sends a message
       allowAgentRunsRef.current = true;
@@ -563,6 +571,8 @@ export function useSDKRealtimeSession({
     pttCreateAttemptedRef.current = false;
 
     try {
+      // Cancel any ongoing assistant speech before opening mic/PTT
+      cancelAssistantOutput();
       (sessionRef.current as any).interrupt?.();
     } catch (err) {
       console.error('[SDK] Failed to interrupt session:', err);
@@ -672,11 +682,11 @@ export function useSDKRealtimeSession({
       try {
         if (dbSessionIdRef.current) {
           console.log('[SDK] Ending database session:', dbSessionIdRef.current);
-          await fetch('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(dbSessionIdRef.current) + '/end', {
+          await fetch(getApiUrl('/api/admin/sessions/' + encodeURIComponent(dbSessionIdRef.current) + '/end'), {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
-              'X-Tenant-ID': 'acc44cdb-8da5-4226-9569-1233a39f564f'
+              'X-Tenant-ID': process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000'
             }
           });
           console.log('[SDK] Session ended in database:', dbSessionIdRef.current);
@@ -692,9 +702,16 @@ export function useSDKRealtimeSession({
     }
   }, [sessionId]);
 
-  // Update session when PTT state changes
+  // Update session when PTT state changes, but avoid updating while assistant audio/response is active
   useEffect(() => {
     if (isConnected) {
+      try {
+        const isAssistantActive = (isResponseActiveRef && isResponseActiveRef.current) || false;
+        if (isAssistantActive) {
+          console.log('[SDK-Realtime] ⏭️ Skipping updateSession due to active assistant output (avoid cannot_update_voice)');
+          return;
+        }
+      } catch {}
       updateSession();
     }
   }, [isPTTActive, isConnected, updateSession]);
@@ -718,25 +735,25 @@ export function useSDKRealtimeSession({
 
   // Auto-connect when dependencies are ready
   useEffect(() => {
-    const snapshot = {
-      enabled,
-      isConnected,
-      isConnecting,
-      hasTools: !!(currentAgentConfig?.tools && currentAgentConfig.tools.length > 0),
-      agentName: currentAgentConfig?.name || ''
-    };
-    const last = (window as any).__SDK_RT_AUTO_CONN__ || { key: '' };
-    const key = JSON.stringify(snapshot);
-    if (last.key !== key) {
-      console.log('[SDK-Realtime] Auto-connect check:', snapshot);
-      (window as any).__SDK_RT_AUTO_CONN__ = { key };
-    }
+    // console.log('[SDK-Realtime] Auto-connect check:', {
+    //   enabled,
+    //   isConnected,
+    //   isConnecting,
+    //   hasTools: currentAgentConfig?.tools?.length > 0,
+    //   agentName: currentAgentConfig?.name
+    // });
     
-    if (snapshot.enabled && !snapshot.isConnected && !snapshot.isConnecting && snapshot.hasTools) {
-      console.log('[SDK-Realtime] 🔄 Auto-connecting with agent:', snapshot.agentName);
+    // Allow connection even if the current agent has zero tools
+    if (
+      enabled &&
+      !isConnected &&
+      !isConnecting &&
+      currentAgentConfig
+    ) {
+      console.log('[SDK-Realtime] 🔄 Auto-connecting with agent:', currentAgentConfig.name);
       connect();
     }
-  }, [enabled, isConnected, isConnecting, currentAgentConfig?.tools?.length, currentAgentConfig?.name, connect]);
+  }, [enabled, isConnected, isConnecting, currentAgentConfig, connect]);
 
   // Cleanup on unmount
   useEffect(() => {

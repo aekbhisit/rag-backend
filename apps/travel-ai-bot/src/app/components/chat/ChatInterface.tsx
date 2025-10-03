@@ -15,9 +15,10 @@ import { useTenantAiConfig } from '@/app/hooks/useTenantAiConfig';
 import { TextStreamTransport } from '@/app/lib/textstream/transport';
 import { buildTextStreamUrl } from '@/app/lib/textstream/sessionAuth';
 import { TextResponseMerger } from '@/app/lib/textstream/responseQueue';
-// Lazy-resolve to avoid SSR import issues; we will require() inside handlers
 import { logMessage } from '@/app/lib/loggerClient';
 import { callAgentCompletions } from '@/app/lib/callCompletions';
+import { useContentExtraction, ExtractedContent } from '@/app/hooks/useContentExtraction';
+import { getApiUrl } from '@/app/lib/apiHelper';
 
 // Custom microphone icon component
 const MicrophoneIcon = ({ className }: { className?: string }) => (
@@ -28,7 +29,7 @@ const MicrophoneIcon = ({ className }: { className?: string }) => (
 
 interface ChatInterfaceProps {
   sessionId: string;
-  activeChannel: 'normal' | 'realtime' | 'human';
+  activeChannel: 'normal' | 'realtime' | 'human' | 'line';
   onChannelSwitch: (channel: 'normal' | 'realtime' | 'human') => void;
   isProcessing: boolean;
   agentSetKey?: string;
@@ -52,9 +53,12 @@ export default function ChatInterface({
   const dynamicAgentSets = Object.keys(dbAgentSets).length > 0 ? dbAgentSets : allAgentSets;
   const { messages, addMessage, clearMessages, updateMessage } = useMessageHistory(sessionId);
   const { config: tenantAiConfig } = useTenantAiConfig();
+  const { extractContent } = useContentExtraction();
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [localChannel, setLocalChannel] = useState<'normal' | 'realtime' | 'human'>(activeChannel);
+  const [localChannel, setLocalChannel] = useState<'normal' | 'realtime' | 'human'>(
+    activeChannel === 'line' ? 'normal' : activeChannel
+  );
   const HUMAN_MODE_ENABLED = typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_HUMAN_MODE_ENABLED === 'true');
   const channelOptions = (HUMAN_MODE_ENABLED ? (['normal', 'realtime', 'human'] as const) : (['normal', 'realtime'] as const));
 
@@ -62,6 +66,10 @@ export default function ChatInterface({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseTransportRef = useRef<TextStreamTransport | null>(null);
+  const currentStreamingMessageIdRef = useRef<string | null>(null);
+  const currentPlaceholderRef = useRef<UniversalMessage | null>(null);
+  const suppressSseRef = useRef<boolean>(false);
+  const lastUserTextRef = useRef<string>('');
   const sseServerLoggedRef = useRef<boolean>(false);
   const loggedAssistantKeysRef = useRef<Set<string>>(new Set());
   const shouldLogOnce = useCallback((store: React.MutableRefObject<Set<string>>, key: string) => {
@@ -80,8 +88,33 @@ export default function ChatInterface({
   const [activeAgentNameState, setActiveAgentNameState] = useState<string | null>(providedAgentName || null);
 
   // Get user's current location
-  // Location capture removed for text SSE (DB-driven tools should request it explicitly via tool)
+  const [userLocation, setUserLocation] = useState<{ lat: number; long: number } | null>(null);
   const [conversationId, setConversationId] = useState<string>('');
+
+  // Request user location
+  const requestLocation = useCallback(async (): Promise<{ lat: number; long: number } | null> => {
+    if (userLocation) return userLocation;
+    
+    try {
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        const location = await new Promise<{ lat: number; long: number }>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, long: pos.coords.longitude }),
+            (error) => {
+              console.warn('[ChatInterface] Location access denied or failed:', error);
+              reject(error);
+            },
+            { timeout: 10000, enableHighAccuracy: false }
+          );
+        });
+        setUserLocation(location);
+        return location;
+      }
+    } catch (error) {
+      console.warn('[ChatInterface] Location request failed:', error);
+    }
+    return null;
+  }, [userLocation]);
 
   // Smooth scroll to bottom
   const scrollToBottom = () => {
@@ -104,7 +137,11 @@ export default function ChatInterface({
 
   // Keep local channel in sync with parent prop changes
   useEffect(() => {
-    setLocalChannel(activeChannel);
+    if (activeChannel === 'line') {
+      setLocalChannel('normal'); // Map 'line' to 'normal'
+    } else {
+      setLocalChannel(activeChannel);
+    }
   }, [activeChannel]);
 
   // Do not auto-enable mic on channel switch; user must trigger mic explicitly
@@ -140,8 +177,8 @@ export default function ChatInterface({
         // Use sendBeacon for reliable delivery even when page is closing
         // Note: sendBeacon doesn't support custom headers, so we'll use a different approach
         const formData = new FormData();
-        formData.append('tenantId', 'acc44cdb-8da5-4226-9569-1233a39f564f');
-        navigator.sendBeacon('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(conversationId) + '/end', formData);
+        formData.append('tenantId', process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000');
+        navigator.sendBeacon(getApiUrl('/api/admin/sessions/' + encodeURIComponent(conversationId) + '/end'), formData);
       }
     };
 
@@ -204,6 +241,116 @@ export default function ChatInterface({
     return str.length > max ? `${str.slice(0, max)}…` : str;
   };
 
+  // Client-side content extraction function
+  const extractContentFromDOM = async (scope: string, limit: number, detail: boolean): Promise<ExtractedContent[]> => {
+    console.log(`[ExtractContentFromDOM] Extracting content for scope: ${scope}, limit: ${limit}, detail: ${detail}`);
+    return extractContent(scope, limit, detail);
+  };
+
+  // Handle UI tool execution from SSE
+  const handleUIToolExecution = async (toolName: string, args: any) => {
+    console.log(`[UI Tool Execution] Executing ${toolName} with args:`, args);
+    
+    // Get agent configuration for this tool execution
+    const setKey = activeAgentSetKeyState || defaultAgentSetKey;
+    const allInSet = dynamicAgentSets[setKey] || [];
+    const targetName = activeAgentNameState || (allInSet[0]?.name || 'welcomeAgent');
+    const agentConfig = allInSet.find((a: { name: string }) => a.name === targetName) || allInSet[0];
+    
+    try {
+      if (toolName === 'navigate') {
+        const { uri } = args;
+        if (uri && typeof uri === 'string') {
+          console.log(`[UI Tool Execution] Navigating to: ${uri}`);
+          
+          // Update URL with content parameter
+          const url = new URL(window.location.href);
+          const params = new URLSearchParams(url.search);
+          params.delete('content');
+          const query = params.toString();
+          const next = `${url.origin}${url.pathname}${query ? `?${query}&` : '?'}content=${uri}${url.hash || ''}`;
+          
+          console.log('[UI Tool Execution] Updating URL to:', next);
+          window.history.pushState({}, '', next);
+          
+          // Dispatch a custom event to notify the travel page component
+          window.dispatchEvent(new CustomEvent('navigate', { detail: { uri } }));
+          
+          console.log('[UI Tool Execution] Navigation completed successfully');
+        } else {
+          console.error('[UI Tool Execution] Invalid URI for navigation:', uri);
+        }
+      } else if (toolName === 'extractContent') {
+        const { scope, limit = 10, detail = false } = args;
+        console.log(`[UI Tool Execution] Extracting content for scope: ${scope}`);
+        // Prevent current SSE reply from finalizing; we'll replace with follow-up
+        suppressSseRef.current = true;
+        
+        const extracted = await extractContentFromDOM(scope, limit, detail);
+        console.log('[UI Tool Execution] Content extracted:', extracted);
+        
+        // Send the extracted content back to the model for processing
+        // This allows the model to provide a proper response based on the extracted content
+        try {
+          // Get the current page from URL to provide context
+          const urlParams = new URLSearchParams(window.location.search);
+          const currentPage = urlParams.get('content') || window.location.pathname;
+          
+          // Format the extracted content for the model
+          const extractedContentText = extracted.map(item => 
+            `${item.title ? `${item.title}: ` : ''}${item.content}`
+          ).join('\n');
+          
+          // Send the extracted content to backend silently (no chat bubble)
+          await fetch('/services/chat/agent-completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              agentName: agentConfig?.name || 'welcomeAgent',
+              agentKey: agentConfig?.key || 'welcomeAgent',
+              agentSetKey: setKey,
+              sessionId: conversationId || sessionId,
+              channel: localChannel,
+              // Build neutral follow-up using the user's last utterance + page data
+              userText: `${lastUserTextRef.current || ''}\n\ndata extracted from ${currentPage}:\n${extractedContentText}`.trim()
+            })
+          })
+          .then(async (res) => {
+            if (!res.ok) return;
+            // Suppress SSE stream and display follow-up response as final
+            suppressSseRef.current = true;
+            const data = await res.json();
+            const text = data?.choices?.[0]?.message?.content || '';
+            if (text && currentPlaceholderRef.current) {
+              const finalized: UniversalMessage = {
+                ...currentPlaceholderRef.current,
+                content: text,
+                metadata: { ...currentPlaceholderRef.current.metadata, isStreaming: false }
+              } as UniversalMessage;
+              updateMessage(finalized);
+              currentPlaceholderRef.current = null;
+              setIsLoading(false);
+            }
+          })
+          .catch(() => {});
+          
+        } catch (error) {
+          console.error('[UI Tool Execution] Error processing extracted content:', error);
+        }
+      } else if (toolName === 'selectItem') {
+        const { itemType, index } = args;
+        console.log(`[UI Tool Execution] Selecting item: ${itemType} at index ${index}`);
+        
+        // Implement item selection logic here
+        // This could involve highlighting items, opening modals, etc.
+      } else {
+        console.warn(`[UI Tool Execution] Unknown UI tool: ${toolName}`);
+      }
+    } catch (error) {
+      console.error(`[UI Tool Execution] Error executing ${toolName}:`, error);
+    }
+  };
+
 
 
   const sendMessage = async (content: string) => {
@@ -212,6 +359,8 @@ export default function ChatInterface({
     // Clear input and set loading immediately to prevent duplicate calls
     setInputValue('');
     setIsLoading(true);
+    // Reset SSE suppression for a fresh turn
+    suppressSseRef.current = false;
     
     const userMessage: UniversalMessage = {
       id: generateMessageId(),
@@ -222,6 +371,7 @@ export default function ChatInterface({
       metadata: { source: 'user', channel: activeChannel, language: 'en' }
     };
     addMessage(userMessage);
+    lastUserTextRef.current = content.trim();
     
     // Log user message to backend
     await logMessage({ sessionId: conversationId, role: 'user', type: 'text', content: content.trim(), channel: activeChannel, meta: { language: 'en' } });
@@ -259,7 +409,14 @@ export default function ChatInterface({
         const agentConfig = allInSet.find((a: { name: string }) => a.name === targetName) || allInSet[0];
         console.log('[SSE] ▶ start', { setKey, agentName: agentConfig?.name, agentKey: agentConfig?.key });
 
-        // Create AI streaming placeholder
+        // Request location if not already available (for place-related queries)
+        let location = null;
+        if (content.toLowerCase().includes('ใกล้') || content.toLowerCase().includes('near') || content.toLowerCase().includes('cafe') || content.toLowerCase().includes('restaurant') || content.toLowerCase().includes('place')) {
+          location = await requestLocation();
+          console.log('[ChatInterface] 📍 Location requested for place query:', location);
+        }
+
+        // Create AI streaming placeholder after location request
         const phId = `ai-stream-${generateMessageId()}`;
         const placeholder: UniversalMessage = {
           id: phId,
@@ -276,27 +433,26 @@ export default function ChatInterface({
           } as any
         };
         addMessage(placeholder);
+        currentStreamingMessageIdRef.current = phId;
+        currentPlaceholderRef.current = placeholder;
 
         const merger = new TextResponseMerger();
-        // Detect language from user input (Thai chars → 'th'), else use baseLanguage
-        const langForMessage = /[\u0E00-\u0E7F]/.test(content) ? 'th' : baseLanguage;
-        const currentPath = ((): string | null => {
-          try {
-            if (typeof window === 'undefined') return null;
-            const url = new URL(window.location.href);
-            const content = url.searchParams.get('content');
-            if (content) return content;
-            return url.pathname;
-          } catch { return null; }
-        })();
+        
+        // Get the current page from URL params or pathname
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentPage = urlParams.get('content') || window.location.pathname;
+        console.log('[ChatInterface] Current page detected:', currentPage);
+        
         const url = buildTextStreamUrl({
           sessionId: conversationId || sessionId,
           agentSetKey: setKey,
           agentName: agentConfig?.name,
           agentKey: agentConfig?.key,
-          language: langForMessage,
+          language: baseLanguage,
           text: content.trim(),
-          currentPath
+          lat: location?.lat,
+          long: location?.long,
+          currentPage: currentPage
         });
 
         const transport = new TextStreamTransport({
@@ -319,111 +475,30 @@ export default function ChatInterface({
             // already created placeholder
           },
           onDelta: (delta) => {
-            // console.debug('[SSE] event: delta', preview(delta));
+            if (suppressSseRef.current) return;
+            console.debug('[SSE] event: delta', preview(delta));
             const merged = merger.append(delta);
             const existing = {
-              ...placeholder,
+              ...(currentPlaceholderRef.current || placeholder),
               content: merged,
-              metadata: { ...placeholder.metadata, isStreaming: true }
+              metadata: { ...((currentPlaceholderRef.current || placeholder).metadata), isStreaming: true }
             } as UniversalMessage;
             updateMessage(existing);
-          },
-          onBotAction: async (data: any) => {
-            try {
-              console.log('[SSE] event: bot_action', data);
-              if (data?.name === 'navigate' && typeof data?.uri === 'string') {
-                const args = { pageName: 'travel', path: data.uri };
-                console.log('[SSE] bot_action navigate args', args);
-                const mod = ((): any => { try { return require('@/botActionFramework'); } catch { return null; } })();
-                const fn = mod?.handleFunctionCall;
-                const result = typeof fn === 'function' ? await fn({ name: 'navigatePage', arguments: JSON.stringify(args) } as any) : null;
-                console.log('[SSE] bot_action navigate result', result);
-              } else if (data?.name === 'extractContent') {
-                // Client-side DOM extractor scoped by .ai-extract-scope
-                const scopeRoot = document.querySelector('.ai-extract-scope') || document.body;
-                console.log('[SSE] extractContent scope root', scopeRoot === document.body ? 'document.body' : '.ai-extract-scope');
-                const blocks: Array<{ type: string; text?: string; items?: string[] }> = [];
-                try {
-                  const walker = document.createTreeWalker(scopeRoot, NodeFilter.SHOW_ELEMENT);
-                  const items: string[] = [];
-                  const texts: string[] = [];
-                  while (walker.nextNode()) {
-                    const el = walker.currentNode as HTMLElement;
-                    const tag = el.tagName.toLowerCase();
-                    if (['script','style','noscript'].includes(tag)) continue;
-                    if (['h1','h2','h3','h4','h5','h6'].includes(tag)) {
-                      const t = el.textContent?.trim(); if (t) blocks.push({ type: 'heading', text: t });
-                    } else if (tag === 'li') {
-                      const t = el.textContent?.trim(); if (t) items.push(t);
-                    } else if (tag === 'table') {
-                      try {
-                        const rows: string[] = [];
-                        el.querySelectorAll('tr').forEach(tr => {
-                          const cells = Array.from(tr.querySelectorAll('th,td')).map(td => (td.textContent||'').trim()).filter(Boolean);
-                          if (cells.length) rows.push(cells.join(' | '));
-                        });
-                        if (rows.length) blocks.push({ type: 'table', items: rows });
-                      } catch {}
-                    } else if (tag === 'dl') {
-                      try {
-                        const pairs: string[] = [];
-                        const dts = Array.from(el.querySelectorAll('dt'));
-                        const dds = Array.from(el.querySelectorAll('dd'));
-                        const len = Math.max(dts.length, dds.length);
-                        for (let i=0;i<len;i++) {
-                          const k = (dts[i]?.textContent||'').trim();
-                          const v = (dds[i]?.textContent||'').trim();
-                          if (k || v) pairs.push(`${k}: ${v}`.trim());
-                        }
-                        if (pairs.length) blocks.push({ type: 'definition_list', items: pairs });
-                      } catch {}
-                    } else if (['p','div','section','article'].includes(tag)) {
-                      const t = el.textContent?.trim(); if (t && t.length > 0 && t.length < 2000) texts.push(t);
-                    }
-                  }
-                  if (items.length) blocks.push({ type: 'list', items });
-                  texts.slice(0, 20).forEach(t => blocks.push({ type: 'text', text: t }));
-                  console.log('[SSE] extractContent collected', { headings: blocks.filter(b => b.type==='heading').length, lists: blocks.filter(b => b.type==='list').length, texts: blocks.filter(b => b.type==='text').length });
-                } catch (e) {
-                  console.warn('[SSE] extractContent DOM walk failed', e);
-                }
-                const result = { success: true, scope: data?.scope || null, blocks };
-                console.log('[SSE] bot_action extractContent result (client)', result);
-                try {
-                  console.log('[SSE] posting tool-result', { key: data?.toolCallId, blocksCount: blocks.length });
-                  const r = await fetch('/api/ui/tool-result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: data?.toolCallId, result }) });
-                  console.log('[SSE] post tool-result status', r.status);
-                } catch (e) { console.warn('[SSE] post tool-result failed', e); }
-              } else if (data?.name === 'selectItem') {
-                const mod = ((): any => { try { return require('@/botActionFramework'); } catch { return null; } })();
-                const fn = mod?.handleFunctionCall;
-                const result = typeof fn === 'function' ? await fn({ name: 'selectItem', arguments: JSON.stringify(data || {}) } as any) : null;
-                console.log('[SSE] bot_action selectItem result', result);
-              }
-            } catch (err) {
-              console.warn('[SSE] bot_action handler failed', err);
-            }
+            currentPlaceholderRef.current = existing;
           },
           onResponseDone: async (finalText, agentName) => {
-            console.log('[SSE] event: response_done', { agentName, text: preview(finalText) });
-            const trimmed = (finalText || '').trim();
-            if (!trimmed) {
-              // Remove placeholder instead of rendering an empty assistant bubble
-              try {
-                updateMessage({
-                  ...placeholder,
-                  metadata: { ...placeholder.metadata, isStreaming: false, deleted: true, agentName: agentName || (activeAgentNameState || 'welcomeAgent') }
-                } as UniversalMessage);
-              } catch {}
+            if (suppressSseRef.current) {
               setIsLoading(false);
               return;
             }
+            console.log('[SSE] event: response_done', { agentName, text: preview(finalText) });
             const existing = {
-              ...placeholder,
-              content: trimmed,
-              metadata: { ...placeholder.metadata, isStreaming: false, agentName: agentName || (activeAgentNameState || 'welcomeAgent') }
+              ...(currentPlaceholderRef.current || placeholder),
+              content: finalText,
+              metadata: { ...((currentPlaceholderRef.current || placeholder).metadata), isStreaming: false, agentName: agentName || (activeAgentNameState || 'welcomeAgent') }
             } as UniversalMessage;
             updateMessage(existing);
+            currentPlaceholderRef.current = null;
             setIsLoading(false);
             // Log assistant response to backend unless server already logged via agent-completions
             if (!sseServerLoggedRef.current) {
@@ -450,6 +525,10 @@ export default function ChatInterface({
               } else if (info?.type === 'agent_completions_start' || info?.type === 'agent_completions_result' || info?.type === 'agent_completions_error') {
                 console.log('[SSE][debug] agent_completions', info);
                 if (info?.type === 'agent_completions_result') { sseServerLoggedRef.current = true; }
+              } else if (info?.type === 'ui_tool_execute') {
+                console.log('[SSE][debug] ui_tool_execute', info);
+                // Execute UI tool on client side
+                handleUIToolExecution(info.toolName, info.args);
               } else {
                 console.log('[SSE][debug]', info);
               }
@@ -748,7 +827,37 @@ export default function ChatInterface({
                 }
               }
               if (typeof impl === 'function') {
-                const result = await impl(fnArgs, [] as any);
+                let result;
+                
+                // Special handling for extractContent - needs client-side DOM access
+                if (fnName === 'extractContent') {
+                  console.log('[TOOL] extractContent - triggering client-side extraction');
+                  result = {
+                    success: true,
+                    scope: fnArgs.scope,
+                    limit: fnArgs.limit || 10,
+                    detail: fnArgs.detail || false,
+                    action: 'extract_from_dom',
+                    message: 'Content extraction will be handled by the frontend',
+                    content: [] as ExtractedContent[],
+                    error: undefined as string | undefined
+                  };
+                  
+                  // Trigger client-side extraction
+                  try {
+                    const extractedContent = await extractContentFromDOM(fnArgs.scope, fnArgs.limit || 10, fnArgs.detail || false);
+                    result.content = extractedContent;
+                    result.success = true;
+                    console.log('[TOOL] extractContent result', { extracted: extractedContent.length, content: extractedContent });
+                  } catch (error) {
+                    console.error('[TOOL] extractContent error:', error);
+                    result.success = false;
+                    result.error = String(error);
+                  }
+                } else {
+                  result = await impl(fnArgs, [] as any);
+                }
+                
                 console.log('[TOOL] result', preview(result));
                 
                 outputs.push({ role: 'tool', content: JSON.stringify(result ?? {}), tool_call_id: tc.id });
@@ -1111,10 +1220,9 @@ export default function ChatInterface({
         onChannelSwitch={handleChannelSwitch}
         onVoiceResponse={handleVoiceResponse}
         baseLanguage={baseLanguage}
-        // Voice mode now loads agents from database internally
+        selectedAgentConfigSet={selectedAgentConfigSet}
         // Optional override props for backward compatibility
         selectedAgentName={selectedAgentName}
-        selectedAgentConfigSet={selectedAgentConfigSet}
         onAgentTransfer={handleAgentTransfer}
       />
     );
@@ -1155,11 +1263,11 @@ export default function ChatInterface({
                   console.log('[ChatInterface] Trash button clicked, conversationId:', conversationId);
                   if (conversationId) {
                     console.log('[ChatInterface] Calling session end API for:', conversationId);
-                    const response = await fetch('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(conversationId) + '/end', {
+                    const response = await fetch(getApiUrl('/api/admin/sessions/' + encodeURIComponent(conversationId) + '/end'), {
                       method: 'POST',
                       headers: { 
                         'Content-Type': 'application/json',
-                        'X-Tenant-ID': 'acc44cdb-8da5-4226-9569-1233a39f564f'
+                        'X-Tenant-ID': process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000'
                       }
                     });
                     const result = await response.json();

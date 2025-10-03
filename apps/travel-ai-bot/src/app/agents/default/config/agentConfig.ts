@@ -28,7 +28,7 @@ const welcomeAgent: AgentConfig = {
       * "สนใจซื้อทัวร์", "อยากจองทัวร์", "จองทัวร์", "buy a tour", "book a tour" → navigate({ uri: "/travel/tours" })
       * "หาแท็กซี่", "call taxi", "airport transfer", "ขอดูรายละเอียดแท็กซี่หน่อย" → navigate({ uri: "/travel/taxi" })
       * "nearby places", "สถานที่ใกล้ ๆ" → navigate({ uri: "/travel/places" })
-    - You may then send a short confirmation message after navigation if helpful.
+    - ALWAYS send a confirmation message after navigation. Use the Thai message: "ฉันได้พาคุณไปที่หน้า[page]แล้วค่ะ คุณสามารถดูรายละเอียดเพิ่มเติมได้ที่นี่ค่ะ!" or English equivalent.
     - Always use the exact URI path like "/travel/taxi", "/travel/tours", etc.
 
     Screen content reasoning (when the user references items on the current screen):

@@ -1,5 +1,6 @@
 import { useCallback, useState, useRef } from 'react';
 import { ConversationLogEntry } from '../lib/logger';
+import { getApiUrl } from '@/app/lib/apiHelper';
 
 // Get file logging setting from environment variable
 export const FILE_LOGGING_ENABLED = 
@@ -157,6 +158,11 @@ export function useConversationLogger() {
       return;
     }
 
+    // Skip if message content is empty
+    if (!entry.message || entry.message.trim() === '') {
+      return;
+    }
+
     // Mark as pending
     pendingLogsRef.current.add(logKey);
 
@@ -167,7 +173,7 @@ export function useConversationLogger() {
     
     try {
       // Use the same logging endpoint as ChatInterface.tsx
-      await fetch('/api/log/messages', {
+      await fetch(getApiUrl('/api/messages'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -175,7 +181,7 @@ export function useConversationLogger() {
           role: entry.type === 'user_message' ? 'user' : 
                 entry.type === 'assistant_response' ? 'assistant' : 'system',
           type: 'text',
-          content: entry.message || null,
+          content: entry.message || '',
           content_tokens: entry.tokenUsage?.promptTokens || null,
           response_tokens: entry.tokenUsage?.completionTokens || null,
           total_tokens: entry.tokenUsage?.totalTokens || null,

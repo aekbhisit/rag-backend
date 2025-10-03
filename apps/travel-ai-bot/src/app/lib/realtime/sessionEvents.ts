@@ -51,40 +51,55 @@ export interface SessionEventDeps {
 }
 
 export function registerSessionEventHandlers(session: any, deps: SessionEventDeps) {
-  // Guard session.update while audio plays to avoid cannot_update_voice
-  const audioActiveRef: Ref<boolean> = { current: false };
-  let pendingUpdateTimer: any = null;
-  const scheduleSafeUpdateSession = () => {
-    try { if (pendingUpdateTimer) clearTimeout(pendingUpdateTimer); } catch {}
-    const attempt = () => {
-      if (audioActiveRef.current) { pendingUpdateTimer = setTimeout(attempt, 400); return; }
-      try { deps.updateSession(); } catch {}
-    };
-    pendingUpdateTimer = setTimeout(attempt, 50);
-  };
   // Error handler
   (session as any).on('error', (err: any) => {
-    const code = err?.error?.code || err?.code || 'unknown';
-    const message = err?.error?.message || err?.message || 'Session error';
-    const eventId = err?.error?.event_id || err?.event_id || null;
+    // Extract more detailed error information
+    const errorMessage = err?.message ||
+      (err as any)?.error?.message ||
+      err?.type ||
+      err?.code ||
+      (typeof err === 'string' ? err : 'Session error');
+
+    // Treat common transport errors as non-fatal warnings to prevent console noise
+    const isGenericError = errorMessage === 'Unknown error' ||
+      errorMessage === 'error' ||
+      errorMessage === 'Session error' ||
+      (typeof errorMessage === 'string' && (
+        errorMessage.includes('WebRTC') ||
+        errorMessage.includes('connection') ||
+        errorMessage.includes('network')
+      ));
+
     try {
-      console.log('[SDK-Realtime] ❌ Detailed error analysis:', {
+      if (isGenericError) {
+        console.warn('[SDK-Realtime] ⚠️ Generic transport error suppressed:', {
+          timestamp: new Date().toISOString(),
+          message: errorMessage,
+          type: err?.type || 'unknown',
+          code: err?.code || 'unknown'
+        });
+        // Do not propagate/generate user-facing errors for generic transport issues
+        return;
+      }
+
+      // Log meaningful errors with full context once
+      console.error('[SDK-Realtime] ❌ Meaningful session error:', {
         timestamp: new Date().toISOString(),
         event: 'error',
-        code,
-        message,
-        event_id: eventId,
-        raw: err
+        message: err?.message || String(err),
+        type: err?.type || 'unknown',
+        code: err?.code || 'unknown',
+        name: err?.name || 'Error',
+        errorKeys: err && typeof err === 'object' ? Object.keys(err) : []
       });
-      console.error('[SDK] Session error:', err);
-    } catch {}
-    // Soft-ignore voice update conflicts to avoid noisy errors during transfer/audio playback
-    if (code === 'cannot_update_voice') {
-      console.warn('[SDK-Realtime] ⚠️ Ignoring cannot_update_voice during active audio/transfer');
-      return;
+    } catch (e) {
+      console.error('[SDK] Error in error handler:', e);
     }
-    deps.setError(message);
-    deps.onError?.(new Error(message));
+
+    if (errorMessage) {
+      deps.setError(errorMessage);
+      deps.onError?.(new Error(errorMessage));
+    }
   });
 
   // Agent handoff
@@ -152,7 +167,7 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
       } catch (e) { console.warn('[SDK-Realtime] ⚠️ Failed to register agents on connect', e); }
       try { (session as any).mute?.(true); } catch {}
       try { deps.setMicEnabled?.(false); } catch {}
-      scheduleSafeUpdateSession();
+      deps.updateSession();
     } catch {}
   });
 
@@ -167,11 +182,6 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
 
   // Transport events
   ;(session as any).on('transport_event', async (event: any) => {
-    // Track audio buffer state
-    try {
-      if (event.type === 'output_audio_buffer.started') { audioActiveRef.current = true; }
-      if (event.type === 'output_audio_buffer.stopped') { audioActiveRef.current = false; }
-    } catch {}
     if (event.type == 'response.done') {
       try {
         console.log('[SDK-Realtime] 🚌 transport_event:', {
@@ -183,6 +193,18 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
     }
 
     switch (event.type) {
+      case 'response.output_item.created': {
+        console.log('[SDK-Realtime] 🧱 output_item.created:', {
+          timestamp: new Date().toISOString(), eventType: 'response.output_item.created', rawEvent: event,
+          itemId: event.item?.id || event.item_id, itemType: event.item?.type, functionName: event.item?.name, callId: event.item?.call_id
+        });
+        try {
+          if (event.item?.type === 'function_call' && event.item?.call_id && event.item?.name) {
+            deps.functionCallNameByIdRef.current.set(event.item.call_id, event.item.name);
+          }
+        } catch {}
+        break;
+      }
       case 'conversation.item.input_audio_transcription.completed': {
         const itemId = event.item_id;
         const finalTranscript = (event.transcript || '').trim();
@@ -274,8 +296,6 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
             hasOutput: !!event.response?.output?.length, voice: event.response?.voice || 'unknown', appliedVoice: deps.appliedVoiceRef.current || 'unknown'
           });
         } catch {}
-        // Allow session.update shortly after audio completes
-        setTimeout(() => { audioActiveRef.current = false; }, 150);
         // Reset response state
         try {
           // Mark not active and unlock via queue controller public refs
@@ -362,12 +382,6 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
         source: selectedAgentConfig.instructions ? 'instructions' : (selectedAgentConfig.systemPrompt ? 'systemPrompt' : 'none'),
         toolsCount: selectedAgentConfig.tools?.length || 0,
         toolNames: selectedAgentConfig.tools?.map((t: any) => t.function?.name || t.name) || [],
-        toolDescriptions: selectedAgentConfig.tools?.map((t: any) => t.function?.description || t.description || '') || [],
-        toolSchemas: (selectedAgentConfig.tools || []).map((t: any) => ({
-          name: t?.function?.name || t?.name,
-          description: t?.function?.description || t?.description || '',
-          parameters: t?.function?.parameters || t?.parameters || {}
-        })),
         downstreamAgents: selectedAgentConfig.downstreamAgents?.map((a: any) => a.name) || []
       });
     }

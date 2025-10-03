@@ -12,7 +12,7 @@ export interface EphemeralKeyResponse {
 export async function fetchEphemeralKey(): Promise<string> {
   // Add cache-busting parameter to force new server-side session
   const cacheBuster = `t=${Date.now()}&r=${Math.random().toString(36).substr(2, 9)}`;
-  const url = `/api/session?${cacheBuster}`;
+  const url = `/services/session?${cacheBuster}`;
 
   try {
     const tokenResponse = await fetch(url, {

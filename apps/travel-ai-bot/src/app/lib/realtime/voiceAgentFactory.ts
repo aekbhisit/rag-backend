@@ -1,6 +1,6 @@
 import { RealtimeAgent } from '@openai/agents/realtime';
 import { createVoiceModeAgent } from '@/app/lib/sdk-agent-wrapper';
-// Do NOT inject extra schemas in voice mode. Use only DB-provided tools for parity with text mode.
+// Core/UI schemas are not injected automatically; voice tools come from DB-configured agent.tools
 import { AgentConfig } from '@/app/types';
 import { UniversalMessage } from '@/app/types';
 
@@ -49,56 +49,8 @@ export function createAllVoiceAgents(
       } as AgentConfig & { downstreamAgents: Array<{ name: string; publicDescription?: string }> };
     });
 
-    // 2) Voice mode tool policy: load ONLY DB tools; do not inject schema tools here
-    //    We will add dynamic transfer_to_* tools per downstream agents to enable handoff.
-    const ONLY_AGENT_FOR_TOOL: Record<string, string> = {
-      placeKnowledgeSearch: 'placeGuide',
-    };
-
-    const agentsWithCoreFunctions = agentsWithDownstream.map(agentConfig => {
-      const existingToolNames = new Set((agentConfig.tools || []).map((t: any) => t.name || t.function?.name));
-      const newTools: any[] = [];
-
-      // Keep DB-provided tools intact (text-mode parity); only enforce per-agent restriction
-      const filteredExisting = (agentConfig.tools || []).filter((t: any) => {
-        const nm = t.name || t.function?.name;
-        const onlyAgent = ONLY_AGENT_FOR_TOOL[nm as string];
-        if (onlyAgent && agentConfig.name !== onlyAgent) return false;
-        return true;
-      });
-
-      // Dynamic transfer_to tools for each downstream agent (not persisted in DB)
-      const transferTools = agentsWithDownstream
-        .find(a => a.name === agentConfig.name)?.downstreamAgents
-        .map(d => ({
-          function: {
-            name: `transfer_to_${d.name}`,
-            description: `Transfer conversation to agent ${d.name}`,
-            parameters: {
-              type: 'object',
-              properties: {
-                rationale_for_transfer: { type: 'string' },
-                conversation_context: { type: 'string' },
-                destination_agent: { type: 'string' }
-              },
-              required: []
-            }
-          }
-        })) || [];
-
-      // Compose final tool list: DB tools + dynamic transfer_to_*
-      return {
-        ...agentConfig,
-        tools: [...filteredExisting, ...newTools, ...transferTools]
-      } as AgentConfig;
-    });
-
-    console.log('[VoiceAgentFactory] 🧩 Tool injection complete:',
-      agentsWithCoreFunctions.map(a => ({ name: a.name, tools: a.tools?.length || 0 }))
-    );
-
-    // 3) Create SDK agents
-    const sdkAgents = agentsWithCoreFunctions.map(agentConfig => {
+  // 2) Create SDK agents directly from DB-provided tools (no core injection)
+  const sdkAgents = agentsWithDownstream.map(agentConfig => {
       return createVoiceModeAgent(agentConfig, (message: string) => {
         if (!onMessage) return;
         const universalMessage: UniversalMessage = {

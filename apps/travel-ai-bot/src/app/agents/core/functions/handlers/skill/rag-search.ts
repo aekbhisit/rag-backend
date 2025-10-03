@@ -7,8 +7,8 @@ export const ragSearchHandler = async (args: any) => {
   const k = typeof topK === 'number' ? topK : (typeof top_k === 'number' ? top_k : DEFAULT_TOPK);
   try {
     const baseUrl = (typeof process !== 'undefined'
-      ? ((process as any)?.env?.NEXT_PUBLIC_APP_URL || (process as any)?.env?.APP_URL)
-      : '') || 'http://localhost:3200';
+      ? ((process as any)?.env?.NEXT_PUBLIC_BACKEND_URL || (process as any)?.env?.BACKEND_URL)
+      : '') || 'http://localhost:3100';
     const defaultUrl = `${baseUrl}`.replace(/\/$/, '') + `/api/rag/summary`;
     const url = (endpointUrl && String(endpointUrl).startsWith('http'))
       ? endpointUrl

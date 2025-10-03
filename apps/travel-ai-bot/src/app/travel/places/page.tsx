@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { getApiUrl } from '@/app/lib/apiHelper';
 import Link from "next/link";
 import ChatInterface from "@/app/components/chat/ChatInterface";
 import { EventProvider } from "@/app/contexts/EventContext";
@@ -124,7 +125,7 @@ function contextToPlace(row: any): Place {
 
 function TravelPlacesPageInner(props?: { embedded?: boolean; defaultCategory?: string }) {
   const embedded = !!(props && props.embedded);
-  const [sessionId] = useState<string>(() => `sess_${Date.now()}`);
+  const [sessionId] = useState<string>(() => crypto.randomUUID());
   const [activeChannel, setActiveChannel] = useState<"normal" | "realtime" | "human">("normal");
   const [isProcessing] = useState(false);
 
@@ -206,7 +207,7 @@ function TravelPlacesPageInner(props?: { embedded?: boolean; defaultCategory?: s
       setLoadingPlace(true);
       setError("");
       setUseDummy(false);
-      const res = await fetch("/api/travel/place", {
+        const res = await fetch("/services/contexts/place", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ placeId: pid }),
@@ -234,8 +235,8 @@ function TravelPlacesPageInner(props?: { embedded?: boolean; defaultCategory?: s
       const isAttraction = (filterState.category || '').toLowerCase().includes('attraction');
       if (isAttraction) {
         // Load from backend contexts by category=Attraction
-        const url = `/api/contexts?type=place&category=Attraction&page_size=50`;
-        const resCtx = await fetch(url, { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+        const url = `/services/contexts?type=place&category=Attraction&page_size=50`;
+        const resCtx = await fetch(url, { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
         if (!resCtx.ok) throw new Error(`contexts ${resCtx.status}`);
         const payload = await resCtx.json();
         const items = Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload) ? payload : []);
@@ -247,7 +248,7 @@ function TravelPlacesPageInner(props?: { embedded?: boolean; defaultCategory?: s
           return ni;
         });
       } else {
-        const res = await fetch("/api/travel/nearby", {
+        const res = await fetch("/services/contexts/nearby", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -293,12 +294,12 @@ function TravelPlacesPageInner(props?: { embedded?: boolean; defaultCategory?: s
       let placeData: Place | null = null;
       if (isUuidLike(placeId)) {
         // Load a single context and map to Place
-        const resCtx = await fetch(`/api/contexts/${encodeURIComponent(placeId)}`, { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+        const resCtx = await fetch(`/services/contexts/${encodeURIComponent(placeId)}`, { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
         if (!resCtx.ok) throw new Error(`context ${resCtx.status}`);
         const row = await resCtx.json();
         placeData = contextToPlace(row);
       } else {
-        const res = await fetch("/api/travel/place", {
+        const res = await fetch("/services/contexts/place", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ placeId }),

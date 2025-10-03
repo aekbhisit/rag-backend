@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getApiUrl } from '@/app/lib/apiHelper';
 
 export interface TenantAiConfig {
   apiKey: string;
@@ -19,9 +20,9 @@ export function useTenantAiConfig() {
         setLoading(true);
         setError(null);
         
-        const response = await fetch('/api/tenant-ai-config', {
+        const response = await fetch(getApiUrl('/api/tenant-ai-config'), {
           headers: {
-            'X-Tenant-ID': 'acc44cdb-8da5-4226-9569-1233a39f564f' // Travel app tenant
+            'X-Tenant-ID': process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000'
           }
         });
         

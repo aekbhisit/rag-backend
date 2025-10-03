@@ -5,7 +5,9 @@ export interface TextStreamParams {
   agentKey?: string;
   language?: string;
   text?: string;
-  currentPath?: string | null;
+  lat?: number;
+  long?: number;
+  currentPage?: string;
 }
 
 export function buildTextStreamUrl(params: TextStreamParams): string {
@@ -16,8 +18,10 @@ export function buildTextStreamUrl(params: TextStreamParams): string {
   if (params.agentKey) query.set('agent_key', params.agentKey);
   if (params.language) query.set('language', params.language);
   if (params.text) query.set('text', params.text);
-  if (params.currentPath) query.set('current_path', params.currentPath);
+  if (params.lat !== undefined) query.set('lat', params.lat.toString());
+  if (params.long !== undefined) query.set('long', params.long.toString());
+  if (params.currentPage) query.set('currentPage', params.currentPage);
   const cacheBust = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
   query.set('cb', cacheBust);
-  return `/api/chat/text-stream?${query.toString()}`;
+  return `/services/chat/text-stream?${query.toString()}`;
 }

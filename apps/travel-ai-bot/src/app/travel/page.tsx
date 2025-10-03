@@ -26,7 +26,7 @@ type FeatureItem = {
   href: string;
   title: string;
   description: string;
-  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  Icon: React.ComponentType<any>;
 };
 
 const FEATURES: FeatureItem[] = [
@@ -80,12 +80,12 @@ function TravelIndexPageContent() {
       const key = 'conversation_session_id';
       let id = localStorage.getItem(key) || '';
       if (!id) {
-        id = `sess_${Date.now()}`;
+        id = crypto.randomUUID();
         try { localStorage.setItem(key, id); } catch {}
       }
       setFrontendSessionId(id);
     } catch {
-      setFrontendSessionId(`sess_${Date.now()}`);
+      setFrontendSessionId(crypto.randomUUID());
     }
   }, []);
 
@@ -379,7 +379,7 @@ function TravelIndexPageContent() {
                           <div key={setKey} className="px-2 py-1">
                             <div className="px-2 py-1 text-[11px] font-semibold" style={{ color: 'var(--ta-muted)' }}>{setKey}</div>
                             <ul className="space-y-0.5">
-                              {agents.map((a) => {
+                              {(agents as any[]).map((a) => {
                                 const selected = setKey === agentSetKey && a.name === agentName;
                                 return (
                                   <li key={`${setKey}::${a.name}`}>
@@ -413,7 +413,7 @@ function TravelIndexPageContent() {
             <div className="flex-1 min-h-0">
               <EventProvider>
                 <ChatInterface
-                  sessionId={frontendSessionId || 'sess_pending'}
+                  sessionId={frontendSessionId || crypto.randomUUID()}
                   activeChannel={activeChannel}
                   onChannelSwitch={setActiveChannel}
                   isProcessing={false}

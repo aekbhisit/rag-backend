@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import ChatInterface from "@/app/components/chat/ChatInterface";
+import { getApiUrl } from '@/app/lib/apiHelper';
 import { useActionContext, ActionType } from "@/botActionFramework";
 import { ActionProvider } from "@/botActionFramework/ActionContext";
 import { EventProvider } from "@/app/contexts/EventContext";
@@ -141,14 +142,14 @@ function ToursPageContent(props: { embedded?: boolean }) {
         setLoading(true);
         setError("");
         // Ensure 'tours' category exists
-        const resCats = await fetch('/api/categories', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+        const resCats = await fetch(getApiUrl('/api/categories'), { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
         const dataCats = await resCats.json();
         const allCats = Array.isArray(dataCats?.items) ? dataCats.items : [];
         let tours = allCats.find((c: any) => (c.slug || '').toLowerCase() === 'tours');
         if (!tours) {
-          const cRes = await fetch('/api/categories', {
+          const cRes = await fetch(getApiUrl('/api/categories'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any,
+            headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any,
             body: JSON.stringify({ name: 'Tours', slug: 'tours' })
           });
           if (cRes.ok) tours = await cRes.json();
@@ -156,12 +157,12 @@ function ToursPageContent(props: { embedded?: boolean }) {
         if (!tours?.id) throw new Error('Missing tours category');
 
         // Load existing tour places
-        const res = await fetch('/api/contexts?type=place&category=tours&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+        const res = await fetch('/services/contexts?type=place&category=tours&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
         const payload = await res.json();
         let ctxItems: any[] = Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload) ? payload : []);
 
         // Seed defaults if needed
-        const tenantId = (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '';
+        const tenantId = (process as any)?.env?.TENANT_ID || '';
         const seedKey = `seed:tours:${tenantId || 'default'}`;
         const alreadySeeded = typeof window !== 'undefined' ? window.localStorage.getItem(seedKey) === '1' : false;
         const existingSlugs = new Set(ctxItems.map((x: any) => String(x?.attributes?.slug || '').toLowerCase()).filter(Boolean));
@@ -215,9 +216,9 @@ function ToursPageContent(props: { embedded?: boolean }) {
                 tags: ['tours']
               }
             };
-            await fetch('/api/admin/contexts/import', {
+            await fetch('/services/contexts/import', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any,
+              headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any,
               body: JSON.stringify(payload)
             });
           }
@@ -226,7 +227,7 @@ function ToursPageContent(props: { embedded?: boolean }) {
 
         // If we created new items, we need to refetch to get the updated list
         if (!alreadySeeded && toCreate.length > 0) {
-          const res2 = await fetch('/api/contexts?type=place&category=tours&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+          const res2 = await fetch('/services/contexts?type=place&category=tours&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
           const p2 = await res2.json();
           ctxItems = Array.isArray(p2?.items) ? p2.items : (Array.isArray(p2) ? p2 : []);
         }
@@ -483,7 +484,7 @@ function ToursPageContent(props: { embedded?: boolean }) {
           <div className="h-full flex flex-col">
             <div className="flex-1 min-h-0">
               <EventProvider>
-                <ChatInterface sessionId={`sess_${Date.now()}`} activeChannel={"normal"} onChannelSwitch={()=>{}} isProcessing={false} />
+                <ChatInterface sessionId={`crypto.randomUUID()`} activeChannel={"normal"} onChannelSwitch={()=>{}} isProcessing={false} />
               </EventProvider>
             </div>
           </div>

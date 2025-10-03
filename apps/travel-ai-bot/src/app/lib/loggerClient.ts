@@ -1,3 +1,5 @@
+import { getApiUrl } from './apiHelper';
+
 export interface LogMessageParams {
   sessionId: string;
   role: 'user' | 'assistant' | 'system';
@@ -8,8 +10,13 @@ export interface LogMessageParams {
 }
 
 export async function logMessage(params: LogMessageParams): Promise<void> {
+  // Skip logging if content is empty
+  if (!params.content || params.content.trim() === '') {
+    return;
+  }
+
   try {
-    await fetch('/api/log/messages', {
+    await fetch(getApiUrl('/api/messages'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -26,7 +33,7 @@ export async function logMessage(params: LogMessageParams): Promise<void> {
 
 export async function pushLine(text: string): Promise<void> {
   try {
-    await fetch('/api/line/push', {
+    await fetch(getApiUrl('/api/line/push'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })

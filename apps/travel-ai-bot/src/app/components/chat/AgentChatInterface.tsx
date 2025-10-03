@@ -6,6 +6,7 @@ import { PaperAirplaneIcon, MicrophoneIcon, UserIcon, CpuChipIcon, UserGroupIcon
 import { useMessageHistory } from './MessageHistory';
 import VoiceChatInterface from './VoiceChatInterface';
 import { getBotActionFunctionDefinitions, isBotAction as isBotUIAction, handleFunctionCall as handleBotUIFunctionCall } from '@/botActionFramework';
+import { getApiUrl } from '@/app/lib/apiHelper';
 
 interface AgentChatInterfaceProps {
   sessionId: string;
@@ -175,12 +176,12 @@ export default function AgentChatInterface({
     setTimeout(scrollToBottom, 50);
 
     try {
-      // Simple keyword trigger: open Taxi page (broadened)
-      if (/(taxi|แท็กซี่)/i.test(content)) {
+      // Simple keyword trigger: open Taxi page
+      if (/\b(taxi|want taxi|เรียกแท็กซี่|อยากได้แท็กซี่)\b/i.test(content)) {
         try {
           await handleBotUIFunctionCall({
             name: 'navigatePage',
-            arguments: JSON.stringify({ pageName: 'travel', path: '/travel/taxi' })
+            arguments: JSON.stringify({ pageName: 'taxi' })
           } as any);
         } catch {}
       }
@@ -241,7 +242,7 @@ ${currentAgent.downstreamAgents && currentAgent.downstreamAgents.length > 0 ?
   `You can transfer users to these specialized agents if needed:
 ${currentAgent.downstreamAgents.map(agent => `- ${agent.name}: ${agent.publicDescription}`).join('\n')}
 
-Use the transferAgents function to transfer users when appropriate.` : 
+Use the transfer_to_{agentName} function to transfer users when appropriate.` : 
   'You cannot transfer users to other agents from this role.'
 }
 
@@ -270,7 +271,7 @@ Current conversation context: You are communicating through the ${activeChannel}
         requestBody.tools = [...botActionTools];
       }
 
-      const response = await fetch('/api/chat/agent-completions', {
+      const response = await fetch(getApiUrl('/api/chat/completions'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -306,7 +307,7 @@ Current conversation context: You are communicating through the ${activeChannel}
       
       // Persist AI response (before handling transfers)
       try {
-        await fetch('/api/log/messages', {
+        await fetch(getApiUrl('/api/messages'), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             session_id: sessionId,
@@ -322,38 +323,36 @@ Current conversation context: You are communicating through the ${activeChannel}
       // Handle function calls (transfer + bot UI actions)
       if (toolCalls && toolCalls.length > 0) {
         for (const toolCall of toolCalls) {
-          if (toolCall.function.name === 'transferAgents') {
+          // Handle per-destination transfer tools like transfer_to_{agent}
+          if (typeof toolCall.function.name === 'string' && toolCall.function.name.startsWith('transfer_to_')) {
+            const destinationAgent = toolCall.function.name.replace('transfer_to_', '');
+            let rationale = '';
             try {
-              const args = JSON.parse(toolCall.function.arguments);
-              const { destination_agent, rationale_for_transfer } = args;
-              
-              // Create transfer message
-              const transferMessage: UniversalMessage = {
-                id: generateMessageId(),
-                sessionId,
-                timestamp: new Date().toISOString(),
-                type: 'system',
-                content: `✅ Transferring you to ${destination_agent}. ${rationale_for_transfer}`,
-                metadata: {
-                  source: 'ai',
-                  channel: activeChannel,
-                  language: 'en',
-                  agentName: selectedAgentName
-                }
-              };
-              
-              addMessage(transferMessage);
-              
-              // Execute transfer
-              setTimeout(() => {
-                handleAgentTransfer(destination_agent);
-              }, 1000);
-              
-              setIsLoading(false);
-              return;
-            } catch (error) {
-              console.error('Error parsing transferAgents arguments:', error);
-            }
+              const args = JSON.parse(toolCall.function.arguments || '{}');
+              if (typeof args?.rationale_for_transfer === 'string') rationale = args.rationale_for_transfer;
+            } catch {}
+
+            const transferMessage: UniversalMessage = {
+              id: generateMessageId(),
+              sessionId,
+              timestamp: new Date().toISOString(),
+              type: 'system',
+              content: `✅ Transferring you to ${destinationAgent}. ${rationale}`.trim(),
+              metadata: {
+                source: 'ai',
+                channel: activeChannel,
+                language: 'en',
+                agentName: selectedAgentName
+              }
+            };
+            addMessage(transferMessage);
+
+            setTimeout(() => {
+              handleAgentTransfer(destinationAgent);
+            }, 1000);
+
+            setIsLoading(false);
+            return;
           }
 
           // Execute agent tool logic locally if available (e.g., placeKnowledgeSearch)
@@ -361,6 +360,37 @@ Current conversation context: You are communicating through the ${activeChannel}
             const fnName = toolCall.function.name;
             if (currentAgent?.toolLogic && currentAgent.toolLogic[fnName]) {
               const args = JSON.parse(toolCall.function.arguments || '{}');
+              
+              // For placeKnowledgeSearch, request location if not provided
+              if (fnName === 'placeKnowledgeSearch') {
+                try {
+                  // Check if location is already provided
+                  if (typeof args.lat !== 'number' || typeof args.long !== 'number') {
+                    // Request user location
+                    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                      const location = await new Promise<{ lat: number; long: number }>((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(
+                          (pos) => resolve({ lat: pos.coords.latitude, long: pos.coords.longitude }),
+                          (error) => {
+                            console.warn('[AgentChatInterface] Location access denied or failed:', error);
+                            reject(error);
+                          },
+                          { timeout: 10000, enableHighAccuracy: false }
+                        );
+                      });
+                      args.lat = location.lat;
+                      args.long = location.long;
+                      console.log('[AgentChatInterface] 📍 Location requested and injected:', { lat: location.lat, long: location.long });
+                    } else {
+                      throw new Error('Geolocation not available');
+                    }
+                  }
+                } catch (error) {
+                  console.warn('[AgentChatInterface] Location request failed:', error);
+                  // Continue without location - the handler will return an error
+                }
+              }
+              
               const fn = currentAgent.toolLogic[fnName];
               const fnResult = await fn(args, []);
               // Attempt to display content via Bot Action Framework if results provided
@@ -449,7 +479,7 @@ Current conversation context: You are communicating through the ${activeChannel}
       // If channel is LINE, push the AI response to the configured LINE user
       if (activeChannel === 'line') {
         try {
-          await fetch('/api/line/push', {
+          await fetch(getApiUrl('/api/line/push'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: assistantContent })

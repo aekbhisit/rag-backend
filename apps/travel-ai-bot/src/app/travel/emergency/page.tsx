@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { getApiUrl } from '@/app/lib/apiHelper';
 import Link from "next/link";
 import { PhoneIcon, ShieldCheckIcon, LifebuoyIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
+import { getApiUrl } from '@/app/lib/apiHelper';
 import ChatInterface from "@/app/components/chat/ChatInterface";
 import { EventProvider } from "@/app/contexts/EventContext";
 
@@ -144,7 +146,7 @@ export default function EmergencyPage(props: { embedded?: boolean }) {
           <div className="h-full flex flex-col">
             <div className="flex-1 min-h-0">
               <EventProvider>
-                <ChatInterface sessionId={`sess_${Date.now()}`} activeChannel={"normal"} onChannelSwitch={()=>{}} isProcessing={false} />
+                <ChatInterface sessionId={`crypto.randomUUID()`} activeChannel={"normal"} onChannelSwitch={()=>{}} isProcessing={false} />
               </EventProvider>
             </div>
           </div>

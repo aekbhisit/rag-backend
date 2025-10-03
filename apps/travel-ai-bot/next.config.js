@@ -69,7 +69,7 @@ const nextConfig = {
     }
   },
   env: {
-    NEXT_PUBLIC_RAG_TENANT_ID: process.env.RAG_TENANT_ID || '',
+    TENANT_ID: process.env.TENANT_ID || '',
   }
 };
 

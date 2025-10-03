@@ -20,7 +20,7 @@ export default function APIEndpointTester() {
   const apiEndpoints = [
     {
       name: 'Staff Messages',
-      endpoint: '/api/staff/messages',
+      endpoint: '/services/staff/messages',
       tests: [
         {
           name: 'Send to Staff',
@@ -41,7 +41,7 @@ export default function APIEndpointTester() {
     },
     {
       name: 'Staff Availability',
-      endpoint: '/api/staff/availability',
+      endpoint: '/services/staff/availability',
       tests: [
         {
           name: 'Get All Staff',
@@ -67,7 +67,7 @@ export default function APIEndpointTester() {
     },
     {
       name: 'Channel Health',
-      endpoint: '/api/channels/health',
+      endpoint: '/services/channels/health',
       tests: [
         {
           name: 'System Health Check',
@@ -93,7 +93,7 @@ export default function APIEndpointTester() {
     },
     {
       name: 'Analytics Usage',
-      endpoint: '/api/analytics/usage',
+      endpoint: '/services/analytics/usage',
       tests: [
         {
           name: 'Get Usage Stats',

@@ -1,7 +1,7 @@
 export async function tourTaxiKnowledgeSearchHandler(args: any) {
   try {
     const { searchQuery, maxResults } = args || {};
-    const tenantId = (typeof process !== "undefined" ? (process as any)?.env?.RAG_TENANT_ID : "") || "";
+    const tenantId = (typeof process !== "undefined" ? (process as any)?.env?.TENANT_ID : "") || "";
     const res = await fetch("/api/rag/summary", {
       method: "POST",
       headers: {

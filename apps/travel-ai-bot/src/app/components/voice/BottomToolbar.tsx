@@ -218,7 +218,7 @@ function BottomToolbar({
           console.log("Running API connectivity tests...");
           
           // Test session API
-          fetch("/api/session", {
+          fetch("/services/session", {
             method: "GET",
             credentials: "include",
             headers: { "Content-Type": "application/json" }

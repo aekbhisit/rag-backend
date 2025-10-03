@@ -2,7 +2,7 @@ import { BaseChannel } from './BaseChannel';
 import { UniversalMessage, ConversationContext, ChannelConfig } from '@/app/types';
 
 export class HumanStaffChannel extends BaseChannel {
-  private staffPlatformEndpoint: string = '/api/staff/messages'; // Placeholder endpoint
+  private staffPlatformEndpoint: string = '/services/staff/messages'; // Placeholder endpoint
   private isStaffConnected: boolean = false;
   private currentStaffId?: string;
   
@@ -112,7 +112,7 @@ export class HumanStaffChannel extends BaseChannel {
     
     try {
       // Test staff availability API endpoint
-      const response = await fetch('/api/staff/availability', {
+      const response = await fetch('/services/staff/availability', {
         method: 'GET',
         signal: AbortSignal.timeout(5000) // 5 second timeout
       });
@@ -152,7 +152,7 @@ export class HumanStaffChannel extends BaseChannel {
     
     try {
       // Send message to staff platform API
-      const response = await fetch('/api/staff/messages', {
+      const response = await fetch('/services/staff/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -189,7 +189,7 @@ export class HumanStaffChannel extends BaseChannel {
     
     while (Date.now() - startTime < maxWaitTime) {
       try {
-        const response = await fetch(`/api/staff/messages?sessionId=${sessionId}&staffId=${staffId}`);
+        const response = await fetch(`/services/staff/messages?sessionId=${sessionId}&staffId=${staffId}`);
         
         if (response.ok) {
           const data = await response.json();

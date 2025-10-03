@@ -1,0 +1,317 @@
+Travel AI Bot - Complete Route List (Based on Actual Code)
+===========================================================
+
+Base URL: http://localhost:3200/travel
+Application: Travel AI Bot (Next.js App Router)
+Domain: chat.haahii.com (Frontend) → rag.haahii.com (Backend)
+
+## Frontend API Routes (/services/*)
+*These are internal frontend API routes that handle frontend-specific logic*
+
+### Chat & AI Services
+- POST /services/chat/agent-completions
+  - Main AI agent completion endpoint
+  - Handles multi-agent conversations with tool execution
+  - Rate limited: 10 requests/minute per IP
+  - Uses ALL_HANDLERS from @/app/agents/core/functions
+  - Supports agent switching and dynamic tool mapping
+
+- POST /services/chat/completions
+  - Standard OpenAI chat completions
+  - Rate limited: 5 requests/minute per IP
+  - Direct OpenAI API integration
+
+- GET /services/chat/text-stream
+  - Streaming text responses for real-time chat
+  - Rate limited: 20 streams/minute per IP
+  - Supports session_id, agent parameters, location data
+  - Query params: session_id, agent_set_key, agent_name, agent_key, language, text, lat, lng
+
+### RAG (Retrieval Augmented Generation) Services
+- POST /services/rag/summary
+  - General RAG retrieval with optional summarization
+  - Headers: X-Tenant-ID (required)
+  - Proxies to backend: ${RAG_BASE_URL}/api/rag/summary
+  - Body: text_query, conversation_history, etc.
+
+- POST /services/rag/place
+  - Location-aware place retrieval
+  - Proxies to backend: ${RAG_BASE_URL}/api/rag/place
+  - Headers: X-Tenant-ID (required)
+  - Body: text_query, lat, long, max_distance_km, etc.
+
+- GET /services/rag/contexts
+  - List/search RAG contexts
+  - Proxies to backend: ${RAG_BASE_URL}/api/rag/contexts
+  - Headers: X-Tenant-ID (required)
+  - Query params: q, type, intent_scope, intent_action, category, status, page, page_size
+
+### Context Management
+- GET /services/contexts
+  - List/search contexts
+  - Proxies to backend: ${RAG_BASE_URL}/api/contexts
+  - Headers: X-Tenant-ID (required)
+  - Query params: q, type, intent_scope, intent_action, category, status, page, page_size
+
+- POST /services/contexts
+  - Create/update contexts
+  - Proxies to backend: ${RAG_BASE_URL}/api/contexts
+  - Headers: X-Tenant-ID (required)
+
+- GET /services/contexts/[id]
+  - Get specific context by ID
+  - Proxies to backend: ${RAG_BASE_URL}/api/contexts/{id}
+  - Headers: X-Tenant-ID (required)
+  - Path: id (uuid)
+
+- POST /services/contexts/import
+  - Import contexts from external sources
+  - Proxies to backend: ${RAG_BASE_URL}/api/contexts/import
+  - Headers: X-Tenant-ID (required)
+
+### Travel Services
+- GET /services/travel/pages
+  - List all available travel pages
+  - Reads from filesystem: apps/travel-ai-bot/src/app/travel/
+  - Returns: slug, title, path for each page
+  - No authentication required
+
+- POST /services/travel/place
+  - Travel-specific place search
+  - Proxies to backend: ${RAG_BASE_URL}/api/rag/place
+  - Headers: X-Tenant-ID (required)
+
+- POST /services/travel/nearby
+  - Find nearby places/attractions
+  - Proxies to backend: ${RAG_BASE_URL}/api/rag/place
+  - Headers: X-Tenant-ID (required)
+
+- GET /services/travel/health
+  - Health check for travel services
+  - Returns basic health status
+
+### Session Management
+- GET /services/session
+  - Get OpenAI realtime session ephemeral key
+  - Calls OpenAI API: https://api.openai.com/v1/realtime/sessions
+  - Model: gpt-4o-realtime-preview-2025-06-03
+  - Fallback to mock key if no OPENAI_API_KEY
+
+### Agent Management
+- GET /services/agent-sets
+  - List available agent sets from database
+  - Fetches from backend: ${BACKEND_URL}/api/agents
+  - Loads agent prompts, tools, and navigation pages
+  - Returns: agentSets, defaultSetKey
+  - Headers: X-Tenant-ID (optional, uses env fallback)
+
+- GET /services/tenant-ai-config
+  - Get tenant-specific AI configuration
+  - Proxies to backend: ${BACKEND_URL}/api/tenant-ai-config
+  - Headers: X-Tenant-ID (required)
+
+### Staff & Support Services
+- GET /services/staff/availability
+  - Get staff availability status (mock data)
+  - Returns: staff members, languages, expertise, status
+  - Mock implementation with sample staff data
+
+- POST /services/staff/messages
+  - Send messages to staff
+  - Staff communication endpoint
+  - Mock implementation
+
+### Analytics & Monitoring
+- GET /services/analytics/usage
+  - Get usage analytics and metrics (mock data)
+  - Returns: channel usage, transfers, system metrics
+  - Mock implementation with sample analytics data
+
+- POST /services/log/messages
+  - Log messages for analytics
+  - Message tracking endpoint
+  - Mock implementation
+
+### LINE Integration
+- POST /services/line/webhook
+  - LINE webhook endpoint
+  - Handles LINE message events
+  - Signature verification required (X-Line-Signature)
+  - Processes text messages and calls agent-completions
+
+- POST /services/line/push
+  - Send push messages via LINE
+  - LINE messaging API integration
+  - Uses LINE channel access token
+
+### Categories & Channels
+- GET /services/categories
+  - List available categories
+  - Proxies to backend: ${BACKEND_URL}/api/categories
+  - Content categorization
+
+- GET /services/channels/health
+  - Health check for channels
+  - Channel status monitoring
+  - Mock implementation
+
+## Backend Proxy Routes (/api/*)
+*These routes forward requests to the backend API (rag.haahii.com)*
+
+### Backend API Proxies
+- All /api/* routes are proxied to the backend
+- Backend handles the actual API logic
+- Frontend acts as a proxy/gateway
+- Headers and authentication are forwarded
+- Backend URL: ${RAG_BASE_URL} or ${BACKEND_URL}
+
+## Page Routes (Frontend Pages)
+*Based on actual page.tsx files found in the codebase*
+
+### Main Pages
+- GET /
+  - Home page (src/app/page.tsx)
+  - Main entry point with App component
+
+- GET /main
+  - Main application page (src/app/main/page.tsx)
+  - Core functionality page
+
+### Chat Pages
+- GET /chat
+  - Chat interface (src/app/chat/page.tsx)
+  - Main chat page
+
+- GET /chat/agents
+  - Agent management interface (src/app/chat/agents/page.tsx)
+  - Agent selection and configuration
+
+### Travel Pages
+*All travel pages are located in src/app/travel/*
+
+- GET /travel
+  - Travel main page (src/app/travel/page.tsx)
+  - Travel services overview and navigation
+
+- GET /travel/accessibility
+  - Accessibility features (src/app/travel/accessibility/page.tsx)
+  - Accessibility options and settings
+
+- GET /travel/emergency
+  - Emergency services (src/app/travel/emergency/page.tsx)
+  - Emergency contacts and information
+
+- GET /travel/essentials
+  - Travel essentials (src/app/travel/essentials/page.tsx)
+  - Important travel information
+
+- GET /travel/getting-around
+  - Transportation guide (src/app/travel/getting-around/page.tsx)
+  - Getting around information
+
+- GET /travel/help
+  - Help and support (src/app/travel/help/page.tsx)
+  - Customer support page
+
+- GET /travel/itinerary
+  - Travel itinerary (src/app/travel/itinerary/page.tsx)
+  - Trip planning and itinerary management
+
+- GET /travel/language
+  - Language settings (src/app/travel/language/page.tsx)
+  - Language selection and preferences
+
+- GET /travel/notifications
+  - Notifications center (src/app/travel/notifications/page.tsx)
+  - User notifications and alerts
+
+- GET /travel/our-hotel
+  - Hotel information (src/app/travel/our-hotel/page.tsx)
+  - Accommodation details and booking
+
+- GET /travel/places
+  - Places and attractions (src/app/travel/places/page.tsx)
+  - Location discovery and recommendations
+
+- GET /travel/rent
+  - Rental services (src/app/travel/rent/page.tsx)
+  - Equipment/car rental booking
+
+- GET /travel/taxi
+  - Taxi and transportation (src/app/travel/taxi/page.tsx)
+  - Transport booking and scheduling
+
+- GET /travel/tours
+  - Tours and packages (src/app/travel/tours/page.tsx)
+  - Tour booking interface with TourDetail component
+
+## Route Categories Summary
+
+### Frontend API Endpoints (/services/*) - 24 total
+- Chat & AI: 3 endpoints (agent-completions, completions, text-stream)
+- RAG Services: 3 endpoints (summary, place, contexts)
+- Context Management: 4 endpoints (GET/POST contexts, [id], import)
+- Travel Services: 4 endpoints (pages, place, nearby, health)
+- Session Management: 1 endpoint (session)
+- Agent Management: 2 endpoints (agent-sets, tenant-ai-config)
+- Staff & Support: 2 endpoints (availability, messages)
+- Analytics: 2 endpoints (usage, log/messages)
+- LINE Integration: 2 endpoints (webhook, push)
+- Categories & Channels: 2 endpoints (categories, channels/health)
+
+### Backend Proxy Routes (/api/*) - All forwarded to backend
+- All /api/* requests are proxied to rag.haahii.com
+- Frontend acts as gateway/proxy
+- Backend handles actual API logic
+- Backend URLs: ${RAG_BASE_URL} or ${BACKEND_URL}
+
+### Frontend Pages (16 total)
+- Main Pages: 2 pages (/, /main)
+- Chat Pages: 2 pages (/chat, /chat/agents)
+- Travel Pages: 12 pages (/travel/* with 12 sub-pages)
+
+### Total Routes: 40
+
+## Authentication & Headers
+
+### Required Headers
+- X-Tenant-ID: Required for most API endpoints
+- Content-Type: application/json (for POST requests)
+- X-Line-Signature: Required for LINE webhook verification
+
+### Rate Limiting
+- Agent completions: 10 requests/minute per IP
+- Other endpoints: No specific rate limiting mentioned
+
+## Environment Variables
+- NEXT_PUBLIC_BACKEND_URL: Backend API URL (default: http://localhost:3001)
+- RAG_BASE_URL: RAG service base URL (default: http://localhost:3100)
+- RAG_TENANT_ID: Default tenant ID for RAG services
+- TENANT_ID: Public tenant ID for contexts
+- OPENAI_API_KEY: OpenAI API key for realtime sessions
+- LINE_CHANNEL_SECRET: LINE webhook verification
+- LINE_CHANNEL_ACCESS_TOKEN: LINE messaging API
+
+## Implementation Details
+- **Rate Limiting**: Different limits per endpoint (5-20 requests/minute)
+- **Proxy Pattern**: Most /services/* routes proxy to backend APIs
+- **Mock Data**: Staff, analytics, and some services use mock implementations
+- **File System**: Travel pages are dynamically discovered from filesystem
+- **Tool Mapping**: Dynamic tool mapping from database to function handlers
+- **Multi-Agent**: Supports agent switching and tool execution
+- **Real-time**: OpenAI realtime API integration with fallback to mock keys
+
+## Architecture Notes
+- Frontend domain: chat.haahii.com
+- Backend domain: rag.haahii.com  
+- All /api/* routes are proxied to backend
+- All /services/* routes are frontend internal APIs
+- Travel pages are under /travel/ prefix
+- Most API endpoints require X-Tenant-ID header
+- Next.js App Router structure with dynamic routing
+- Multi-agent system with database-driven tool mapping
+- Real-time chat capabilities with OpenAI integration
+- LINE messaging platform integration
+- Comprehensive travel service functionality
+
+Generated: $(date)

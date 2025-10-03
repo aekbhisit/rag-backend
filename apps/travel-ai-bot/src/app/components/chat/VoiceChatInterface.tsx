@@ -17,6 +17,7 @@ import { getOrCreateDbSession, clearCurrentSession } from '@/app/lib/sharedSessi
 import { useDbAgentSets } from '@/app/hooks/useDbAgentSets';
 import { allAgentSets, defaultAgentSetKey } from '@/app/agents';
 import { logMessage as logToDb } from '@/app/lib/loggerClient';
+import { getApiUrl } from '@/app/lib/apiHelper';
 
 // Custom microphone icon component
 const MicrophoneIcon = ({ className }: { className?: string }) => (
@@ -54,9 +55,9 @@ export default function VoiceChatInterface({
 
   const { messages, addMessage, updateMessage, replaceMessageById, replaceLatestSpeechPlaceholder, clearMessages } = useMessageHistory(currentSessionId);
 
-  // Load agents and tools from database (same as text mode)
-  const { agentSets: dbAgentSets, loading: agentSetsLoading } = useDbAgentSets();
-  const dynamicAgentSets = Object.keys(dbAgentSets).length > 0 ? dbAgentSets : allAgentSets;
+  // Use agent sets passed from parent (ChatInterface) to avoid duplicate API calls
+  const dynamicAgentSets = providedAgentConfigSet ? { default: providedAgentConfigSet } : allAgentSets;
+  const agentSetsLoading = false; // No loading since we use passed data
 
   // State for active agent (similar to text mode)
   const [activeAgentSetKeyState, setActiveAgentSetKeyState] = useState<string>(defaultAgentSetKey);
@@ -163,8 +164,8 @@ export default function VoiceChatInterface({
       if (dbSessionId) {
         // Use sendBeacon for reliable delivery even when page is closing
         const formData = new FormData();
-        formData.append('tenantId', 'acc44cdb-8da5-4226-9569-1233a39f564f');
-        navigator.sendBeacon('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(dbSessionId) + '/end', formData);
+        formData.append('tenantId', process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000');
+        navigator.sendBeacon(getApiUrl('/api/admin/sessions/' + encodeURIComponent(dbSessionId) + '/end'), formData);
       }
     };
 
@@ -378,6 +379,20 @@ export default function VoiceChatInterface({
 
   const handleSDKError = useCallback((error: Error) => {
     console.error('[VoiceRealtime-RAW] ❌ SDK Error:', error);
+    
+    // Don't show error to user for common WebRTC/connection issues
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes('WebRTC') || 
+        errorMessage.includes('connection') || 
+        errorMessage.includes('network') ||
+        errorMessage === 'error' ||
+        errorMessage === 'Unknown error') {
+      console.warn('[VoiceRealtime-RAW] ⚠️ Ignoring common connection error:', errorMessage);
+      return;
+    }
+    
+    // Only show meaningful errors to user
+    console.error('[VoiceRealtime-RAW] 🚨 User-facing error:', errorMessage);
   }, []);
 
   // Initialize SDK connection automatically on page load
@@ -963,11 +978,11 @@ export default function VoiceChatInterface({
                   
                   if (dbSessionId && dbSessionId !== currentSessionId) {
                     console.log('[VoiceChatInterface] Calling session end API for database session:', dbSessionId);
-                    const response = await fetch('http://localhost:3100/api/admin/sessions/' + encodeURIComponent(dbSessionId) + '/end', {
+                    const response = await fetch(getApiUrl('/api/admin/sessions/' + encodeURIComponent(dbSessionId) + '/end'), {
                       method: 'POST',
                       headers: { 
                         'Content-Type': 'application/json',
-                        'X-Tenant-ID': 'acc44cdb-8da5-4226-9569-1233a39f564f'
+                        'X-Tenant-ID': process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000'
                       }
                     });
                     const result = await response.json();
@@ -1009,7 +1024,7 @@ export default function VoiceChatInterface({
                 await new Promise(resolve => setTimeout(resolve, 100));
                 console.log('[VoiceChatInterface] State reset complete, creating new session...');
                 
-                const newSessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const newSessionId = crypto.randomUUID();
                 console.log('[VoiceChatInterface] Creating new session ID:', newSessionId);
                 setCurrentSessionId(newSessionId);
                 try {
@@ -1195,20 +1210,14 @@ export default function VoiceChatInterface({
           const canConnect = !realtimeEnabled && sessionStatus === 'DISCONNECTED' && (!agentSetsLoading);
           
           // Debug logging for button state
-          // Log only when values change to avoid spam
-          const lastBtnStateRef = (window as any).__VCI_LAST_BTN_STATE__ || { key: '' };
-          const btnKey = JSON.stringify({ sessionStatus, realtimeEnabled, hasAgent: !!currentAgent, agentSetsLoading, isEnabled, canConnect });
-          if (lastBtnStateRef.key !== btnKey) {
-            console.log('[VoiceChatInterface] Button state:', {
-              sessionStatus,
-              realtimeEnabled,
-              currentAgent: !!currentAgent,
-              agentSetsLoading,
-              isEnabled,
-              canConnect
-            });
-            (window as any).__VCI_LAST_BTN_STATE__ = { key: btnKey };
-          }
+          // console.log('[VoiceChatInterface] Button state:', {
+          //   sessionStatus,
+          //   realtimeEnabled,
+          //   currentAgent: !!currentAgent,
+          //   agentSetsLoading,
+          //   isEnabled,
+          //   canConnect
+          // });
           
           return (
             <div className="flex flex-col items-center justify-center gap-3" style={{ minHeight: 120 }}>

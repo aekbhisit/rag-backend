@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import ChatInterface from "@/app/components/chat/ChatInterface";
+import { getApiUrl } from '@/app/lib/apiHelper';
 
 type Vehicle = { id: string; type: string; seats?: number; transmission?: string; pricePerDay: string };
 type Product = { id: string; title: string; attributes: any };
@@ -29,14 +30,14 @@ export default function RentPage(props: { embedded?: boolean }) {
         setLoading(true);
         setError("");
         // Ensure 'rent' category exists
-        const catsRes = await fetch('/api/categories', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+        const catsRes = await fetch(getApiUrl('/api/categories'), { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
         const cats = await catsRes.json();
         const list = Array.isArray(cats?.items) ? cats.items : [];
         let rent = list.find((c: any) => (c.slug || '').toLowerCase() === 'rent');
         if (!rent) {
-          const cRes = await fetch('/api/categories', {
+          const cRes = await fetch(getApiUrl('/api/categories'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any,
+            headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any,
             body: JSON.stringify({ name: 'Rent', slug: 'rent' })
           });
           if (cRes.ok) rent = await cRes.json();
@@ -44,13 +45,13 @@ export default function RentPage(props: { embedded?: boolean }) {
         if (!rent?.id) throw new Error('Missing rent category');
 
         // Load products
-        const res = await fetch('/api/contexts?type=product&category=rent&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+        const res = await fetch('/services/contexts?type=product&category=rent&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
         const data = await res.json();
         let got: Product[] = (Array.isArray(data?.items) ? data.items : []).map((x: any) => ({ id: x.id, title: x.title, attributes: x.attributes || {} }));
 
         // Seed defaults if none
         if (got.length === 0) {
-          const seedKey = `seed:rent:${(process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || 'default'}`;
+          const seedKey = `seed:rent:${(process as any)?.env?.TENANT_ID || 'default'}`;
           const seeded = typeof window !== 'undefined' ? window.localStorage.getItem(seedKey) === '1' : false;
           const defaults = [
             { slug: 'economy-car', title: 'Economy Car', product_type: 'car', seats: 4, transmission: 'Auto', price_per_day: 900, currency: 'THB' },
@@ -72,16 +73,16 @@ export default function RentPage(props: { embedded?: boolean }) {
                 categories: [rent.id],
                 attributes: { ...d, tags: ['rent'] }
               };
-              await fetch('/api/admin/contexts/import', {
+              await fetch('/services/contexts/import', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any,
+                headers: { 'Content-Type': 'application/json', 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any,
                 body: JSON.stringify(payload)
               });
             }
             try { if (typeof window !== 'undefined') window.localStorage.setItem(seedKey, '1'); } catch {}
             
             // If we created new items, we need to refetch to get the updated list
-            const res2 = await fetch('/api/contexts?type=product&category=rent&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.NEXT_PUBLIC_RAG_TENANT_ID || '' } as any });
+            const res2 = await fetch('/services/contexts?type=product&category=rent&page_size=100', { headers: { 'x-tenant-id': (process as any)?.env?.TENANT_ID || '' } as any });
             const d2 = await res2.json();
             got = (Array.isArray(d2?.items) ? d2.items : []).map((x: any) => ({ id: x.id, title: x.title, attributes: x.attributes || {} }));
           }
@@ -209,7 +210,7 @@ export default function RentPage(props: { embedded?: boolean }) {
         <aside className="bg-white border-l border-stone-200" style={{ width: `${chatWidth}px` }}>
           <div className="h-full flex flex-col">
             <div className="flex-1 min-h-0">
-              <ChatInterface sessionId={`sess_${Date.now()}`} activeChannel={"normal"} onChannelSwitch={()=>{}} isProcessing={false} />
+              <ChatInterface sessionId={`crypto.randomUUID()`} activeChannel={"normal"} onChannelSwitch={()=>{}} isProcessing={false} />
             </div>
           </div>
         </aside>
