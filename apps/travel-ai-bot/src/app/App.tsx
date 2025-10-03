@@ -16,7 +16,6 @@ import { LanguageProvider, useLanguage } from "@/app/contexts/LanguageContext";
 // Hooks
 import { useHandleServerEvent } from "./hooks/useHandleServerEvent";
 import useAudioDownload from "./hooks/useAudioDownload";
-import { useWebRTCConnection } from "./hooks/useWebRTCConnection";
 import { useUIPreferences } from "./hooks/useUIPreferences";
 import { useCommunication } from "./hooks/useCommunication";
 import { useAgentSelection } from "./hooks/useAgentSelection";
