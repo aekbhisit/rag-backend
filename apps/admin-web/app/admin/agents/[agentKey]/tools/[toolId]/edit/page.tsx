@@ -58,6 +58,7 @@ interface ExportedToolConfig {
   tool_key: string;
   tool_name: string;
   tool_description: string;
+  alias: string;
   enabled: boolean;
   position: number;
   arg_defaults: Record<string, any>;
@@ -104,7 +105,7 @@ const TOOL_TYPES: Record<string, ToolTypeDefinition> = {
     }
   },
   'skill.rag.place': {
-    name: 'Rag Place',
+    name: 'RAG Place Search',
     description: 'Search for nearby places using location-based RAG with distance weighting',
     category: 'skill',
     runtime: 'server',
@@ -117,7 +118,7 @@ const TOOL_TYPES: Record<string, ToolTypeDefinition> = {
       { name: 'conversation_history', type: 'string', description: 'Previous conversation context (optional)', required: false }
     ],
     configFields: [
-      { name: 'api_endpoint', type: 'string', description: 'RAG API endpoint', required: true, default: '/api/rag/place' },
+      { name: 'api_endpoint', type: 'string', description: 'RAG API endpoint', required: true, default: '/services/rag/place' },
       { name: 'method', type: 'string', description: 'HTTP method', required: true, default: 'POST' }
     ],
     examples: {
@@ -582,6 +583,7 @@ export default function EditToolPage() {
   const [error, setError] = useState('');
   
   const [toolConfig, setToolConfig] = useState({
+    alias: '',
     enabled: true,
     position: 0,
     arg_defaults: {} as Record<string, any>,
@@ -634,6 +636,7 @@ export default function EditToolPage() {
       // Set the selected tool and configuration
       setSelectedTool(tool.tool_key);
       setToolConfig({
+        alias: tool.alias || '',
         enabled: tool.enabled,
         position: tool.position || 0,
         arg_defaults: tool.arg_defaults || {},
@@ -803,6 +806,7 @@ export default function EditToolPage() {
       const toolData = {
         agent_key: agentKey,
         tool_key: selectedTool,
+        alias: toolConfig.alias,
         enabled: toolConfig.enabled,
         position: toolConfig.position,
         arg_defaults: toolConfig.arg_defaults,
@@ -838,6 +842,7 @@ export default function EditToolPage() {
       tool_key: selectedTool,
       tool_name: selectedToolDef.name,
       tool_description: selectedToolDef.description,
+      alias: toolConfig.alias,
       enabled: toolConfig.enabled,
       position: toolConfig.position,
       arg_defaults: toolConfig.arg_defaults,
@@ -891,6 +896,7 @@ export default function EditToolPage() {
         
         // Set tool configuration
         setToolConfig({
+          alias: importData.alias || '',
           enabled: importData.enabled !== undefined ? importData.enabled : true,
           position: importData.position || 0,
           arg_defaults: importData.arg_defaults || {},
@@ -1080,8 +1086,8 @@ export default function EditToolPage() {
                         >
                           <div className="flex items-center justify-between">
                             <div>
-                              <div className="font-medium text-gray-900">{(TOOL_TYPES as any)[tool.tool_key]?.name || tool.name}</div>
-                              <div className="text-sm text-gray-600">{(TOOL_TYPES as any)[tool.tool_key]?.description || tool.description || 'No description'}</div>
+                              <div className="font-medium text-gray-900">{tool.name}</div>
+                              <div className="text-sm text-gray-600">{tool.description || 'No description'}</div>
                               <div className="text-xs text-gray-500 mt-1">
                                 {tool.runtime}
                               </div>
@@ -1680,7 +1686,13 @@ export default function EditToolPage() {
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                  {/* Alias removed by request */}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Alias (Optional)</label>
+                    <input 
+                      value={toolConfig.alias} 
+                      onChange={(e) => setToolConfig(prev => ({ ...prev, alias: e.target.value }))}
+                      className="w-full border rounded px-3 py-2" 
+                      placeholder="Custom name for this tool"
+                    />
                     <p className="text-xs text-gray-500 mt-1">Give this tool a friendly name</p>
                   </div>
                   <div>

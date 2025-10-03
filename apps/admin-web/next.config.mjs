@@ -9,10 +9,13 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/:path*` : 'http://localhost:3100/api/:path*',
+        destination: 'http://localhost:3001/api/:path*',
       },
     ];
   },
+  env: {
+    NEXT_PUBLIC_TENANT_ID: process.env.TENANT_ID || '',
+  }
 };
 
 export default nextConfig;

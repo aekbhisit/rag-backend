@@ -262,15 +262,8 @@ export default function SessionsPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => router.push(`/admin/sessions/${encodeURIComponent(i.id)}`)}
-                      className="h-8 w-8 rounded border hover:bg-[color:var(--surface-hover)] flex items-center justify-center"
-                      aria-label="View session"
-                      title="View"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    </button>
+                      className="h-8 px-3 rounded border hover:bg-[color:var(--surface-hover)]"
+                    >View</button>
                     <button
                       onClick={() => deleteSession(i.id)}
                       disabled={deleting === i.id}

@@ -9,8 +9,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 interface BackendToolData {
   id: string;
   tool_key: string;
-  function_name?: string;
-  function_description?: string;
+  alias?: string;
   enabled: boolean;
   position: number;
   arg_defaults: string | Record<string, any>;
@@ -239,6 +238,7 @@ export default function AgentToolsPage() {
   async function saveTool(t: BackendToolData) {
     try {
       const body: any = {
+        alias: t.alias || null,
         enabled: !!t.enabled,
         position: Number(t.position || 0),
         arg_defaults: typeof t.arg_defaults === 'string' ? JSON.parse(t.arg_defaults) : (t.arg_defaults || {}),
@@ -414,7 +414,7 @@ export default function AgentToolsPage() {
                         <tr>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tool</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Function</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alias</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Runtime</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -441,13 +441,20 @@ export default function AgentToolsPage() {
                               <div>
                                 <div className="text-sm font-medium text-gray-900">{getToolDisplayName(tool.tool_key)}</div>
                                 <div className="text-xs text-gray-500 font-mono">{tool.tool_key}</div>
-                                {tool.function_name && (
-                                  <div className="text-[11px] text-gray-500 font-mono">fn: {tool.function_name}</div>
-                                )}
                               </div>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-mono">
-                              {tool.function_name || '—'}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <input 
+                                value={tool.alias || ''} 
+                                onChange={(e) => {
+                                  const newTools = [...tools];
+                                  const toolIndex = tools.findIndex(t => t.id === tool.id);
+                                  newTools[toolIndex] = { ...tool, alias: e.target.value };
+                                  setTools(newTools);
+                                }}
+                                className="w-32 border rounded px-2 py-1 text-sm"
+                                placeholder="Custom name"
+                              />
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                               {getToolRuntime(tool.tool_key)}

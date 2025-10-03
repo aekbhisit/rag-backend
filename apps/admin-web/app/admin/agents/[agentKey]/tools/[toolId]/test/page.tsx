@@ -8,6 +8,7 @@ interface ToolData {
   id: string;
   agent_key: string;
   tool_key: string;
+  alias?: string;
   enabled: boolean;
   position: number;
   arg_defaults: Record<string, any>;
@@ -248,8 +249,8 @@ export default function ToolTestPage() {
               <p className="text-gray-900 font-mono">{toolData.tool_key}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Function</label>
-              <p className="text-gray-900 font-mono">{toolData.function_name || '—'}</p>
+              <label className="block text-sm font-medium text-gray-700">Alias</label>
+              <p className="text-gray-900">{toolData.alias || 'None'}</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Status</label>

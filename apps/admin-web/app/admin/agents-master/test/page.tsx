@@ -13,7 +13,7 @@ export default function TestPage() {
           <h2 className="text-lg font-semibold mb-2">Environment Variables</h2>
           <div className="bg-gray-100 p-4 rounded">
             <p><strong>BACKEND_URL:</strong> {process.env.NEXT_PUBLIC_BACKEND_URL || 'Not set'}</p>
-            <p><strong>DEFAULT_TENANT_ID:</strong> {process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'Not set'}</p>
+            <p><strong>DEFAULT_TENANT_ID:</strong> {process.env.NEXT_PUBLIC_TENANT_ID || 'Not set'}</p>
           </div>
         </div>
         
@@ -32,7 +32,7 @@ export default function TestPage() {
           <button 
             onClick={async () => {
               try {
-                const response = await fetch(`${BACKEND_URL}/api/admin/agents-master/conversations`, {
+                const response = await fetch('http://localhost:3001/api/admin/agents-master/conversations', {
                   headers: {
                     'X-Tenant-ID': '00000000-0000-0000-0000-000000000000',
                     'X-User-ID': 'test-user',

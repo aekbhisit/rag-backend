@@ -1,0 +1,440 @@
+Admin Web - Complete Route List (Based on Actual Code)
+======================================================
+
+Base URL: http://localhost:3002
+Application: Admin Web (Next.js App Router)
+Domain: admin.haahii.com
+Framework: Next.js 14+ with TypeScript
+
+## Public Routes
+*These are routes accessible without authentication*
+
+### Authentication
+- GET /login
+  - Login page
+  - User authentication form
+  - Redirects to /admin after successful login
+
+### Landing Page
+- GET /
+  - Welcome page
+  - Redirects to admin panel
+  - Simple landing with link to admin
+
+## Admin Routes (/admin/*)
+*These routes require authentication and are protected by the admin layout*
+
+### Dashboard
+- GET /admin
+  - Main admin dashboard
+  - System overview and statistics
+  - Key metrics and quick actions
+
+## Content Management Routes
+
+### Contexts Management
+- GET /admin/contexts
+  - List all contexts
+  - Search, filter, and pagination
+  - CRUD operations for contexts
+
+- GET /admin/contexts/create
+  - Create new context form
+  - Context creation interface
+
+- GET /admin/contexts/edit/[id]
+  - Edit specific context
+  - Context editing interface
+  - Path: id (context UUID)
+
+- GET /admin/contexts/import-places
+  - Import places from external sources
+  - Bulk import functionality
+  - Place data import interface
+
+### Categories Management
+- GET /admin/categories
+  - List all categories
+  - Hierarchical category management
+  - CRUD operations for categories
+
+### Intent System
+- GET /admin/intent
+  - Intent system management
+  - Intent scopes and actions
+  - Intent configuration interface
+
+## Conversation Management Routes
+
+### Session Management
+- GET /admin/sessions
+  - List all user sessions
+  - Session monitoring and management
+  - Session details and analytics
+
+- GET /admin/sessions/[id]
+  - View specific session details
+  - Session conversation history
+  - Path: id (session UUID)
+
+## Agent Management Routes
+
+### Agents
+- GET /admin/agents
+  - List all agents
+  - Agent management interface
+  - Agent status and configuration
+
+- GET /admin/agents/new
+  - Create new agent form
+  - Agent creation interface
+
+- GET /admin/agents/[agentKey]
+  - View specific agent details
+  - Agent configuration and settings
+  - Path: agentKey (agent identifier)
+
+- GET /admin/agents/[agentKey]/edit
+  - Edit specific agent
+  - Agent editing interface
+  - Path: agentKey (agent identifier)
+
+### Agent Tools Management
+- GET /admin/agents/[agentKey]/tools
+  - List agent tools
+  - Tool management for specific agent
+  - Path: agentKey (agent identifier)
+
+- GET /admin/agents/[agentKey]/tools/add
+  - Add new tool to agent
+  - Tool addition interface
+  - Path: agentKey (agent identifier)
+
+- GET /admin/agents/[agentKey]/tools/[toolId]
+  - View specific tool details
+  - Tool configuration
+  - Path: agentKey, toolId
+
+- GET /admin/agents/[agentKey]/tools/[toolId]/edit
+  - Edit specific tool
+  - Tool editing interface
+  - Path: agentKey, toolId
+
+- GET /admin/agents/[agentKey]/tools/[toolId]/test
+  - Test specific tool
+  - Tool testing interface
+  - Path: agentKey, toolId
+
+### Agent Prompts Management
+- GET /admin/agents/[agentKey]/prompts
+  - List agent prompts
+  - Prompt management for specific agent
+  - Path: agentKey (agent identifier)
+
+- GET /admin/agents/[agentKey]/prompts/new
+  - Create new prompt for agent
+  - Prompt creation interface
+  - Path: agentKey (agent identifier)
+
+- GET /admin/agents/[agentKey]/prompts/[id]
+  - View specific prompt
+  - Prompt details
+  - Path: agentKey, id
+
+- GET /admin/agents/[agentKey]/prompts/[id]/edit
+  - Edit specific prompt
+  - Prompt editing interface
+  - Path: agentKey, id
+
+### Agent Navigation Pages
+- GET /admin/agents/[agentKey]/navigation-pages
+  - List agent navigation pages
+  - Navigation page management
+  - Path: agentKey (agent identifier)
+
+### Agent Prompts (Alternative Route)
+- GET /admin/agent-prompts/[agentKey]/edit
+  - Edit agent prompts (alternative route)
+  - Prompt editing interface
+  - Path: agentKey (agent identifier)
+
+### Agents Master
+- GET /admin/agents-master
+  - Master agents management
+  - Agent master configuration
+  - Advanced agent settings
+
+- GET /admin/agents-master/test
+  - Test agents master functionality
+  - Agent testing interface
+
+### Agents Test
+- GET /admin/agents-test
+  - Agent testing interface
+  - Test agent functionality
+  - Agent performance testing
+
+## RAG (Retrieval Augmented Generation) Routes
+
+### Prompts Management
+- GET /admin/prompts
+  - List all prompts
+  - Global prompt management
+  - CRUD operations for prompts
+
+- GET /admin/prompts/create
+  - Create new prompt form
+  - Prompt creation interface
+
+- GET /admin/prompts/edit/[id]
+  - Edit specific prompt
+  - Prompt editing interface
+  - Path: id (prompt UUID)
+
+### RAG Requests
+- GET /admin/requests
+  - List RAG requests
+  - Request monitoring and analytics
+  - Request details and logs
+
+- GET /admin/requests/[id]
+  - View specific request details
+  - Request analysis and debugging
+  - Path: id (request UUID)
+
+### API Documentation & Testing
+- GET /admin/api
+  - API documentation and testing
+  - Interactive API testing interface
+  - API endpoint testing tools
+
+## AI Management Routes
+
+### AI Cost Management
+- GET /admin/ai-costs
+  - AI cost summary and analysis
+  - Cost tracking and reporting
+  - AI usage cost breakdown
+
+### AI Usage Analytics
+- GET /admin/ai-usage
+  - AI usage analytics and metrics
+  - Usage patterns and trends
+  - AI model usage statistics
+
+### AI Pricing
+- GET /admin/ai-pricing
+  - AI pricing configuration
+  - Pricing models and rates
+  - Cost management settings
+
+## System Management Routes
+
+### Tenants Management
+- GET /admin/tenants
+  - List all tenants
+  - Multi-tenant management
+  - Tenant configuration
+
+- GET /admin/tenants/create
+  - Create new tenant form
+  - Tenant creation interface
+
+- GET /admin/tenants/edit/[id]
+  - Edit specific tenant
+  - Tenant editing interface
+  - Path: id (tenant UUID)
+
+- GET /admin/tenants/[id]/settings
+  - Tenant-specific settings
+  - Tenant configuration management
+  - Path: id (tenant UUID)
+
+### User Management
+- GET /admin/users
+  - List all users
+  - User management interface
+  - User roles and permissions
+
+- GET /admin/users/create
+  - Create new user form
+  - User creation interface
+
+- GET /admin/users/edit/[id]
+  - Edit specific user
+  - User editing interface
+  - Path: id (user UUID)
+
+### Audit & Logging
+- GET /admin/audit
+  - Audit log viewer
+  - System activity monitoring
+  - Audit trail and compliance
+
+### Error Logs
+- GET /admin/error-logs
+  - Error log viewer
+  - System error monitoring
+  - Error analysis and debugging
+
+- GET /admin/error-logs/[id]
+  - View specific error details
+  - Error analysis interface
+  - Path: id (error log UUID)
+
+### System Settings
+- GET /admin/settings
+  - System settings configuration
+  - Application settings
+  - Multi-tab settings interface:
+    - Application settings
+    - Tenant settings
+    - AI Models (Embedding)
+    - Models (Generating)
+    - Integrations
+    - Security
+
+## Tool Registry Routes
+
+### Tool Management
+- GET /admin/tool-registry
+  - List all registered tools
+  - Tool registry management
+  - Global tool configuration
+
+- GET /admin/tool-registry/new
+  - Create new tool form
+  - Tool registration interface
+
+- GET /admin/tool-registry/[toolKey]/edit
+  - Edit specific tool
+  - Tool editing interface
+  - Path: toolKey (tool identifier)
+
+## Cost Management Routes
+
+### General Costs
+- GET /admin/costs
+  - General cost management
+  - Cost tracking and reporting
+  - Financial analytics
+
+## Route Categories Summary
+
+### Public Routes (2 total)
+- Authentication: 1 route (/login)
+- Landing: 1 route (/)
+
+### Admin Routes (50+ total)
+- Dashboard: 1 route
+- Content Management: 8 routes
+- Conversation Management: 2 routes
+- Agent Management: 20+ routes
+- RAG Management: 5 routes
+- AI Management: 3 routes
+- System Management: 10+ routes
+- Tool Registry: 3 routes
+- Cost Management: 1 route
+
+### Total Routes: 52+
+
+## Navigation Structure
+
+### Content Group
+- Contexts
+- Import Places
+- Categories
+- Intent System
+
+### Conversation Group
+- Sessions
+
+### Agents Group
+- Agents
+- Agents Master
+- Agents Test
+
+### RAG Group
+- Prompts
+- RAG Requests
+- API Docs & Test
+
+### AI Group
+- AI Cost Summary
+- AI Usage
+
+### Main Group
+- AI Pricing
+- Tenants
+- Users
+- Audit Log
+- Error Logs
+
+## Authentication & Security
+
+### Authentication
+- Login required for all /admin/* routes
+- Session-based authentication
+- Auto-redirect to login if not authenticated
+- Development mode bypass available
+
+### User Interface
+- Responsive sidebar navigation
+- Collapsible sidebar
+- Theme toggle (light/dark)
+- Language switcher (English/Thai)
+- User profile display
+
+## Features & Functionality
+
+### Multi-language Support
+- English and Thai translations
+- Dynamic language switching
+- Localized content and labels
+
+### Theme Support
+- Light and dark themes
+- Theme persistence
+- Custom CSS variables
+
+### Data Management
+- CRUD operations for all entities
+- Search and filtering
+- Pagination support
+- Bulk operations
+- Import/export functionality
+
+### Real-time Features
+- Live data updates
+- Real-time monitoring
+- Dynamic content loading
+
+### Error Handling
+- Comprehensive error logging
+- User-friendly error messages
+- Error recovery mechanisms
+
+## Environment Variables
+- NEXT_PUBLIC_BACKEND_URL: Backend API URL
+- NODE_ENV: Environment (development/production)
+
+## Implementation Details
+- **Framework**: Next.js 14+ with App Router
+- **Language**: TypeScript
+- **Styling**: CSS with CSS variables for theming
+- **State Management**: React hooks and context
+- **API Integration**: REST API calls to backend
+- **Authentication**: Custom auth provider
+- **Internationalization**: Custom translation system
+- **UI Components**: Custom component library
+
+## Architecture Notes
+- **Domain**: admin.haahii.com
+- **Authentication**: Required for all admin routes
+- **Layout**: Shared admin layout with sidebar navigation
+- **API Integration**: Communicates with backend API
+- **Multi-tenant**: Supports multiple tenants
+- **Responsive**: Mobile-friendly design
+- **Accessibility**: Keyboard navigation and screen reader support
+
+Generated: $(date)

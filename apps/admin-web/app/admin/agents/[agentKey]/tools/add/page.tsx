@@ -58,6 +58,7 @@ interface ExportedToolConfig {
   tool_key: string;
   tool_name: string;
   tool_description: string;
+  alias: string;
   enabled: boolean;
   position: number;
   arg_defaults: Record<string, any>;
@@ -117,7 +118,7 @@ const TOOL_TYPES: Record<string, ToolTypeDefinition> = {
       { name: 'conversation_history', type: 'string', description: 'Previous conversation context (optional)', required: false }
     ],
     configFields: [
-      { name: 'api_endpoint', type: 'string', description: 'RAG API endpoint', required: true, default: '/api/rag/place' },
+      { name: 'api_endpoint', type: 'string', description: 'RAG API endpoint', required: true, default: '/services/rag/place' },
       { name: 'method', type: 'string', description: 'HTTP method', required: true, default: 'POST' }
     ],
     examples: {
@@ -576,11 +577,13 @@ export default function AddAgentToolPage() {
   const apiBase = useMemo(() => `${BACKEND_URL}/api/admin`, []);
   
   const [catalog, setCatalog] = useState<ToolRegistryEntry[]>([]);
+  const [existingToolKeys, setExistingToolKeys] = useState<Set<string>>(new Set());
   const [selectedTool, setSelectedTool] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   const [toolConfig, setToolConfig] = useState({
+    alias: '',
     enabled: true,
     position: 0,
     arg_defaults: {} as Record<string, any>,
@@ -822,7 +825,7 @@ export default function AddAgentToolPage() {
 
     return {
       method,
-      url: `${BACKEND_URL}${baseUrl}`,
+      url: `http://localhost:3001${baseUrl}`,
       headers: {
         'Content-Type': 'application/json',
         'X-User-ID': 'test-user'
@@ -839,19 +842,8 @@ export default function AddAgentToolPage() {
       if (!res.ok) throw new Error('Failed to load tool catalog');
       const data = await res.json();
       
-      // Only show skill tools in the catalog - core and ui tools are automatically available
-      // Also exclude time and geo tools as they are not needed
-      const skillTools = data.filter((tool: any) => {
-        if (tool.category !== 'skill') return false;
-        
-        // Skip time and geo tools
-        if (tool.tool_key.startsWith('skill.time.') || tool.tool_key.startsWith('skill.geo.')) {
-          return false;
-        }
-        
-        return true;
-      });
-      setCatalog(skillTools);
+      // Keep full registry so Core/UI picker can render core.* and ui.*
+      setCatalog(Array.isArray(data) ? data : []);
     } catch (e: any) { 
       setError(e?.message || 'Load failed'); 
     } finally { 
@@ -859,8 +851,19 @@ export default function AddAgentToolPage() {
     }
   }
 
+  async function loadExistingTools() {
+    try {
+      const res = await fetch(`${apiBase}/agents/${encodeURIComponent(agentKey)}/tools`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const rows = await res.json();
+      const keys = new Set<string>((Array.isArray(rows) ? rows : []).map((r: any) => r.tool_key).filter(Boolean));
+      setExistingToolKeys(keys);
+    } catch {}
+  }
+
   useEffect(() => { 
     loadCatalog(); 
+    loadExistingTools();
   }, []);
 
   function handleToolSelect(toolKey: string) {
@@ -884,6 +887,7 @@ export default function AddAgentToolPage() {
       const toolData = {
         agent_key: agentKey,
         tool_key: selectedTool,
+        alias: toolConfig.alias,
         enabled: toolConfig.enabled,
         position: toolConfig.position,
         arg_defaults: toolConfig.arg_defaults,
@@ -915,6 +919,7 @@ export default function AddAgentToolPage() {
       tool_key: selectedTool,
       tool_name: selectedToolDef.name,
       tool_description: selectedToolDef.description,
+      alias: toolConfig.alias,
       enabled: toolConfig.enabled,
       position: toolConfig.position,
       arg_defaults: toolConfig.arg_defaults,
@@ -968,6 +973,7 @@ export default function AddAgentToolPage() {
         
         // Set tool configuration
         setToolConfig({
+          alias: importData.alias || '',
           enabled: importData.enabled !== undefined ? importData.enabled : true,
           position: importData.position || 0,
           arg_defaults: importData.arg_defaults || {},
@@ -1084,6 +1090,43 @@ export default function AddAgentToolPage() {
         <div className="lg:col-span-4 bg-white border rounded-lg p-4">
           <h2 className="text-lg font-medium mb-4">Skill Tool Catalog</h2>
           
+          {/* Core/UI Tools Picker */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+            <h3 className="font-medium text-gray-900 mb-2">Core & UI Tools</h3>
+            <div className="text-xs text-gray-600 mb-2">Select core/UI tools to attach to this agent. These are stored in DB like other tools.</div>
+            <div className="grid grid-cols-1 gap-2">
+              {catalog
+                .filter((tool: any) => tool.tool_key.startsWith('core.') || tool.tool_key.startsWith('ui.'))
+                .map((tool: any) => (
+                  <div
+                    key={tool.tool_key}
+                    onClick={() => handleToolSelect(tool.tool_key)}
+                    className={`border rounded p-2 cursor-pointer transition-colors ${
+                      selectedTool === tool.tool_key ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          onChange={() => handleToolSelect(tool.tool_key)}
+                          checked={selectedTool === tool.tool_key || existingToolKeys.has(tool.tool_key)}
+                          className="h-4 w-4"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <div className="text-sm font-medium text-gray-900">{tool.name}</div>
+                        <div className="text-xs text-gray-600">{tool.description || 'No description'}</div>
+                      </div>
+                      <div className="text-xs text-gray-400 font-mono">{tool.tool_key}</div>
+                    </div>
+                  </div>
+                ))}
+              {catalog.filter((t: any) => t.tool_key.startsWith('core.') || t.tool_key.startsWith('ui.')).length === 0 && (
+                <div className="text-xs text-gray-500">No core/UI tools found in registry. Add them in Tool Registry first.</div>
+              )}
+            </div>
+          </div>
+          
           {/* Auto-available tools info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
             <h3 className="font-medium text-blue-900 mb-2">🔄 Automatically Available Tools</h3>
@@ -1157,7 +1200,7 @@ export default function AddAgentToolPage() {
                         >
                           <div className="flex items-center justify-between">
                             <div>
-                              <div className="font-medium text-gray-900">{tool.name}</div>
+                              <div className="font-medium text-gray-900">{tool.tool_key === 'skill.rag.place' ? 'RAG Place' : tool.name}</div>
                               <div className="text-sm text-gray-600">{tool.description || 'No description'}</div>
                               <div className="text-xs text-gray-500 mt-1">
                                 {tool.runtime}
