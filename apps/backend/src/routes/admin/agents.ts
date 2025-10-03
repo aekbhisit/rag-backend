@@ -233,6 +233,40 @@ export function buildAgentsAdminRouter(pool: Pool) {
     }
   });
 
+  // Seed core & UI tools into tool_registry (idempotent)
+  router.post('/tool-registry/seed-core', async (_req, res) => {
+    try {
+      const entries = [
+        // Core tools (exclude legacy transfer tools; transfer handled via transfer_to_{agent})
+        { tool_key: 'core.intentionChange', name: 'Intention Change', category: 'core', runtime: 'frontend', handler_key: 'ui.intentionChange', description: 'Change user intention in UI flow' },
+        // UI tools
+        { tool_key: 'ui.navigate', name: 'Navigate', category: 'ui', runtime: 'frontend', handler_key: 'ui.navigate', description: 'Navigate UI to a named page' },
+        { tool_key: 'ui.navigateToMain', name: 'Navigate To Main', category: 'ui', runtime: 'frontend', handler_key: 'ui.navigateToMain', description: 'Navigate back to main agent UI' },
+        { tool_key: 'ui.navigateToPrevious', name: 'Navigate To Previous', category: 'ui', runtime: 'frontend', handler_key: 'ui.navigateToPrevious', description: 'Navigate back to previous UI' },
+        { tool_key: 'ui.selectItem', name: 'Select Item', category: 'ui', runtime: 'frontend', handler_key: 'ui.selectItem', description: 'Select item in UI' },
+        { tool_key: 'ui.switchView', name: 'Switch View', category: 'ui', runtime: 'frontend', handler_key: 'ui.switchView', description: 'Switch UI view mode' },
+        { tool_key: 'ui.filterContent', name: 'Filter Content', category: 'ui', runtime: 'frontend', handler_key: 'ui.filterContent', description: 'Filter displayed content' },
+        { tool_key: 'ui.toast', name: 'Toast', category: 'ui', runtime: 'frontend', handler_key: 'ui.toast', description: 'Show toast notification' },
+        { tool_key: 'ui.extractContent', name: 'Extract Content', category: 'ui', runtime: 'frontend', handler_key: 'ui.extractContent', description: 'Extract content to UI list' },
+      ];
+
+      const results: any[] = [];
+      for (const e of entries) {
+        const r = await pool.query(
+          `INSERT INTO tool_registry (tool_key, name, category, runtime, handler_key, input_schema, output_schema, default_settings, permissions, is_enabled)
+           VALUES ($1, $2, $3, $4, $5, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, true)
+           ON CONFLICT (tool_key) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, runtime = EXCLUDED.runtime, handler_key = EXCLUDED.handler_key, is_enabled = true, updated_at = now()
+           RETURNING tool_key`,
+          [e.tool_key, e.name, e.category, e.runtime, e.handler_key]
+        );
+        results.push(r.rows[0]?.tool_key || e.tool_key);
+      }
+      res.json({ seeded: results });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
   // Agent prompts endpoints
   router.get('/agents/:agentKey/prompts', async (req, res) => {
     try {

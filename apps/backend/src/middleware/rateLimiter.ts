@@ -62,7 +62,7 @@ export function createRateLimiter(config: RateLimitConfig) {
 function createIdentifier(req: Request): string {
   const ip = (req.ip || (req.connection as any)?.remoteAddress || 'unknown').toString();
   const userId = ((req as any).user?.id || 'anonymous').toString();
-  const tenantId = (req.header('X-Tenant-ID') || process.env.DEFAULT_TENANT_ID || process.env.TENANT_ID || 'default').toString();
+  const tenantId = (req.header('X-Tenant-ID') || process.env.TENANT_ID || process.env.DEFAULT_TENANT_ID || 'default').toString();
   return `ratelimit:${tenantId}:${ip}:${userId}`;
 }
 
@@ -125,7 +125,7 @@ export function createDynamicRateLimiter(
 export function tenantSettingsRateLimiter() {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || process.env.DEFAULT_TENANT_ID || process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = (req.header('X-Tenant-ID') || process.env.TENANT_ID || process.env.DEFAULT_TENANT_ID || '00000000-0000-0000-0000-000000000000').toString();
       const ip = (req.ip || (req.connection as any)?.remoteAddress || '').toString();
 
       // Load tenant settings lazily

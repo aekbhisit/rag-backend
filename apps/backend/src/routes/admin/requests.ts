@@ -30,47 +30,7 @@ export function buildRequestsRouter(_pool: Pool) {
       if (!id) return res.status(400).json({ error: 'Missing id' });
       const row = await repo.getById(tenantId, id);
       if (!row) return res.status(404).json({ message: 'Not found' });
-      
-      // Fetch context details for contexts_used
-      let contextDetails = [];
-      if (row.contexts_used && Array.isArray(row.contexts_used) && row.contexts_used.length > 0) {
-        try {
-          const contextPromises = row.contexts_used.map(async (contextId: string) => {
-            try {
-              const contextRes = await fetch(`${process.env.RAG_BASE_URL || 'http://localhost:3100'}/api/contexts/${encodeURIComponent(contextId)}`, {
-                headers: { 'X-Tenant-ID': tenantId }
-              });
-              if (contextRes.ok) {
-                const contextData = await contextRes.json();
-                return {
-                  id: contextId,
-                  title: contextData.title || 'Untitled',
-                  type: contextData.type || 'text'
-                };
-              }
-            } catch (err) {
-              console.warn(`Failed to fetch context ${contextId}:`, err);
-            }
-            return {
-              id: contextId,
-              title: 'Unknown Context',
-              type: 'unknown'
-            };
-          });
-          
-          contextDetails = await Promise.all(contextPromises);
-        } catch (err) {
-          console.warn('Failed to fetch context details:', err);
-        }
-      }
-      
-      // Add context details to the response
-      const response = {
-        ...row,
-        context_details: contextDetails
-      };
-      
-      return res.json(response);
+      return res.json(row);
     } catch (e) { next(e); }
   });
 

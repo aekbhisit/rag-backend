@@ -188,7 +188,7 @@ export function buildAgentsTestAdminRouter(pool: Pool) {
                 (node.properties as any)[k] = { type: 'string', description: 'auto-fixed' };
                 continue;
               }
-              if (!v.type || !allowed.has((v as any).type)) (v as any).type = 'string';
+              if (!(v as any).type || !allowed.has((v as any).type)) (v as any).type = 'string';
               if ((v as any).type === 'array') {
                 if (!(v as any).items || typeof (v as any).items !== 'object') (v as any).items = { type: 'string' };
                 if (!(v as any).items.type || !allowed.has((v as any).items.type)) (v as any).items.type = 'string';

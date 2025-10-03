@@ -2,15 +2,14 @@ import 'dotenv/config';
 
 /**
  * Centralized tenant configuration utilities.
- * Reads tenant id from NEXT_PUBLIC_RAG_TENANT_ID only.
+ * Reads default tenant id from env variables TENANT_ID or DEFAULT_TENANT_ID.
  */
 export function getDefaultTenantId(): string {
-  // Use NEXT_PUBLIC_RAG_TENANT_ID only, no fallback to default ID
-  const envTenant = process.env.NEXT_PUBLIC_RAG_TENANT_ID;
-  if (!envTenant) {
-    throw new Error('NEXT_PUBLIC_RAG_TENANT_ID environment variable is required');
-  }
-  return envTenant.toString();
+  // Use TENANT_ID environment variable
+  const envTenant = process.env.TENANT_ID || process.env.DEFAULT_TENANT_ID;
+  const fallback = '00000000-0000-0000-0000-000000000000';
+  const id = (envTenant || fallback).toString();
+  return id;
 }
 
 export function resolveTenantId(headerValue?: string | null): string {

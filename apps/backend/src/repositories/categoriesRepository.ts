@@ -190,21 +190,12 @@ export class CategoriesRepository {
   async delete(tenantId: string, id: string): Promise<boolean> {
     const client = await this.pool.connect();
     try {
-      await client.query("SELECT set_config('app.current_tenant', $1, true)", [tenantId]);
+      await client.query('SET app.current_tenant = $1', [tenantId]);
       const result = await client.query(`
       DELETE FROM categories
       WHERE tenant_id = $1 AND id = $2
     `, [tenantId, id]);
       return (result.rowCount ?? 0) > 0;
-    } catch (error) {
-      console.error('Database error in delete category:', {
-        error: error,
-        stack: error instanceof Error ? error.stack : undefined,
-        tenantId,
-        categoryId: id,
-        query: 'delete'
-      });
-      throw error; // Re-throw to be caught by the route handler
     } finally {
       client.release();
     }

@@ -414,12 +414,68 @@ export async function createApp() {
     console.error('Failed to load public prompts routes:', error);
   }
 
+  // Public agents endpoints (for frontend-safe data)
+  try {
+    const { buildPublicAgentsRouter } = await import('./routes/public/agents');
+    app.use('/api', buildPublicAgentsRouter());
+  } catch (error) {
+    console.error('Failed to load public agents routes:', error);
+  }
+
   // Public API docs
   try {
     const { buildDocsRouter } = await import('./routes/public/docs.js');
     app.use('/api', buildDocsRouter());
   } catch (error) {
     console.error('Failed to load api docs routes:', error);
+  }
+
+  // Public messages endpoints (logging)
+  try {
+    const { buildPublicMessagesRouter } = await import('./routes/public/messages');
+    app.use('/api', buildPublicMessagesRouter());
+  } catch (error) {
+    console.error('Failed to load public messages routes:', error);
+  }
+
+  // Public chat endpoints (completions)
+  try {
+    const { buildPublicChatRouter } = await import('./routes/public/chat');
+    app.use('/api', buildPublicChatRouter());
+  } catch (error) {
+    console.error('Failed to load public chat routes:', error);
+  }
+
+  // Public contexts endpoints (import)
+  try {
+    const { buildPublicContextsRouter } = await import('./routes/public/contexts');
+    app.use('/api', buildPublicContextsRouter());
+  } catch (error) {
+    console.error('Failed to load public contexts routes:', error);
+  }
+
+  // Public LINE endpoints
+  try {
+    const { buildPublicLineRouter } = await import('./routes/public/line');
+    app.use('/api', buildPublicLineRouter());
+  } catch (error) {
+    console.error('Failed to load public line routes:', error);
+  }
+
+  // Public staff endpoints
+  try {
+    const { buildPublicStaffRouter } = await import('./routes/public/staff');
+    app.use('/api', buildPublicStaffRouter());
+  } catch (error) {
+    console.error('Failed to load public staff routes:', error);
+  }
+
+  // Public travel endpoints
+  try {
+    const { buildPublicTravelRouter } = await import('./routes/public/travel');
+    app.use('/api', buildPublicTravelRouter());
+  } catch (error) {
+    console.error('Failed to load public travel routes:', error);
   }
 
   // Error handler

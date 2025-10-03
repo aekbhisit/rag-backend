@@ -58,7 +58,7 @@ export function buildToolTestAdminRouter(pool: Pool) {
         mappedParams = {};
         for (const [aiParam, toolParam] of Object.entries(mapping)) {
           if (aiParam in testParams) {
-            mappedParams[toolParam] = testParams[aiParam];
+            mappedParams[toolParam as string] = testParams[aiParam];
           }
         }
       }
