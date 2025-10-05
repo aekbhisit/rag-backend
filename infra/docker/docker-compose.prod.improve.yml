@@ -15,7 +15,7 @@ services:
       # Database
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # Redis
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      REDIS_URL: redis://redis:6379
       # MinIO
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
@@ -47,34 +47,26 @@ services:
       minio:
         condition: service_started
     networks:
-      - internal-db-network      # Database access
-      - internal-cache-network   # Redis access
-      - internal-storage-network # MinIO access
-      - internal-app-network     # Internal API
-      - public-web-network       # External API
+      - rag-network
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    read_only: true
-    tmpfs:
-      - /tmp:noexec,nosuid,size=100m
-      - /app/node_modules:noexec,nosuid,size=500m
     ulimits:
-      nproc: 100
+      nproc: 200          # Increased for better process handling
       nofile:
-        soft: 1024
-        hard: 2048
+        soft: 2048        # Increased for more file descriptors
+        hard: 4096
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 1G
+          cpus: '4.0'      # Increased for AI/ML workloads
+          memory: 4G       # Increased for vector operations and embeddings
         reservations:
-          cpus: '1.0'
-          memory: 512M
+          cpus: '1.0'      # Minimum guaranteed CPU
+          memory: 1G       # Minimum guaranteed memory
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
@@ -105,31 +97,21 @@ services:
       rag-backend:
         condition: service_started
     networks:
-      - management-network       # Admin access
-      - internal-app-network     # Backend communication
+      - rag-network
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    read_only: true
-    tmpfs:
-      - /tmp:noexec,nosuid,size=100m
-      - /app/node_modules:noexec,nosuid,size=500m
-    ulimits:
-      nproc: 50
-      nofile:
-        soft: 1024
-        hard: 2048
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 512M
+          cpus: '2.0'      # Increased for Next.js SSR and admin operations
+          memory: 2G       # Increased for admin interface performance
         reservations:
-          cpus: '0.5'
-          memory: 256M
+          cpus: '0.5'      # Minimum guaranteed CPU
+          memory: 512M     # Minimum guaranteed memory
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
@@ -162,31 +144,21 @@ services:
       rag-backend:
         condition: service_started
     networks:
-      - public-web-network       # Public access
-      - internal-app-network     # Backend communication
+      - rag-network
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    read_only: true
-    tmpfs:
-      - /tmp:noexec,nosuid,size=100m
-      - /app/node_modules:noexec,nosuid,size=500m
-    ulimits:
-      nproc: 50
-      nofile:
-        soft: 1024
-        hard: 2048
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 512M
+          cpus: '3.0'      # Increased for AI bot processing and real-time interactions
+          memory: 3G       # Increased for AI model operations
         reservations:
-          cpus: '0.5'
-          memory: 256M
+          cpus: '0.5'      # Minimum guaranteed CPU
+          memory: 512M     # Minimum guaranteed memory
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3200/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
@@ -211,10 +183,11 @@ services:
       - ./data/postgres:/var/lib/postgresql/data
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
       - ./data/backups:/backups
-      - ../../infra/db/security-setup.sql:/docker-entrypoint-initdb.d/security-setup.sql:ro
-    # REMOVED: ports: - "5432:5432"  # No external database exposure for security
+    # SECURITY: PostgreSQL accessible only via SSH tunnel (127.0.0.1:5432)
+    ports:
+      - "127.0.0.1:5432:5432"  # SSH tunnel access only - not accessible from external networks
     networks:
-      - internal-db-network
+      - rag-network
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -230,18 +203,18 @@ services:
       - /tmp:noexec,nosuid,size=100m
       - /var/lib/postgresql/data:noexec,nosuid,size=10g
     ulimits:
-      nproc: 100
+      nproc: 200          # Increased for database connections
       nofile:
-        soft: 1024
-        hard: 2048
+        soft: 2048        # Increased for database file handles
+        hard: 4096
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1G
+          cpus: '2.0'      # Increased for database operations and query processing
+          memory: 2G       # Increased for database cache and connections
         reservations:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '0.5'      # Minimum guaranteed CPU
+          memory: 512M     # Minimum guaranteed memory
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -257,9 +230,11 @@ services:
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - ./data/redis:/data
-    # REMOVED: ports: - "6379:6379"  # No external Redis exposure for security
+    # SECURITY: Remove external port exposure - cache should only be accessible internally
+    # ports:
+    #   - "6379:6379"  # REMOVED: No external Redis access for security
     networks:
-      - internal-cache-network
+      - rag-network
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -267,20 +242,14 @@ services:
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-      - /data:noexec,nosuid,size=1g
-    ulimits:
-      nproc: 50
-      nofile:
-        soft: 1024
-        hard: 2048
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'      # Adequate for caching operations
+          memory: 1G       # Increased for cache performance
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.25'     # Minimum guaranteed CPU
+          memory: 256M     # Minimum guaranteed memory
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
@@ -301,41 +270,35 @@ services:
     volumes:
       - ./data/minio:/data
     ports:
-      - "9000:9000"  # MinIO API (required for external access)
-      - "9001:9001"  # MinIO Console (required for admin access)
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console (Web UI)
     networks:
-      - internal-storage-network
+      - rag-network
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
+      - DAC_OVERRIDE
       - FOWNER
-    read_only: true
-    tmpfs:
-      - /tmp:noexec,nosuid,size=100m
-      - /data:noexec,nosuid,size=5g
-    ulimits:
-      nproc: 50
-      nofile:
-        soft: 1024
-        hard: 2048
+      - SETGID
+      - SETUID
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '2.0'      # Increased for file operations and API serving
+          memory: 2G       # Increased for large file handling
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.5'      # Minimum guaranteed CPU
+          memory: 512M     # Minimum guaranteed memory
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
       timeout: 20s
       retries: 3
 
-  # Malware Detection Service
+  # Basic Malware Detection Service
   malware-detector:
     image: alpine:latest
     container_name: rag-malware-detector
@@ -343,52 +306,33 @@ services:
     restart: unless-stopped
     command: >
       sh -c "
-        apk add --no-cache bash curl jq &&
-        echo 'Starting malware detection service...' &&
+        apk add --no-cache bash curl &&
+        echo 'Starting basic malware detection service...' &&
         while true; do
           echo 'Scanning for malware at $(date)'
           
-          # Check for crypto miners in all containers
-          for container in rag-backend rag-admin-web rag-travel-ai-bot rag-postgres rag-redis rag-minio; do
-            if docker ps --format '{{.Names}}' | grep -q $$container; then
-              echo \"Checking container: $$container\"
+          # Check for crypto miners in PostgreSQL container
+          if docker ps --format '{{.Names}}' | grep -q rag-postgres; then
+            if docker exec rag-postgres ps aux 2>/dev/null | grep -E '(kdevtmpfsi|minerd|xmrig|cpuminer|ccminer|stratum|LvZm9SZ|kinsing)' > /dev/null; then
+              echo \"ALERT: Malware detected in PostgreSQL at $(date)\"
               
-              # Check for known malware processes
-              if docker exec $$container ps aux 2>/dev/null | grep -E '(kdevtmpfsi|minerd|xmrig|cpuminer|ccminer|stratum|LvZm9SZ|kinsing|masscan|nmap|nc|netcat)' > /dev/null; then
-                echo \"ALERT: Malware detected in $$container at $(date)\"
-                
-                # Create incident log
-                echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"$$container\\\",\\\"incident\\\":\\\"malware_detected\\\",\\\"action\\\":\\\"container_isolated\\\"}\" >> /tmp/security-incidents.log
-                
-                # Isolate container
-                docker stop $$container
-                docker network disconnect rag-network $$container 2>/dev/null || true
-                
-                # Create forensic snapshot
-                docker commit $$container rag-forensic-$(date +%Y%m%d-%H%M%S) || true
-                
-                # Send alert (if webhook configured)
-                if [ ! -z \"$$SLACK_WEBHOOK_URL\" ]; then
-                  curl -X POST -H 'Content-type: application/json' \\
-                    --data \"{\\\"text\\\":\\\"🚨 CRITICAL: Malware detected in $$container. Container isolated for forensic analysis.\\\"}\" \\
-                    $$SLACK_WEBHOOK_URL || true
-                fi
-              fi
+              # Create incident log
+              echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"rag-postgres\\\",\\\"incident\\\":\\\"malware_detected\\\",\\\"action\\\":\\\"container_isolated\\\"}\" >> /tmp/security-incidents.log
               
-              # Check for suspicious network connections
-              if docker exec $$container netstat -an 2>/dev/null | grep -E ':(4444|5555|6666|7777|8888|9999|8080|3000|5000)' | grep ESTABLISHED > /dev/null; then
-                echo \"ALERT: Suspicious network connection in $$container\"
-                echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"$$container\\\",\\\"incident\\\":\\\"suspicious_network\\\",\\\"action\\\":\\\"logged\\\"}\" >> /tmp/security-incidents.log
-              fi
+              # Stop PostgreSQL container
+              docker stop rag-postgres
               
-              # Check for high CPU usage (potential mining)
-              cpu_usage=$$(docker stats --no-stream --format \"{{.CPUPerc}}\" $$container 2>/dev/null | sed 's/%//' | cut -d. -f1)
-              if [ ! -z \"$$cpu_usage\" ] && [ \"$$cpu_usage\" -gt 80 ]; then
-                echo \"ALERT: High CPU usage in $$container: $$cpu_usage%\"
-                echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"$$container\\\",\\\"incident\\\":\\\"high_cpu_usage\\\",\\\"cpu_usage\\\":\\\"$$cpu_usage%\\\",\\\"action\\\":\\\"logged\\\"}\" >> /tmp/security-incidents.log
-              fi
+              # Send alert
+              echo \"🚨 CRITICAL: Malware detected in PostgreSQL. Container stopped for security.\"
             fi
-          done
+            
+            # Check for high CPU usage (potential mining)
+            cpu_usage=$$(docker stats --no-stream --format \"{{.CPUPerc}}\" rag-postgres 2>/dev/null | sed 's/%//' | cut -d. -f1)
+            if [ ! -z \"$$cpu_usage\" ] && [ \"$$cpu_usage\" -gt 80 ]; then
+              echo \"ALERT: High CPU usage in PostgreSQL: $$cpu_usage%\"
+              echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"rag-postgres\\\",\\\"incident\\\":\\\"high_cpu_usage\\\",\\\"cpu_usage\\\":\\\"$$cpu_usage%\\\",\\\"action\\\":\\\"logged\\\"}\" >> /tmp/security-incidents.log
+            fi
+          fi
           
           sleep 300  # Check every 5 minutes
         done
@@ -396,9 +340,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data/logs/security:/tmp:rw
-      - ./scripts:/scripts:ro
     networks:
-      - management-network
+      - rag-network
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -408,8 +351,6 @@ services:
         limits:
           cpus: '0.1'
           memory: 64M
-    environment:
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
 
 volumes:
   # All data is stored in local ./data directory for easy management
@@ -433,68 +374,8 @@ volumes:
       device: ./data/minio
 
 networks:
-  # Database network - only database services
-  internal-db-network:
+  rag-network:
     driver: bridge
-    internal: true
     ipam:
       config:
-        - subnet: 172.20.1.0/24
-    labels:
-      - "security.level=high"
-      - "network.type=database"
-
-  # Cache network - Redis and caching services
-  internal-cache-network:
-    driver: bridge
-    internal: true
-    ipam:
-      config:
-        - subnet: 172.20.2.0/24
-    labels:
-      - "security.level=high"
-      - "network.type=cache"
-
-  # Storage network - MinIO and file storage
-  internal-storage-network:
-    driver: bridge
-    internal: true
-    ipam:
-      config:
-        - subnet: 172.20.3.0/24
-    labels:
-      - "security.level=medium"
-      - "network.type=storage"
-
-  # Application network - Backend services
-  internal-app-network:
-    driver: bridge
-    internal: true
-    ipam:
-      config:
-        - subnet: 172.20.4.0/24
-    labels:
-      - "security.level=medium"
-      - "network.type=application"
-
-  # Web network - Frontend and public services
-  public-web-network:
-    driver: bridge
-    internal: false
-    ipam:
-      config:
-        - subnet: 172.20.5.0/24
-    labels:
-      - "security.level=low"
-      - "network.type=web"
-
-  # Management network - Admin and monitoring
-  management-network:
-    driver: bridge
-    internal: true
-    ipam:
-      config:
-        - subnet: 172.20.6.0/24
-    labels:
-      - "security.level=high"
-      - "network.type=management"
+        - subnet: 172.20.0.0/16

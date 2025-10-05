@@ -81,6 +81,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Admin Web (Next.js)
   admin-web:
@@ -136,6 +141,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Travel AI Bot (Next.js)
   travel-ai-bot:
@@ -193,6 +203,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # PostgreSQL Database
   postgres:
@@ -247,6 +262,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Redis Cache
   redis:
@@ -254,7 +274,7 @@ services:
     container_name: rag-redis
     user: "999:999"  # redis user
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - ./data/redis:/data
     # REMOVED: ports: - "6379:6379"  # No external Redis exposure for security
@@ -282,10 +302,15 @@ services:
           cpus: '0.25'
           memory: 256M
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--raw", "incr", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # MinIO Object Storage
   minio:
@@ -302,7 +327,7 @@ services:
       - ./data/minio:/data
     ports:
       - "9000:9000"  # MinIO API (required for external access)
-      - "9001:9001"  # MinIO Console (required for admin access)
+      # REMOVED: - "9001:9001"  # MinIO Console - NOT exposed externally for security
     networks:
       - internal-storage-network
     security_opt:
@@ -334,69 +359,27 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # Malware Detection Service
-  malware-detector:
+  # Log Rotation Service (Essential Security)
+  logrotate:
     image: alpine:latest
-    container_name: rag-malware-detector
+    container_name: rag-logrotate
     user: "1000:1000"
     restart: unless-stopped
     command: >
       sh -c "
-        apk add --no-cache bash curl jq &&
-        echo 'Starting malware detection service...' &&
-        while true; do
-          echo 'Scanning for malware at $(date)'
-          
-          # Check for crypto miners in all containers
-          for container in rag-backend rag-admin-web rag-travel-ai-bot rag-postgres rag-redis rag-minio; do
-            if docker ps --format '{{.Names}}' | grep -q $$container; then
-              echo \"Checking container: $$container\"
-              
-              # Check for known malware processes
-              if docker exec $$container ps aux 2>/dev/null | grep -E '(kdevtmpfsi|minerd|xmrig|cpuminer|ccminer|stratum|LvZm9SZ|kinsing|masscan|nmap|nc|netcat)' > /dev/null; then
-                echo \"ALERT: Malware detected in $$container at $(date)\"
-                
-                # Create incident log
-                echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"$$container\\\",\\\"incident\\\":\\\"malware_detected\\\",\\\"action\\\":\\\"container_isolated\\\"}\" >> /tmp/security-incidents.log
-                
-                # Isolate container
-                docker stop $$container
-                docker network disconnect rag-network $$container 2>/dev/null || true
-                
-                # Create forensic snapshot
-                docker commit $$container rag-forensic-$(date +%Y%m%d-%H%M%S) || true
-                
-                # Send alert (if webhook configured)
-                if [ ! -z \"$$SLACK_WEBHOOK_URL\" ]; then
-                  curl -X POST -H 'Content-type: application/json' \\
-                    --data \"{\\\"text\\\":\\\"🚨 CRITICAL: Malware detected in $$container. Container isolated for forensic analysis.\\\"}\" \\
-                    $$SLACK_WEBHOOK_URL || true
-                fi
-              fi
-              
-              # Check for suspicious network connections
-              if docker exec $$container netstat -an 2>/dev/null | grep -E ':(4444|5555|6666|7777|8888|9999|8080|3000|5000)' | grep ESTABLISHED > /dev/null; then
-                echo \"ALERT: Suspicious network connection in $$container\"
-                echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"$$container\\\",\\\"incident\\\":\\\"suspicious_network\\\",\\\"action\\\":\\\"logged\\\"}\" >> /tmp/security-incidents.log
-              fi
-              
-              # Check for high CPU usage (potential mining)
-              cpu_usage=$$(docker stats --no-stream --format \"{{.CPUPerc}}\" $$container 2>/dev/null | sed 's/%//' | cut -d. -f1)
-              if [ ! -z \"$$cpu_usage\" ] && [ \"$$cpu_usage\" -gt 80 ]; then
-                echo \"ALERT: High CPU usage in $$container: $$cpu_usage%\"
-                echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"$$container\\\",\\\"incident\\\":\\\"high_cpu_usage\\\",\\\"cpu_usage\\\":\\\"$$cpu_usage%\\\",\\\"action\\\":\\\"logged\\\"}\" >> /tmp/security-incidents.log
-              fi
-            fi
-          done
-          
-          sleep 300  # Check every 5 minutes
-        done
+        apk add --no-cache logrotate &&
+        echo '0 2 * * * /usr/sbin/logrotate /etc/logrotate.conf' | crontab - &&
+        crond -f
       "
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./data/logs/security:/tmp:rw
-      - ./scripts:/scripts:ro
+      - ./data/logs:/var/log/app:rw
+      - ./scripts/logrotate.conf:/etc/logrotate.conf:ro
     networks:
       - management-network
     security_opt:
@@ -408,8 +391,6 @@ services:
         limits:
           cpus: '0.1'
           memory: 64M
-    environment:
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
 
 volumes:
   # All data is stored in local ./data directory for easy management
