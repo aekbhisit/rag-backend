@@ -29,6 +29,8 @@ const welcomeAgent: AgentConfig = {
       * "หาแท็กซี่", "call taxi", "airport transfer", "ขอดูรายละเอียดแท็กซี่หน่อย" → navigate({ uri: "/travel/taxi" })
       * "nearby places", "สถานที่ใกล้ ๆ" → navigate({ uri: "/travel/places" })
     - ALWAYS send a confirmation message after navigation. Use the Thai message: "ฉันได้พาคุณไปที่หน้า[page]แล้วค่ะ คุณสามารถดูรายละเอียดเพิ่มเติมได้ที่นี่ค่ะ!" or English equivalent.
+    - CRITICAL: When the navigate tool returns success=true, the navigation was successful. The page is now displayed to the user. Always respond with a positive confirmation message.
+    - NEVER say navigation failed when the tool returns success=true. The navigation IS working.
     - Always use the exact URI path like "/travel/taxi", "/travel/tours", etc.
 
     Screen content reasoning (when the user references items on the current screen):

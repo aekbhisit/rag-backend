@@ -57,7 +57,7 @@ export class ConversationCollector {
     console.log('[ConversationCollector] Using baseUrl:', this.baseUrl);
     
     try {
-      const res = await fetch(`${this.baseUrl}/api/admin/sessions`, {
+      const res = await fetch(`${this.baseUrl}/api/sessions`, {
         method: 'POST',
         headers: this.headers(),
         body: JSON.stringify(body),
@@ -87,7 +87,7 @@ export class ConversationCollector {
   }
 
   async endSession(sessionId: string) {
-    const res = await fetch(`${this.baseUrl}/api/admin/sessions/${encodeURIComponent(sessionId)}/end`, {
+    const res = await fetch(`${this.baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/end`, {
       method: 'POST',
       headers: this.headers(),
     });

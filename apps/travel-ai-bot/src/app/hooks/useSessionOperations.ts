@@ -337,7 +337,7 @@ CURRENT LANGUAGE SETTING: \`${language}\`
     // Update the session with the new bot and context
     updateSessionWithContext(
       destinationBotName,
-      destinationConfig.instructions || '',
+      destinationConfig.prompt || destinationConfig.instructions || '',
       destinationConfig.tools || [],
       formattedContext,
       true, // Trigger response
@@ -446,7 +446,7 @@ CURRENT LANGUAGE SETTING: \`${language}\`
       );
 
       // Get the current agent's configuration settings
-      const instructions = selectedAgent.instructions || "";
+      const instructions = selectedAgent.prompt || selectedAgent.instructions || "";
       const tools = selectedAgent.tools || [];
       
       // Get any existing context for this bot

@@ -3,7 +3,9 @@
 import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import ChatInterface from "@/app/components/chat/ChatInterface";
-import { allAgentSets, defaultAgentSetKey } from "@/app/agents";
+// Removed import from deleted agents/index.ts - now using database-driven agents
+const allAgentSets = {}; // Fallback empty object
+const defaultAgentSetKey = 'default';
 import { ChevronDownIcon, CheckIcon } from "@heroicons/react/24/outline";
 import { EventProvider } from "@/app/contexts/EventContext";
 import { MapPinIcon, QuestionMarkCircleIcon, ExclamationTriangleIcon, BuildingOfficeIcon, MapIcon } from "@heroicons/react/24/outline";

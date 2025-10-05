@@ -8,7 +8,9 @@ import { useMessageHistory } from './MessageHistory';
 import HumanChatInterface from './HumanChatInterface';
 import VoiceChatInterface from './VoiceChatInterface';
 
-import { allAgentSets, defaultAgentSetKey } from '@/app/agents';
+// Removed import from deleted agents/index.ts - now using database-driven agents
+const allAgentSets = {}; // Fallback empty object
+const defaultAgentSetKey = 'default';
 import { useDbAgentSets } from '@/app/hooks/useDbAgentSets';
 import { getOrCreateDbSession, clearCurrentSession } from '@/app/lib/sharedSessionManager';
 import { useTenantAiConfig } from '@/app/hooks/useTenantAiConfig';
@@ -51,7 +53,7 @@ export default function ChatInterface({
 }: ChatInterfaceProps) {
   const { agentSets: dbAgentSets, loading: agentSetsLoading } = useDbAgentSets();
   const dynamicAgentSets = Object.keys(dbAgentSets).length > 0 ? dbAgentSets : allAgentSets;
-  const { messages, addMessage, clearMessages, updateMessage } = useMessageHistory(sessionId);
+  const { messages, addMessage, clearMessages, updateMessage, cleanupEmptyMessages } = useMessageHistory(sessionId);
   const { config: tenantAiConfig } = useTenantAiConfig();
   const { extractContent } = useContentExtraction();
   const [inputValue, setInputValue] = useState('');
@@ -86,6 +88,11 @@ export default function ChatInterface({
   // Persist active agent across messages (updated on transfer)
   const [activeAgentSetKeyState, setActiveAgentSetKeyState] = useState<string>(providedAgentSetKey || defaultAgentSetKey);
   const [activeAgentNameState, setActiveAgentNameState] = useState<string | null>(providedAgentName || null);
+
+  // Cleanup empty messages on component mount
+  useEffect(() => {
+    cleanupEmptyMessages();
+  }, [cleanupEmptyMessages]);
 
   // Get user's current location
   const [userLocation, setUserLocation] = useState<{ lat: number; long: number } | null>(null);
@@ -178,7 +185,7 @@ export default function ChatInterface({
         // Note: sendBeacon doesn't support custom headers, so we'll use a different approach
         const formData = new FormData();
         formData.append('tenantId', process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000');
-        navigator.sendBeacon(getApiUrl('/api/admin/sessions/' + encodeURIComponent(conversationId) + '/end'), formData);
+        navigator.sendBeacon(getApiUrl('/api/sessions/' + encodeURIComponent(conversationId) + '/end'), formData);
       }
     };
 
@@ -250,6 +257,7 @@ export default function ChatInterface({
   // Handle UI tool execution from SSE
   const handleUIToolExecution = async (toolName: string, args: any) => {
     console.log(`[UI Tool Execution] Executing ${toolName} with args:`, args);
+    console.log(`[UI Tool Execution] Args type:`, typeof args, 'Args keys:', args ? Object.keys(args) : 'null/undefined');
     
     // Get agent configuration for this tool execution
     const setKey = activeAgentSetKeyState || defaultAgentSetKey;
@@ -259,8 +267,20 @@ export default function ChatInterface({
     
     try {
       if (toolName === 'navigate') {
-        const { uri } = args;
-        if (uri && typeof uri === 'string') {
+        // Handle different possible argument structures
+        let uri = null;
+        
+        if (args && typeof args === 'object') {
+          // Try different possible parameter names
+          uri = args.uri || args.route || args.section || args.path;
+        } else if (typeof args === 'string') {
+          // If args is a string, treat it as the URI directly
+          uri = args;
+        }
+        
+        console.log(`[UI Tool Execution] Extracted URI:`, uri, 'from args:', args);
+        
+        if (uri && typeof uri === 'string' && uri.trim() !== '') {
           console.log(`[UI Tool Execution] Navigating to: ${uri}`);
           
           // Update URL with content parameter
@@ -278,7 +298,12 @@ export default function ChatInterface({
           
           console.log('[UI Tool Execution] Navigation completed successfully');
         } else {
-          console.error('[UI Tool Execution] Invalid URI for navigation:', uri);
+          console.error('[UI Tool Execution] Invalid URI for navigation:', {
+            uri,
+            args,
+            argsType: typeof args,
+            argsKeys: args && typeof args === 'object' ? Object.keys(args) : 'N/A'
+          });
         }
       } else if (toolName === 'extractContent') {
         const { scope, limit = 10, detail = false } = args;
@@ -528,7 +553,11 @@ export default function ChatInterface({
               } else if (info?.type === 'ui_tool_execute') {
                 console.log('[SSE][debug] ui_tool_execute', info);
                 // Execute UI tool on client side
-                handleUIToolExecution(info.toolName, info.args);
+                try {
+                  handleUIToolExecution(info.toolName, info.args);
+                } catch (error) {
+                  console.error('[SSE][debug] UI tool execution error:', error);
+                }
               } else {
                 console.log('[SSE][debug]', info);
               }
@@ -545,7 +574,7 @@ export default function ChatInterface({
       const allInSet = dynamicAgentSets[setKey] || [];
       const targetName = activeAgentNameState || (allInSet[0]?.name || '');
       const agentConfig = allInSet.find((a: { name: string }) => a.name === targetName) || allInSet[0];
-      const agentInstructions = agentConfig?.instructions || 'You are a helpful assistant.';
+      const agentInstructions = agentConfig?.prompt || agentConfig?.instructions || 'You are a helpful assistant.';
       let agentTools = Array.isArray(agentConfig?.tools) ? agentConfig!.tools : [];
       
       
@@ -633,7 +662,7 @@ export default function ChatInterface({
                   
                 }
                 // Continue to get response from the new agent (both text and voice mode)
-                const nextInstructions = nextAgent.instructions || '';
+                const nextInstructions = nextAgent.prompt || nextAgent.instructions || '';
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
                 
                 console.log('[CMP] ▶ follow-up for destination agent', { agent: nextAgent.name, tools: (nextTools || []).map((t: any) => t?.function?.name).filter(Boolean) });
@@ -957,7 +986,7 @@ export default function ChatInterface({
               let nextSetKey = defaultAgentSetKey;
               let nextAgent = (dynamicAgentSets[nextSetKey] || []).find((a: { name: string }) => a.name === 'welcomeAgent') || (dynamicAgentSets[nextSetKey] || [])[0];
               if (nextAgent) {
-                const nextInstructions = nextAgent.instructions || '';
+                const nextInstructions = nextAgent.prompt || nextAgent.instructions || '';
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
                 const follow = await fetch('/api/chat/agent-completions', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1034,7 +1063,7 @@ export default function ChatInterface({
               let nextSetKey = defaultAgentSetKey;
               let nextAgent = (dynamicAgentSets[nextSetKey] || []).find((a: { name: string }) => a.name === 'welcomeAgent') || (dynamicAgentSets[nextSetKey] || [])[0];
               if (nextAgent) {
-                const nextInstructions = nextAgent.instructions || '';
+                const nextInstructions = nextAgent.prompt || nextAgent.instructions || '';
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
                 const follow = await fetch('/api/chat/agent-completions', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1263,7 +1292,7 @@ export default function ChatInterface({
                   console.log('[ChatInterface] Trash button clicked, conversationId:', conversationId);
                   if (conversationId) {
                     console.log('[ChatInterface] Calling session end API for:', conversationId);
-                    const response = await fetch(getApiUrl('/api/admin/sessions/' + encodeURIComponent(conversationId) + '/end'), {
+                    const response = await fetch(getApiUrl('/api/sessions/' + encodeURIComponent(conversationId) + '/end'), {
                       method: 'POST',
                       headers: { 
                         'Content-Type': 'application/json',

@@ -45,7 +45,8 @@ export interface Tool {
 export interface AgentConfig {
   name: string;
   publicDescription: string; // gives context to agent transfer tool
-  instructions: string;
+  prompt: string; // system prompt for the agent
+  instructions?: string; // deprecated, use prompt instead
   systemPrompt?: string; // Optional system prompt for the agent
   model?: string; // Optional model specification
   conversationSummary?: string; // Optional conversation context/summary

@@ -3,7 +3,8 @@
 import { useRef, useCallback, useEffect } from "react";
 import { AgentConfig } from "@/app/types";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
-import { allAgentSets } from "@/app/agents";
+// Removed import from deleted agents/index.ts - now using database-driven agents
+const allAgentSets = {}; // Fallback empty object
 import { useSessionRegistry } from "@/app/hooks/useSessionRegistry";
 import { useSessionOperations } from "./useSessionOperations";
 import { isBotAction as isBotUIAction, handleFunctionCall as handleBotUIFunctionCall } from "@/botActionFramework";

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import React from "react";
-import { allAgentSets } from "@/app/agents";
+// Removed import from deleted agents/index.ts - now using database-driven agents
+const allAgentSets = {}; // Fallback empty object
 import { AgentConfig } from "@/app/types";
 import LanguageSwitcher from "../ui/LanguageSwitcher";
 

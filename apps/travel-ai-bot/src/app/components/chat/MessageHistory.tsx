@@ -13,6 +13,7 @@ interface MessageHistoryHook {
   replaceLatestSpeechPlaceholder: (newMessage: UniversalMessage) => void;
   clearMessages: () => void;
   loadMessages: () => void;
+  cleanupEmptyMessages: () => void;
 }
 
 export function useMessageHistory(sessionId: string): MessageHistoryHook {
@@ -30,7 +31,17 @@ export function useMessageHistory(sessionId: string): MessageHistoryHook {
   useEffect(() => {
     if (messages.length > 0) {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(messages));
+        // Filter out empty AI messages before saving to localStorage
+        const messagesToSave = messages.filter((msg: UniversalMessage) => {
+          const hasContent = msg.content && msg.content.trim().length > 0;
+          const isUserMessage = msg.metadata?.source === 'user';
+          const isNotDeleted = !msg.metadata?.deleted;
+          
+          // Keep messages that have content, are user messages, or are not deleted
+          return (hasContent || isUserMessage) && isNotDeleted;
+        });
+        
+        localStorage.setItem(storageKey, JSON.stringify(messagesToSave));
       } catch (error) {
         console.warn('Failed to save chat history:', error);
       }
@@ -42,7 +53,16 @@ export function useMessageHistory(sessionId: string): MessageHistoryHook {
       const stored = localStorage.getItem(storageKey);
       if (stored) {
         const parsedMessages = JSON.parse(stored);
-        setMessages(parsedMessages);
+        // Filter out empty messages and deleted messages to prevent empty bubbles
+        const filteredMessages = parsedMessages.filter((msg: UniversalMessage) => {
+          // Keep messages that have content or are user messages
+          const hasContent = msg.content && msg.content.trim().length > 0;
+          const isUserMessage = msg.metadata?.source === 'user';
+          const isNotDeleted = !msg.metadata?.deleted;
+          
+          return (hasContent || isUserMessage) && isNotDeleted;
+        });
+        setMessages(filteredMessages);
       }
     } catch (error) {
       console.warn('Failed to load chat history:', error);
@@ -51,6 +71,8 @@ export function useMessageHistory(sessionId: string): MessageHistoryHook {
   
   const addMessage = (message: UniversalMessage) => {
     console.log(`[MessageHistory-TRACK] 📝 addMessage called - ID: ${message.id}, Source: ${message.metadata.source}, Content: "${message.content.substring(0, 50)}"`);
+    
+    // Always add to UI state (including empty placeholders for immediate display)
     setMessages(prev => {
       const exists = prev.some(m => m.id === message.id);
       if (exists) {
@@ -133,6 +155,36 @@ export function useMessageHistory(sessionId: string): MessageHistoryHook {
       console.warn('Failed to clear chat history:', error);
     }
   };
+
+  const cleanupEmptyMessages = () => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsedMessages = JSON.parse(stored);
+        // Filter out empty messages and deleted messages
+        const filteredMessages = parsedMessages.filter((msg: UniversalMessage) => {
+          const hasContent = msg.content && msg.content.trim().length > 0;
+          const isUserMessage = msg.metadata?.source === 'user';
+          const isNotDeleted = !msg.metadata?.deleted;
+          
+          return (hasContent || isUserMessage) && isNotDeleted;
+        });
+        
+        // Only update if we actually removed messages
+        if (filteredMessages.length !== parsedMessages.length) {
+          console.log(`[MessageHistory] 🧹 Cleaned up ${parsedMessages.length - filteredMessages.length} empty messages`);
+          if (filteredMessages.length > 0) {
+            localStorage.setItem(storageKey, JSON.stringify(filteredMessages));
+          } else {
+            localStorage.removeItem(storageKey);
+          }
+          setMessages(filteredMessages);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to cleanup empty messages:', error);
+    }
+  };
   
   return {
     messages,
@@ -143,6 +195,7 @@ export function useMessageHistory(sessionId: string): MessageHistoryHook {
     replaceMessageById,
     replaceLatestSpeechPlaceholder,
     clearMessages,
-    loadMessages
+    loadMessages,
+    cleanupEmptyMessages
   };
 } 

@@ -15,7 +15,9 @@ import { useMessageHistory } from './MessageHistory';
 import { SpeakerWaveIcon, SpeakerXMarkIcon, UserIcon, CpuChipIcon, UserGroupIcon, TrashIcon, ArrowsRightLeftIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 import { getOrCreateDbSession, clearCurrentSession } from '@/app/lib/sharedSessionManager';
 import { useDbAgentSets } from '@/app/hooks/useDbAgentSets';
-import { allAgentSets, defaultAgentSetKey } from '@/app/agents';
+// Removed import from deleted agents/index.ts - now using database-driven agents
+const allAgentSets = {}; // Fallback empty object
+const defaultAgentSetKey = 'default';
 import { logMessage as logToDb } from '@/app/lib/loggerClient';
 import { getApiUrl } from '@/app/lib/apiHelper';
 
@@ -165,7 +167,7 @@ export default function VoiceChatInterface({
         // Use sendBeacon for reliable delivery even when page is closing
         const formData = new FormData();
         formData.append('tenantId', process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000');
-        navigator.sendBeacon(getApiUrl('/api/admin/sessions/' + encodeURIComponent(dbSessionId) + '/end'), formData);
+        navigator.sendBeacon(getApiUrl('/api/sessions/' + encodeURIComponent(dbSessionId) + '/end'), formData);
       }
     };
 
@@ -978,7 +980,7 @@ export default function VoiceChatInterface({
                   
                   if (dbSessionId && dbSessionId !== currentSessionId) {
                     console.log('[VoiceChatInterface] Calling session end API for database session:', dbSessionId);
-                    const response = await fetch(getApiUrl('/api/admin/sessions/' + encodeURIComponent(dbSessionId) + '/end'), {
+                    const response = await fetch(getApiUrl('/api/sessions/' + encodeURIComponent(dbSessionId) + '/end'), {
                       method: 'POST',
                       headers: { 
                         'Content-Type': 'application/json',

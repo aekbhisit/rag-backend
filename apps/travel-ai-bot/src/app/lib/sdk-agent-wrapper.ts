@@ -290,14 +290,14 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
   const sdkTools = [...dbSdkTools, ...autoHandoffTools];
 
   // Log the agent's system prompt for debugging (once per agent)
-  const instructions = agentConfig.instructions || agentConfig.systemPrompt || '';
+  const instructions = agentConfig.prompt || agentConfig.instructions || agentConfig.systemPrompt || '';
   if (!PROMPT_LOGGED_AGENTS.has(agentConfig.name)) {
     console.log(`[SDK-Voice] 📝 Agent ${agentConfig.name} system prompt:`, {
       agentName: agentConfig.name,
       promptLength: instructions.length,
       promptPreview: instructions.substring(0, 200) + '...',
       fullPrompt: instructions,
-      source: agentConfig.instructions ? 'instructions' : (agentConfig.systemPrompt ? 'systemPrompt' : 'none')
+      source: agentConfig.prompt ? 'prompt' : (agentConfig.instructions ? 'instructions' : (agentConfig.systemPrompt ? 'systemPrompt' : 'none'))
     });
     PROMPT_LOGGED_AGENTS.add(agentConfig.name);
   }
@@ -305,7 +305,7 @@ export function createVoiceModeAgent(agentConfig: AgentConfig, onMessage?: (mess
   return new RealtimeAgent({
     name: agentConfig.name,
     voice: (agentConfig as any).voice || selectVoiceForAgent(agentConfig.name),
-    instructions: agentConfig.instructions || agentConfig.systemPrompt || '',
+    instructions: agentConfig.prompt || agentConfig.instructions || agentConfig.systemPrompt || '',
     tools: sdkTools
   });
 }
@@ -463,7 +463,7 @@ export class DatabaseAgentWrapper {
 
     return new RealtimeAgent({
       name: this.agentConfig.name,
-      instructions: this.agentConfig.instructions || this.agentConfig.systemPrompt || '',
+      instructions: this.agentConfig.prompt || this.agentConfig.instructions || this.agentConfig.systemPrompt || '',
       tools: sdkTools
     });
   }

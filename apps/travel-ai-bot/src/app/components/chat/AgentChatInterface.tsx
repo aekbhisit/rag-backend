@@ -67,11 +67,11 @@ export default function AgentChatInterface({
   // Get current agent
   const currentAgent = selectedAgentConfigSet?.find(a => a.name === selectedAgentName);
 
-  // Use server-provided instructions only (avoid duplicate prompt fetches)
-  const [systemInstructions, setSystemInstructions] = useState<string>(currentAgent?.instructions || '');
+  // Use server-provided prompt only (avoid duplicate prompt fetches)
+  const [systemInstructions, setSystemInstructions] = useState<string>(currentAgent?.prompt || currentAgent?.instructions || '');
   useEffect(() => {
-    setSystemInstructions(currentAgent?.instructions || '');
-  }, [currentAgent?.instructions]);
+    setSystemInstructions(currentAgent?.prompt || currentAgent?.instructions || '');
+  }, [currentAgent?.prompt, currentAgent?.instructions]);
 
   // Handle agent transfer (including cross-agent-set transfers)
   const handleAgentTransfer = (targetAgentName: string) => {
@@ -85,25 +85,9 @@ export default function AgentChatInterface({
     if (!targetAgent) {
       console.log(`[AgentChatInterface] Target agent not in current set, checking all agent sets...`);
       
-      // Import allAgentSets to find the target agent
-      import('@/app/agents').then(({ allAgentSets }) => {
-        const typedAllAgentSets = allAgentSets as Record<string, AgentConfig[]>;
-        for (const [setKey, agentSet] of Object.entries(typedAllAgentSets)) {
-          const foundAgent = agentSet.find(a => a.name === targetAgentName);
-          if (foundAgent) {
-            targetAgent = foundAgent;
-            targetAgentSetKey = setKey;
-            console.log(`[AgentChatInterface] Found target agent ${targetAgentName} in set ${setKey}`);
-            break;
-          }
-        }
-        
-        if (targetAgent && targetAgentSetKey) {
-          executeTransfer(targetAgentName, targetAgentSetKey);
-        } else {
-          console.error(`[AgentChatInterface] Target agent ${targetAgentName} not found in any agent set`);
-        }
-      });
+      // Use database agent sets instead of importing from deleted file
+      // Since we're now database-driven, this fallback is not needed
+      console.warn('[AgentChatInterface] Target agent not found in current set, but database-driven agents should handle this');
       return;
     } else {
       console.log(`[AgentChatInterface] Target agent found in current set:`, targetAgent.name);

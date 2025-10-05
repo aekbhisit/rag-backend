@@ -373,13 +373,13 @@ export function registerSessionEventHandlers(session: any, deps: SessionEventDep
     });
 
     if (selectedAgentConfig) {
-      const instructions = selectedAgentConfig.instructions || selectedAgentConfig.systemPrompt || '';
+      const instructions = selectedAgentConfig.prompt || selectedAgentConfig.instructions || selectedAgentConfig.systemPrompt || '';
       console.log('[SDK-Realtime] 📝 Agent starting with configuration:', {
         agentName: effectiveName,
         systemPromptLength: instructions.length,
         systemPromptPreview: instructions.substring(0, 300) + '...',
         fullSystemPrompt: instructions,
-        source: selectedAgentConfig.instructions ? 'instructions' : (selectedAgentConfig.systemPrompt ? 'systemPrompt' : 'none'),
+        source: selectedAgentConfig.prompt ? 'prompt' : (selectedAgentConfig.instructions ? 'instructions' : (selectedAgentConfig.systemPrompt ? 'systemPrompt' : 'none')),
         toolsCount: selectedAgentConfig.tools?.length || 0,
         toolNames: selectedAgentConfig.tools?.map((t: any) => t.function?.name || t.name) || [],
         downstreamAgents: selectedAgentConfig.downstreamAgents?.map((a: any) => a.name) || []

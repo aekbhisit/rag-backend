@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
     let instructions = '';
     let tools: any[] = [];
     if (resolvedKey) {
-      const base = await fetchJson(`${BACKEND_URL}/api/admin/agents/${encodeURIComponent(resolvedKey)}/prompts?category=instructions`);
+      const base = await fetchJson(`${BACKEND_URL}/api/admin/agents/${encodeURIComponent(resolvedKey)}/prompts?category=system`);
       instructions = base.ok ? (base.json?.[0]?.content || '') : '';
       const toolsRes = await fetchJson(`${BACKEND_URL}/api/admin/agents/${encodeURIComponent(resolvedKey)}/tools`);
       if (toolsRes.ok && Array.isArray(toolsRes.json)) {
@@ -443,8 +443,8 @@ export async function GET(req: NextRequest) {
             
             // Add follow-up completion after UI tool execution
             if (uiTools.length > 0) {
-              console.log('[SSE:text-stream] 🎨 UI tools executed, generating follow-up response');
-              try {
+                console.log('[SSE:text-stream] 🎨 UI tools executed, generating follow-up response');
+                try {
                 const followupMessages = [
                   { role: 'system', content: instructions },
                   { role: 'user', content: userText },
@@ -453,12 +453,35 @@ export async function GET(req: NextRequest) {
                     type: 'function',
                     function: { name: toolName, arguments: argsStr }
                   })) },
-                  ...uiTools.map(([toolName, argsStr]) => ({
-                    role: 'tool',
-                    tool_call_id: `ui-${toolName}`,
-                    content: JSON.stringify({ success: true, navigated: toolName === 'navigate' ? 'UI executed successfully' : 'UI tool executed' })
-                  }))
+                  ...uiTools.map(([toolName, argsStr]) => {
+                    let content;
+                    if (toolName === 'navigate') {
+                      const args = JSON.parse(argsStr);
+                      const uri = args.uri || args.route || args.section || args.path;
+                      content = JSON.stringify({ 
+                        success: true, 
+                        navigated: uri,
+                        message: `Navigation successful: ${uri}`,
+                        status: 'completed',
+                        result: 'The page has been successfully navigated to and is now displayed to the user.'
+                      });
+                    } else {
+                      content = JSON.stringify({ 
+                        success: true, 
+                        message: 'UI tool executed successfully',
+                        status: 'completed',
+                        result: 'The UI tool has been successfully executed.'
+                      });
+                    }
+                    return {
+                      role: 'tool',
+                      tool_call_id: `ui-${toolName}`,
+                      content
+                    };
+                  })
                 ];
+                
+                console.log('[SSE:text-stream] 🔄 Sending follow-up completion with messages:', JSON.stringify(followupMessages, null, 2));
                 
                 const followupCompletion = await openai.chat.completions.create({
                   model,
@@ -474,9 +497,9 @@ export async function GET(req: NextRequest) {
                   console.log('[SSE:text-stream] ✅ generated follow-up response after UI tools');
                   finalText = followupText;
                 }
-              } catch (error) {
-                console.warn('[SSE:text-stream] ⚠️ follow-up completion failed:', error);
-              }
+                } catch (error) {
+                  console.warn('[SSE:text-stream] ⚠️ follow-up completion failed:', error);
+                }
             }
             
             // Execute non-UI tools on server
@@ -563,7 +586,7 @@ export async function GET(req: NextRequest) {
               let targetInstructions = '';
               let targetTools: any[] = [];
               if (targetKey) {
-                const base2 = await fetchJson(`${BACKEND_URL}/api/agents/${encodeURIComponent(targetKey)}/prompt?category=base`);
+                const base2 = await fetchJson(`${BACKEND_URL}/api/agents/${encodeURIComponent(targetKey)}/prompt?category=system`);
                 targetInstructions = base2.ok ? (base2.json?.content || '') : '';
                 const toolsRes2 = await fetchJson(`${BACKEND_URL}/api/agents/${encodeURIComponent(targetKey)}/tools`);
                 if (toolsRes2.ok && Array.isArray(toolsRes2.json)) {

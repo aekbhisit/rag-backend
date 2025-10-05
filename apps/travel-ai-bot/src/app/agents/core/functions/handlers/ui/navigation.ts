@@ -34,13 +34,25 @@ export const navigateToPreviousHandler = async (args: any) => {
 export const navigateHandler = async (args: any) => {
   console.log('[UI] navigate called:', args);
   
-  const { uri } = args;
+  // Handle different possible argument structures
+  let uri = null;
   
-  if (!uri || typeof uri !== 'string') {
+  if (args && typeof args === 'object') {
+    // Try different possible parameter names
+    uri = args.uri || args.route || args.section || args.path;
+  } else if (typeof args === 'string') {
+    // If args is a string, treat it as the URI directly
+    uri = args;
+  }
+  
+  console.log('[UI] navigate extracted URI:', uri, 'from args:', args);
+  
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
     console.log('[UI] navigate error: URI is required');
     return {
       success: false,
-      error: 'URI is required for navigation'
+      error: 'URI is required for navigation',
+      receivedArgs: args
     };
   }
   

@@ -272,8 +272,8 @@ export function useSDKRealtimeSession({
       getAgentInstructions: () => {
         try {
           const cfg = (allAgentConfigsRef.current || []).find(c => c.name === selectedAgentName) || null;
-          const raw = (cfg?.instructions || cfg?.systemPrompt || '').toString();
-          const source = (cfg?.instructions ? 'instructions' : (cfg?.systemPrompt ? 'systemPrompt' : 'none')) as 'instructions' | 'systemPrompt' | 'none';
+          const raw = (cfg?.prompt || cfg?.instructions || cfg?.systemPrompt || '').toString();
+          const source = (cfg?.prompt ? 'prompt' : (cfg?.instructions ? 'instructions' : (cfg?.systemPrompt ? 'systemPrompt' : 'none'))) as 'prompt' | 'instructions' | 'systemPrompt' | 'none';
           return { instructions: raw, source };
         } catch { return null; }
       }
@@ -682,7 +682,7 @@ export function useSDKRealtimeSession({
       try {
         if (dbSessionIdRef.current) {
           console.log('[SDK] Ending database session:', dbSessionIdRef.current);
-          await fetch(getApiUrl('/api/admin/sessions/' + encodeURIComponent(dbSessionIdRef.current) + '/end'), {
+          await fetch(getApiUrl('/api/sessions/' + encodeURIComponent(dbSessionIdRef.current) + '/end'), {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
