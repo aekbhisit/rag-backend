@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { rateLimit } from '@/app/lib/rateLimit';
 import OpenAI from 'openai';
+import { getAiConfig } from '@/app/lib/getAiConfig';
 
 /**
  * /services/chat/text-stream - Streaming Text Chat Endpoint
@@ -45,7 +46,11 @@ import OpenAI from 'openai';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const openai = new OpenAI();
+// Initialize OpenAI client with database API key (deferred until runtime)
+const getOpenAI = async () => {
+  const aiConfig = await getAiConfig();
+  return new OpenAI({ apiKey: aiConfig.apiKey });
+};
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3100';
 
 async function fetchJson(url: string) {
@@ -231,6 +236,8 @@ export async function GET(req: NextRequest) {
         // Emit initial tools debug to client
         try { emitToolsDebug('initial', agentName || resolvedKey, tools); } catch {}
         try {
+          // Get OpenAI client with database API key
+          const openai = await getOpenAI();
           const completion = await openai.chat.completions.create({
             model,
             stream: true,
@@ -316,6 +323,7 @@ export async function GET(req: NextRequest) {
           if (seenToolCallsInitial.length > 0 && Object.keys(aggregatedArgsInitial).length === 0) {
             console.log('[SSE:text-stream] ▶ initial args probe (non-stream) - tool calls seen but no args streamed');
             try {
+              const openai = await getOpenAI();
               const probe = await openai.chat.completions.create({
                 model,
                 stream: false,
@@ -375,6 +383,7 @@ export async function GET(req: NextRequest) {
               // Compose a constrained prompt instructing to output ONLY JSON matching schema
               const prompt = `You are filling function call arguments for the tool "${toolName}". The user message is: "${userText}". Output ONLY a compact JSON object that conforms to the following JSON Schema (no extra text): ${JSON.stringify(schema)}`;
               try {
+                const openai = await getOpenAI();
                 const resp = await openai.chat.completions.create({
                   model,
                   stream: false,
@@ -483,6 +492,7 @@ export async function GET(req: NextRequest) {
                 
                 console.log('[SSE:text-stream] 🔄 Sending follow-up completion with messages:', JSON.stringify(followupMessages, null, 2));
                 
+                const openai = await getOpenAI();
                 const followupCompletion = await openai.chat.completions.create({
                   model,
                   stream: false,
@@ -664,6 +674,7 @@ export async function GET(req: NextRequest) {
               ];
 
               console.log('[SSE:text-stream] ▶ follow-up completion for', { agentName: transferTarget, tools: targetTools.length, carriedPreview: carried.slice(0, 120) });
+              const openai = await getOpenAI();
               const completion2 = await openai.chat.completions.create({
                 model,
                 stream: true,
@@ -713,6 +724,7 @@ export async function GET(req: NextRequest) {
               try {
                 if (seenToolCalls.length > 0 && Object.keys(aggregatedArgsFollow).length === 0) {
                   console.log('[SSE:text-stream] ▶ follow-up args probe (non-stream)');
+                  const openai = await getOpenAI();
                   const probe = await openai.chat.completions.create({
                     model,
                     stream: false,

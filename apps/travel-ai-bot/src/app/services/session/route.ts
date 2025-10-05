@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAiConfig } from "@/app/lib/getAiConfig";
 
 /**
  * /services/session - OpenAI Realtime API Session Endpoint
@@ -28,10 +29,13 @@ import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   try {
+    // Get API key from database
+    const aiConfig = await getAiConfig();
+    
     // For testing without a real API key, return a mock ephemeral key
     // In production, this would make a real API call to OpenAI
-    if (!process.env.OPENAI_API_KEY) {
-      console.log("No OPENAI_API_KEY found, returning mock ephemeral key for testing");
+    if (!aiConfig.apiKey || aiConfig.apiKey === 'dummy-key-for-build') {
+      console.log("No valid API key found in database, returning mock ephemeral key for testing");
       return NextResponse.json({
         client_secret: {
           value: `mock-ephemeral-key-for-testing-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -45,7 +49,7 @@ export async function GET(request: Request) {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          Authorization: `Bearer ${aiConfig.apiKey}`,
           "Content-Type": "application/json",
           "Cache-Control": "no-cache, no-store, must-revalidate",
           "Pragma": "no-cache",

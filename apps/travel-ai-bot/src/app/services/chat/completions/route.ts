@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { rateLimit } from "@/app/lib/rateLimit";
 import { NextRequest } from "next/server";
+import { getAiConfig } from "@/app/lib/getAiConfig";
 
 /**
  * /services/chat/completions - Basic Chat Completions Endpoint
@@ -33,7 +34,11 @@ import { NextRequest } from "next/server";
  * - For streaming chat, use /services/chat/text-stream
  */
 
-const openai = new OpenAI();
+// Initialize OpenAI client with database API key (deferred until runtime)
+const getOpenAI = async () => {
+  const aiConfig = await getAiConfig();
+  return new OpenAI({ apiKey: aiConfig.apiKey });
+};
 
 // Rate limit configuration: 5 requests per minute
 const RATE_LIMIT_CONFIG = {
@@ -68,6 +73,9 @@ export async function POST(req: NextRequest) {
     // Retrieve the entire JSON object from the request.
     const body = await req.json();
 
+    // Get OpenAI client with database API key
+    const openai = await getOpenAI();
+    
     // Spread the entire body into the API call.
     const completion = await openai.chat.completions.create({
       ...body,

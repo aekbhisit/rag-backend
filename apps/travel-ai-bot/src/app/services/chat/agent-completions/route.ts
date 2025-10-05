@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { rateLimit } from "@/app/lib/rateLimit";
 import { NextRequest } from "next/server";
 import { createCollector } from "@/app/lib/conversationCollector";
+import { getAiConfig } from "@/app/lib/getAiConfig";
 
 /**
  * /services/chat/agent-completions - Agent Chat Completions Endpoint
@@ -37,7 +38,11 @@ import { createCollector } from "@/app/lib/conversationCollector";
  * - transfer_to_placeGuide (agent transfers)
  */
 
-const openai = new OpenAI();
+// Initialize OpenAI client with database API key (deferred until runtime)
+const getOpenAI = async () => {
+  const aiConfig = await getAiConfig();
+  return new OpenAI({ apiKey: aiConfig.apiKey });
+};
 const DEFAULT_MODEL = process.env.TEXT_MODEL || 'gpt-4o';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3100';
 const TENANT_ID = process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000';
@@ -169,6 +174,9 @@ export async function POST(req: NextRequest) {
       ...(transformedTools.length > 0 ? { tools: transformedTools } : {}),
     } as any;
 
+    // Get OpenAI client with database API key
+    const openai = await getOpenAI();
+    
     // Call OpenAI API
     const completion = await openai.chat.completions.create(completionRequest);
 
@@ -308,6 +316,9 @@ export async function POST(req: NextRequest) {
         ];
         
         console.log(`[Agent API] Follow-up messages:`, JSON.stringify(followUpMessages, null, 2));
+        
+        // Get OpenAI client for follow-up request
+        const openai = await getOpenAI();
         
         // Make follow-up completion request
         const followUpCompletion = await openai.chat.completions.create({
