@@ -105,12 +105,6 @@ start_dev() {
     print_status "Starting RAG backend application..."
     docker-compose up -d rag-backend
     
-    print_status "Waiting for backend to be ready..."
-    sleep 10
-    
-    print_status "Starting frontend applications..."
-    docker-compose up -d admin-web travel-ai-bot
-    
     print_success "Development environment started!"
     print_status "Services available at:"
     echo "  - PostgreSQL: localhost:5432"
@@ -118,7 +112,6 @@ start_dev() {
     echo "  - MinIO: http://localhost:9000 (Console: http://localhost:9001)"
     echo "  - RAG Backend: http://localhost:3002"
     echo "  - Admin Web UI: http://localhost:3000"
-    echo "  - Travel AI Bot: http://localhost:3200"
     echo "  - Health Check: http://localhost:3002/health"
 }
 
@@ -151,28 +144,14 @@ logs() {
 
 # Function to rebuild application
 rebuild() {
-    local service=${1:-"rag-backend"}
+    print_status "Rebuilding RAG backend application..."
+    docker-compose build rag-backend
+    print_success "Application rebuilt"
     
-    if [[ "$service" == "all" ]]; then
-        print_status "Rebuilding all applications..."
-        docker-compose build rag-backend admin-web travel-ai-bot
-        print_success "All applications rebuilt"
-        
-        if [[ "$2" == "--restart" ]]; then
-            print_status "Restarting all applications..."
-            docker-compose up -d rag-backend admin-web travel-ai-bot
-            print_success "All applications restarted"
-        fi
-    else
-        print_status "Rebuilding $service application..."
-        docker-compose build "$service"
-        print_success "Application rebuilt"
-        
-        if [[ "$2" == "--restart" ]]; then
-            print_status "Restarting application..."
-            docker-compose up -d "$service"
-            print_success "Application restarted"
-        fi
+    if [[ "$1" == "--restart" ]]; then
+        print_status "Restarting application..."
+        docker-compose up -d rag-backend
+        print_success "Application restarted"
     fi
 }
 
@@ -218,13 +197,6 @@ status() {
     else
         echo "  ❌ Admin Web UI: Unhealthy"
     fi
-    
-    # Check Travel AI Bot Frontend
-    if curl -s http://localhost:3200/ > /dev/null 2>&1; then
-        echo "  ✅ Travel AI Bot: Healthy"
-    else
-        echo "  ❌ Travel AI Bot: Unhealthy"
-    fi
 }
 
 # Function to clean up
@@ -252,7 +224,7 @@ show_help() {
     echo "  stop        Stop development environment"
     echo "  restart     Restart development environment"
     echo "  logs [SERVICE] Show logs (all or specific service)"
-    echo "  rebuild [SERVICE] Rebuild application (rag-backend, admin-web, travel-ai-bot, or all)"
+    echo "  rebuild     Rebuild RAG backend application"
     echo "  status      Show environment status"
     echo "  clean       Clean up all containers and volumes"
     echo "  help        Show this help message"
@@ -260,8 +232,7 @@ show_help() {
     echo "Examples:"
     echo "  $0 start              # Start all services"
     echo "  $0 logs rag-backend   # Show backend logs"
-    echo "  $0 rebuild all        # Rebuild all applications"
-    echo "  $0 rebuild travel-ai-bot --restart  # Rebuild and restart travel bot"
+    echo "  $0 rebuild --restart  # Rebuild and restart"
 }
 
 # Main script logic
