@@ -107,14 +107,14 @@ export function buildPublicAgentsRouter(pool?: Pool) {
       for (const a of agents) {
         const key = String(a.agent_key);
 
-        // 2) load system prompt (base category)
+        // 2) load system prompt (system category)
         const promptResult = await pg.query(
           `SELECT content FROM agent_prompts 
-           WHERE agent_key = $1 AND category = 'base' 
+           WHERE agent_key = $1 AND category = 'system' 
            ORDER BY version DESC LIMIT 1`,
           [key]
         );
-        const instructions = promptResult.rows.length > 0 ? promptResult.rows[0].content || '' : '';
+        const prompt = promptResult.rows.length > 0 ? promptResult.rows[0].content || '' : '';
 
         // 3) tools (public)
         const toolsResult = await pg.query(
@@ -158,7 +158,7 @@ export function buildPublicAgentsRouter(pool?: Pool) {
           name: a.name,
           key,
           publicDescription: a.public_description,
-          instructions: instructions, // load system prompt from database
+          prompt: prompt, // load system prompt from database
           tools: dbTools,
           toolLogic: {}, // client maps DB tool keys to actual handlers
           functionSkillKeys,

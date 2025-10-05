@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Pool } from 'pg';
 import { getPostgresPool } from '../../adapters/db/postgresClient';
 import { getTenantIdFromReq } from '../../config/tenant';
+import { SessionsRepository } from '../../repositories/sessionsRepository';
 
 export function buildPublicMessagesRouter(pool?: Pool) {
   const router = Router();
@@ -24,9 +25,27 @@ export function buildPublicMessagesRouter(pool?: Pool) {
       });
       
       const input = MessageSchema.parse(req.body);
-      
-      // Use session_id as provided (simplified for now)
-      const sessionId = input.session_id;
+
+      // Resolve or create a valid session_id (UUID)
+      const sessionsRepo = new SessionsRepository(pg);
+      const rawSessionId = input.session_id;
+      const isUuid = z.string().uuid().safeParse(rawSessionId).success;
+      let sessionId = rawSessionId;
+
+      if (!isUuid) {
+        const newSession = await sessionsRepo.create({
+          tenant_id: tenantId,
+          user_id: null,
+          channel: input.channel || 'web',
+          status: 'active',
+          meta: { created_from: 'messages_api', original_session_id: rawSessionId },
+        });
+        sessionId = newSession.id;
+      }
+
+      // Debug: verify resolved session id
+      // Note: safe to log here, no PII; helps verify sanitization behavior
+      console.log('Messages route session resolution', { rawSessionId, isUuid, sessionId });
       
       // Insert message into database
       const { rows } = await pg.query(
@@ -50,7 +69,8 @@ export function buildPublicMessagesRouter(pool?: Pool) {
       res.status(201).json({
         id: rows[0].id,
         created_at: rows[0].created_at,
-        status: 'logged'
+        status: 'logged',
+        session_id: sessionId,
       });
       
     } catch (error) {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Pool } from 'pg';
 import { getPostgresPool } from '../../adapters/db/postgresClient';
 import { getTenantIdFromReq } from '../../config/tenant';
+import { SessionsRepository } from '../../repositories/sessionsRepository';
 
 export function buildPublicStaffRouter(pool?: Pool) {
   const router = Router();
@@ -62,8 +63,20 @@ export function buildPublicStaffRouter(pool?: Pool) {
       
       const input = StaffMessageSchema.parse(req.body);
       
-      // Create staff message session if not exists
-      const sessionId = input.session_id || `staff-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      // Resolve or create a valid session (UUID)
+      const sessionsRepo = new SessionsRepository(pg);
+      let sessionId = input.session_id;
+      const isUuid = typeof sessionId === 'string' && /^[0-9a-fA-F-]{36}$/.test(sessionId);
+      if (!isUuid) {
+        const session = await sessionsRepo.create({
+          tenant_id: tenantId,
+          user_id: input.user_id || null,
+          channel: 'staff',
+          status: 'pending',
+          meta: { created_from: 'staff_messages' },
+        });
+        sessionId = session.id;
+      }
       
       // Log staff message
       await pg.query(

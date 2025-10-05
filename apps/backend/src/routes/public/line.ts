@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Pool } from 'pg';
 import { getPostgresPool } from '../../adapters/db/postgresClient';
 import { getTenantIdFromReq } from '../../config/tenant';
+import { SessionsRepository } from '../../repositories/sessionsRepository';
 
 export function buildPublicLineRouter(pool?: Pool) {
   const router = Router();
@@ -45,15 +46,16 @@ export function buildPublicLineRouter(pool?: Pool) {
         });
       }
       
-      // For now, log the message and return success
-      // In a full implementation, this would actually push to LINE API
-      console.log('LINE push request:', {
-        tenantId,
-        text: input.text,
-        user_id: input.user_id,
-        channel: input.channel
+      // Resolve or create a valid chat session (UUID)
+      const sessionsRepo = new SessionsRepository(pg);
+      const session = await sessionsRepo.create({
+        tenant_id: tenantId,
+        user_id: input.user_id || null,
+        channel: input.channel || 'line',
+        status: 'active',
+        meta: { created_from: 'line_push' },
       });
-      
+
       // Log to database
       await pg.query(
         `INSERT INTO messages (
@@ -61,7 +63,7 @@ export function buildPublicLineRouter(pool?: Pool) {
         ) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
         [
           tenantId,
-          `line-${Date.now()}`,
+          session.id,
           'assistant',
           'text',
           input.text,
@@ -77,6 +79,7 @@ export function buildPublicLineRouter(pool?: Pool) {
       res.json({
         status: 'pushed',
         message: 'Message pushed to LINE successfully',
+        session_id: session.id,
         timestamp: new Date().toISOString()
       });
       

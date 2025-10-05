@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './config/security/env'; // Validate environment on startup
 import http from 'node:http'
 import { createApp } from './app.js';
 import * as db from './adapters/db/postgresClient';

@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
+import { dataSanitizer } from '../utils/dataSanitizer';
 
 export type ErrorLogRow = {
   id: string;
@@ -87,6 +88,16 @@ export class ErrorLogsRepository {
   async create(input: Omit<ErrorLogRow, 'id' | 'created_at'>): Promise<ErrorLogRow> {
     await this.ensureTable();
     const id = randomUUID();
+    
+    // Sanitize sensitive data before storing (only for logging, not database operations)
+    const sanitizedInput = {
+      ...input,
+      headers: input.headers ? dataSanitizer.sanitizeObject(input.headers, { sensitive: true, direction: 'log' }) : null,
+      query: input.query ? dataSanitizer.sanitizeObject(input.query, { sensitive: true, direction: 'log' }) : null,
+      body: input.body ? dataSanitizer.sanitizeObject(input.body, { sensitive: true, direction: 'log' }) : null,
+      message: input.message ? dataSanitizer.sanitizeObject({ message: input.message }, { sensitive: true, direction: 'log' }).message : null,
+    };
+    
     const { rows } = await this.pool.query(
       `INSERT INTO error_logs (
         id, tenant_id, endpoint, method, http_status, message, error_code, stack, file, line, column_no, headers, query, body, request_id, log_status, notes, fixed_by, fixed_at
@@ -95,24 +106,24 @@ export class ErrorLogsRepository {
       ) RETURNING id, tenant_id, endpoint, method, http_status, message, error_code, stack, file, line, column_no, headers, query, body, request_id, log_status, notes, fixed_by, fixed_at, created_at`,
       [
         id,
-        input.tenant_id,
-        input.endpoint ?? null,
-        input.method ?? null,
-        input.http_status ?? null,
-        input.message ?? null,
-        input.error_code ?? null,
-        input.stack ?? null,
-        input.file ?? null,
-        input.line ?? null,
-        input.column_no ?? null,
-        input.headers ?? null,
-        input.query ?? null,
-        input.body ?? null,
-        input.request_id ?? null,
-        input.log_status ?? 'open',
-        input.notes ?? null,
-        input.fixed_by ?? null,
-        input.fixed_at ?? null,
+        sanitizedInput.tenant_id,
+        sanitizedInput.endpoint ?? null,
+        sanitizedInput.method ?? null,
+        sanitizedInput.http_status ?? null,
+        sanitizedInput.message ?? null,
+        sanitizedInput.error_code ?? null,
+        sanitizedInput.stack ?? null,
+        sanitizedInput.file ?? null,
+        sanitizedInput.line ?? null,
+        sanitizedInput.column_no ?? null,
+        sanitizedInput.headers ?? null,
+        sanitizedInput.query ?? null,
+        sanitizedInput.body ?? null,
+        sanitizedInput.request_id ?? null,
+        sanitizedInput.log_status ?? 'open',
+        sanitizedInput.notes ?? null,
+        sanitizedInput.fixed_by ?? null,
+        sanitizedInput.fixed_at ?? null,
       ]
     );
     return rows[0] as ErrorLogRow;

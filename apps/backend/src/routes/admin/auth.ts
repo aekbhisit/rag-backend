@@ -4,6 +4,11 @@ import type { Pool } from 'pg';
 // @ts-ignore
 import bcrypt from 'bcryptjs';
 import { getTenantIdFromReq } from '../../config/tenant';
+import { secrets } from '../../config/security/secrets';
+import { tokenService } from '../../services/tokenService';
+import { loginAttemptService } from '../../services/loginAttemptService';
+import { sessionService } from '../../services/sessionService';
+import { createSessionCookie, clearSessionCookie } from '../../middleware/sessionMiddleware';
 
 export function buildAuthRouter(pool: Pool) {
   const router = Router();
@@ -35,7 +40,20 @@ export function buildAuthRouter(pool: Pool) {
       const { email, password } = (req.body || {}) as { email?: string; password?: string };
       const tenantId = getTenantIdFromReq(req);
       if (!email || !password) return res.status(400).json({ message: 'Missing email or password' });
+      
+      // Check for account lockout (enhanced security)
+      const identifier = `${req.ip}:${email}`;
+      const isLocked = await loginAttemptService.isAccountLocked(identifier);
+      
+      if (isLocked) {
+        return res.status(423).json({ 
+          message: 'Account temporarily locked due to too many failed attempts',
+          retryAfter: 900 // 15 minutes
+        });
+      }
+      
       await ensureUserColumns();
+      
       // First, try to find a user within the provided tenant
       const { rows } = await pool.query(`SELECT * FROM users WHERE tenant_id=$1 AND email=$2 LIMIT 1`, [tenantId, email]);
       let user = rows[0];
@@ -49,13 +67,72 @@ export function buildAuthRouter(pool: Pool) {
         }
       }
 
-      if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+      if (!user) {
+        // Record failed attempt
+        await loginAttemptService.recordFailedAttempt(identifier);
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      
       if (user.status && user.status !== 'active') return res.status(403).json({ message: 'User is not active' });
+      
       const ok = user.password_hash ? await bcrypt.compare(password, user.password_hash) : false;
-      if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
-      // Simple sessionless response; front-end stores minimal data
-      return res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role, status: user.status } });
-    } catch (e) { next(e); }
+      if (!ok) {
+        // Record failed attempt
+        await loginAttemptService.recordFailedAttempt(identifier);
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Record successful attempt
+      await loginAttemptService.recordSuccessfulAttempt(identifier);
+
+      // Generate JWT token
+      const token = tokenService.generateToken({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        tenantId: user.tenant_id,
+      });
+
+      // Create session for enhanced security
+      const session = await sessionService.createSession(
+        user.id,
+        user.tenant_id,
+        req.ip || 'unknown',
+        req.get('User-Agent') || 'unknown',
+        {
+          role: user.role,
+          email: user.email,
+          loginTime: new Date().toISOString(),
+        }
+      );
+
+      // Set session cookie
+      createSessionCookie(session.id, res);
+
+      // Enhanced response with JWT token and session
+      return res.json({ 
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          name: user.name, 
+          role: user.role, 
+          status: user.status 
+        },
+        token,
+        session: {
+          id: session.id,
+          expiresAt: session.expiresAt
+        }
+      });
+    } catch (e) { 
+      // Record failed attempt on error
+      const { email } = (req.body || {}) as { email?: string; password?: string };
+      if (email) {
+        const identifier = `${req.ip}:${email}`;
+        await loginAttemptService.recordFailedAttempt(identifier);
+      }
+      next(e); 
+    }
   });
 
   router.post('/set-password', async (req, res, next) => {
@@ -88,6 +165,27 @@ export function buildAuthRouter(pool: Pool) {
       }
       return res.json({ message: 'Password updated' });
     } catch (e) { next(e); }
+  });
+
+  router.post('/logout', async (req, res, next) => {
+    try {
+      // Extract session ID from request
+      const sessionId = req.headers.authorization?.replace('Bearer ', '') || 
+                       req.cookies?.sessionId || 
+                       req.query.sessionId;
+
+      if (sessionId) {
+        // Invalidate session
+        await sessionService.invalidateSession(sessionId);
+      }
+
+      // Clear session cookie
+      clearSessionCookie(res);
+
+      res.json({ message: 'Logged out successfully' });
+    } catch (error) {
+      next(error);
+    }
   });
 
   return router;
