@@ -1,0 +1,381 @@
+version: '3.8'
+
+services:
+  # Main RAG Backend Application
+  rag-backend:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    container_name: rag-backend
+    user: "1000:1000"  # Non-root user
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # MinIO
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      # Bootstrap (optional)
+      TENANT_ID: ${TENANT_ID}
+      TENANT_NAME: ${TENANT_NAME}
+      TENANT_CONTACT_EMAIL: ${TENANT_CONTACT_EMAIL}
+      TENANT_CODE: ${TENANT_CODE}
+      TENANT_SLUG: ${TENANT_SLUG}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_NAME: ${ADMIN_NAME}
+    volumes:
+      - ./data/logs:/app/logs:rw,noexec,nosuid
+      - ./data/uploads:/app/uploads:rw,noexec,nosuid
+      - ./data/temp:/app/temp:rw,noexec,nosuid
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    ulimits:
+      nproc: 200          # Increased for better process handling
+      nofile:
+        soft: 2048        # Increased for more file descriptors
+        hard: 4096
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'      # Increased for AI/ML workloads
+          memory: 4G       # Increased for vector operations and embeddings
+        reservations:
+          cpus: '1.0'      # Minimum guaranteed CPU
+          memory: 1G       # Minimum guaranteed memory
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Web (Next.js)
+  admin-web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.admin-web
+    container_name: rag-admin-web
+    user: "1000:1000"  # Non-root user
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Frontend will call the backend via your external Nginx on the same domain
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+      # Tenant configuration
+      TENANT_ID: ${TENANT_ID}
+      NEXT_TELEMETRY_DISABLED: ${NEXT_TELEMETRY_DISABLED}
+    ports:
+      - "3000:3000"
+    depends_on:
+      rag-backend:
+        condition: service_started
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'      # Increased for Next.js SSR and admin operations
+          memory: 2G       # Increased for admin interface performance
+        reservations:
+          cpus: '0.5'      # Minimum guaranteed CPU
+          memory: 512M     # Minimum guaranteed memory
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Travel AI Bot (Next.js)
+  travel-ai-bot:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.travel-ai-bot
+    container_name: rag-travel-ai-bot
+    user: "1000:1000"  # Non-root user
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3200
+      # Backend API connection
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+      RAG_BASE_URL: ${RAG_BASE_URL}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      # Tenant configuration
+      TENANT_ID: ${TENANT_ID}
+      # Next.js configuration
+      NEXT_TELEMETRY_DISABLED: ${NEXT_TELEMETRY_DISABLED}
+    ports:
+      - "3200:3200"
+    depends_on:
+      rag-backend:
+        condition: service_started
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'      # Increased for AI bot processing and real-time interactions
+          memory: 3G       # Increased for AI model operations
+        reservations:
+          cpus: '0.5'      # Minimum guaranteed CPU
+          memory: 512M     # Minimum guaranteed memory
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3200/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database
+  postgres:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile.postgis
+    container_name: rag-postgres
+    user: "999:999"  # Run as postgres user, not root
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./data/backups:/backups
+    # SECURITY: PostgreSQL accessible only via SSH tunnel (127.0.0.1:5432)
+    ports:
+      - "127.0.0.1:5432:5432"  # SSH tunnel access only - not accessible from external networks
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /var/lib/postgresql/data:noexec,nosuid,size=10g
+    ulimits:
+      nproc: 200          # Increased for database connections
+      nofile:
+        soft: 2048        # Increased for database file handles
+        hard: 4096
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'      # Increased for database operations and query processing
+          memory: 2G       # Increased for database cache and connections
+        reservations:
+          cpus: '0.5'      # Minimum guaranteed CPU
+          memory: 512M     # Minimum guaranteed memory
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    user: "999:999"  # redis user
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - ./data/redis:/data
+    # SECURITY: Remove external port exposure - cache should only be accessible internally
+    # ports:
+    #   - "6379:6379"  # REMOVED: No external Redis access for security
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'      # Adequate for caching operations
+          memory: 1G       # Increased for cache performance
+        reservations:
+          cpus: '0.25'     # Minimum guaranteed CPU
+          memory: 256M     # Minimum guaranteed memory
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: rag-minio
+    user: "1000:1000"  # minio user
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
+    volumes:
+      - ./data/minio:/data
+    ports:
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console (Web UI)
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'      # Increased for file operations and API serving
+          memory: 2G       # Increased for large file handling
+        reservations:
+          cpus: '0.5'      # Minimum guaranteed CPU
+          memory: 512M     # Minimum guaranteed memory
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Basic Malware Detection Service
+  malware-detector:
+    image: alpine:latest
+    container_name: rag-malware-detector
+    user: "1000:1000"
+    restart: unless-stopped
+    command: >
+      sh -c "
+        apk add --no-cache bash curl &&
+        echo 'Starting basic malware detection service...' &&
+        while true; do
+          echo 'Scanning for malware at $(date)'
+          
+          # Check for crypto miners in PostgreSQL container
+          if docker ps --format '{{.Names}}' | grep -q rag-postgres; then
+            if docker exec rag-postgres ps aux 2>/dev/null | grep -E '(kdevtmpfsi|minerd|xmrig|cpuminer|ccminer|stratum|LvZm9SZ|kinsing)' > /dev/null; then
+              echo \"ALERT: Malware detected in PostgreSQL at $(date)\"
+              
+              # Create incident log
+              echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"rag-postgres\\\",\\\"incident\\\":\\\"malware_detected\\\",\\\"action\\\":\\\"container_isolated\\\"}\" >> /tmp/security-incidents.log
+              
+              # Stop PostgreSQL container
+              docker stop rag-postgres
+              
+              # Send alert
+              echo \"🚨 CRITICAL: Malware detected in PostgreSQL. Container stopped for security.\"
+            fi
+            
+            # Check for high CPU usage (potential mining)
+            cpu_usage=$$(docker stats --no-stream --format \"{{.CPUPerc}}\" rag-postgres 2>/dev/null | sed 's/%//' | cut -d. -f1)
+            if [ ! -z \"$$cpu_usage\" ] && [ \"$$cpu_usage\" -gt 80 ]; then
+              echo \"ALERT: High CPU usage in PostgreSQL: $$cpu_usage%\"
+              echo \"{\\\"timestamp\\\":\\\"$(date -Iseconds)\\\",\\\"container\\\":\\\"rag-postgres\\\",\\\"incident\\\":\\\"high_cpu_usage\\\",\\\"cpu_usage\\\":\\\"$$cpu_usage%\\\",\\\"action\\\":\\\"logged\\\"}\" >> /tmp/security-incidents.log
+            fi
+          fi
+          
+          sleep 300  # Check every 5 minutes
+        done
+      "
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/logs/security:/tmp:rw
+    networks:
+      - rag-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+
+volumes:
+  # All data is stored in local ./data directory for easy management
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/minio
+
+networks:
+  rag-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
