@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { BACKEND_URL } from '../../../../components/config';
 
 export default function TestPage() {
   return (

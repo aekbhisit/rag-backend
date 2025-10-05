@@ -125,13 +125,13 @@ export default function NavigationPagesPage() {
 
       if (response.ok) {
         setPages(pages.filter(p => p.id !== id));
-        alert('Navigation page deleted successfully');
+        console.log('Navigation page deleted successfully');
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to delete navigation page');
+        console.error(error.error || 'Failed to delete navigation page');
       }
     } catch (error) {
-      alert('Error deleting navigation page');
+      console.error('Error deleting navigation page');
     }
   };
 
@@ -376,7 +376,7 @@ export default function NavigationPagesPage() {
                 <div>
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     {page.title}
-                    <Badge variant={page.is_active ? "default" : "info"}>
+                    <Badge variant={page.is_active ? "default" : "warning"}>
                       {page.is_active ? "Active" : "Inactive"}
                     </Badge>
                     <Badge variant="info">Priority: {page.priority}</Badge>

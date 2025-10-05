@@ -58,7 +58,7 @@ interface ExportedToolConfig {
   tool_key: string;
   tool_name: string;
   tool_description: string;
-  alias?: string;
+  alias: string;
   enabled: boolean;
   position: number;
   arg_defaults: Record<string, any>;
