@@ -3,7 +3,7 @@ import 'dotenv/config';
 async function main() {
   const { indexAiUsage } = await import('../adapters/search/aiUsageLogService');
 
-  const tenantId = process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000';
+  const tenantId = process.env.SEED_TENANT_ID || '00000000-0000-0000-0000-000000000000';
   const now = new Date();
   const start = new Date(now.getTime() - 500);
   const doc = {

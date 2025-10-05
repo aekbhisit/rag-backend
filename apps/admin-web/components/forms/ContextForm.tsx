@@ -58,6 +58,7 @@ const CONTEXT_TYPES = [
   { value: "website", label: "Website" },
   { value: "ticket", label: "Ticket" },
   { value: "document", label: "Document" },
+  { value: "product", label: "Product" },
   { value: "text", label: "Text" }
 ];
 
@@ -357,15 +358,20 @@ export function ContextForm({ initialData, onSubmit, onCancel, loading = false, 
             onUpdate={updateAttribute}
           />
         );
-      // case "product":
-        // Product form not implemented yet
-        // return null;
+      case "product":
+        return (
+          <ProductForm
+            attributes={formData.attributes}
+            errors={errors}
+            onUpdate={updateAttribute}
+          />
+        );
       case "text":
         // No extra fields beyond general ones
-        // return null;
+        return null;
 
       default:
-        // return null;
+        return null;
     }
   };
 

@@ -42,8 +42,6 @@
     "init:error-logs": "tsx src/scripts/createErrorLogsTable.ts",
     "migrate:error-logs": "tsx src/scripts/migrateErrorLogsTable.ts",
     "run-migration": "tsx src/scripts/runMigration.ts",
-    "apply-sql": "tsx src/scripts/applySqlFile.ts",
-    "seed:agent-prompts": "tsx src/scripts/seedAgentPrompts.ts",
     "test:db-connection": "tsx src/scripts/testDatabaseConnection.ts"
   },
   "dependencies": {
@@ -56,7 +54,6 @@
     "mammoth": "^1.10.0",
     "minio": "^1.0.0",
     "morgan": "^1.10.0",
-    "openai": "^4.104.0",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^4.10.38",
     "pg": "^8.11.5",

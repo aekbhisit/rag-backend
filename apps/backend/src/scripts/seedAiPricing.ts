@@ -2,7 +2,7 @@ import { getPostgresPool } from '../adapters/db/postgresClient';
 import { AiPricingRepository } from '../repositories/aiPricingRepository';
 
 async function main() {
-  const tenantId = process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000';
+  const tenantId = process.env.SEED_TENANT_ID || '00000000-0000-0000-0000-000000000000';
   const repo = new AiPricingRepository(getPostgresPool());
 
   // OpenAI pricing (example, adjust to your current contract):

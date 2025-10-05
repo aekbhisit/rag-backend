@@ -77,6 +77,7 @@ function toContextPayload(d: PlaceDetails) {
       maps_url: d.place_id ? `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(d.place_id)}` : (typeof lat==='number'&&typeof lng==='number' ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : undefined),
       google_place_id: d.place_id,
       source_uri: website,
+      google_place_id: d.place_id,
       imported_at: new Date().toISOString(),
       images: d.images || [],
     },

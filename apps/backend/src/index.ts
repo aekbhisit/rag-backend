@@ -7,7 +7,7 @@ import * as storage from './adapters/storage/minioClient';
 import { ensureAiUsageIndex } from './adapters/search/aiUsageLogService';
 // requests index now stored in Postgres; no index ensure needed
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3100;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 
 async function init() {
   try {
