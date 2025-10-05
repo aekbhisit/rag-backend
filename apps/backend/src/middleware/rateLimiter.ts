@@ -62,7 +62,7 @@ export function createRateLimiter(config: RateLimitConfig) {
 function createIdentifier(req: Request): string {
   const ip = (req.ip || (req.connection as any)?.remoteAddress || 'unknown').toString();
   const userId = ((req as any).user?.id || 'anonymous').toString();
-  const tenantId = (req.header('X-Tenant-ID') || process.env.DEFAULT_TENANT_ID || process.env.TENANT_ID || 'default').toString();
+  const tenantId = (req.header('X-Tenant-ID') || process.env.TENANT_ID || process.env.DEFAULT_TENANT_ID || 'default').toString();
   return `ratelimit:${tenantId}:${ip}:${userId}`;
 }
 
@@ -125,7 +125,7 @@ export function createDynamicRateLimiter(
 export function tenantSettingsRateLimiter() {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const tenantId = (req.header('X-Tenant-ID') || process.env.DEFAULT_TENANT_ID || process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000').toString();
+      const tenantId = (req.header('X-Tenant-ID') || process.env.TENANT_ID || process.env.DEFAULT_TENANT_ID || '00000000-0000-0000-0000-000000000000').toString();
       const ip = (req.ip || (req.connection as any)?.remoteAddress || '').toString();
 
       // Load tenant settings lazily
@@ -196,6 +196,49 @@ export function tenantSettingsRateLimiter() {
     }
   };
 }
+
+// Enhanced user-based rate limiter
+export function createUserBasedRateLimiter(config: RateLimitConfig) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Create identifier based on user if authenticated, otherwise IP
+      const userId = (req as any).user?.userId;
+      const identifier = userId ? `user:${userId}` : createIdentifier(req);
+      
+      const rateLimit = await cacheService.checkCustomRateLimit(
+        identifier,
+        config.maxRequests,
+        Math.floor(config.windowMs / 1000)
+      );
+      
+      // Set rate limit headers
+      res.set({
+        'X-RateLimit-Limit': String(config.maxRequests),
+        'X-RateLimit-Remaining': String(rateLimit.remaining),
+        'X-RateLimit-Reset': String(Math.floor(rateLimit.resetTime / 1000)),
+      });
+      
+      if (!rateLimit.allowed) {
+        return res.status(429).json({
+          error: 'RATE_LIMIT_EXCEEDED',
+          message: config.message || 'Rate limit exceeded',
+          retryAfter: Math.max(0, Math.ceil((rateLimit.resetTime - Date.now()) / 1000)),
+        });
+      }
+      
+      next();
+    } catch (error) {
+      console.error('Rate limiting error:', error);
+      next(); // Allow request on error
+    }
+  };
+}
+
+// Export enhanced rate limiters
+export const enhancedRateLimiters = {
+  ...rateLimiters,
+  userBased: createUserBasedRateLimiter,
+};
 
 export default rateLimiters;
 

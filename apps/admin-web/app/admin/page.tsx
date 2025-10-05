@@ -255,7 +255,7 @@ export default function AdminDashboard() {
                 </div>
               )}
               {stats.topIntents.map((intent, index) => (
-                <div key={intent.intent} className="flex items-center justify-between">
+                <div key={`${intent?.intent || 'unknown'}:${index}`} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-[color:var(--text-muted)] w-4">
                       #{index + 1}
@@ -285,8 +285,8 @@ export default function AdminDashboard() {
                   {translationMounted ? t('noContextData') : 'No context data'}
                 </div>
               )}
-              {stats.contextUsage.map((context) => (
-                <div key={context.type} className="flex items-center justify-between">
+              {stats.contextUsage.map((context, index) => (
+                <div key={`${context?.type || 'unknown'}:${index}`} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Badge variant="info" size="sm">
                       {context.type.replace("_", " ")}
@@ -321,8 +321,8 @@ export default function AdminDashboard() {
                     0,
                     ...stats.confidenceDistribution.map((c) => c.count || 0)
                   );
-                  return stats.confidenceDistribution.map((conf) => (
-                    <div key={conf.range} className="flex items-center justify-between">
+                  return stats.confidenceDistribution.map((conf, index) => (
+                    <div key={`${conf?.range || 'unknown'}:${index}`} className="flex items-center justify-between">
                       <span className="text-sm font-medium">{conf.range}</span>
                       <div className="flex items-center gap-2">
                         <div className="w-40 bg-[color:var(--surface-muted)] rounded-full h-2">

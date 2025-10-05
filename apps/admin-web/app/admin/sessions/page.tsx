@@ -30,6 +30,9 @@ export default function SessionsPage() {
   const [status, setStatus] = React.useState("");
   const [channel, setChannel] = React.useState("");
   const [userId, setUserId] = React.useState("");
+  const [deleting, setDeleting] = React.useState<string | null>(null);
+  const [sortField, setSortField] = React.useState<string>('started_at');
+  const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('desc');
   const { userTimezone } = useAuth();
 
   const search = async () => {
@@ -39,6 +42,8 @@ export default function SessionsPage() {
       if (status) params.set('status', status);
       if (channel) params.set('channel', channel);
       if (userId) params.set('user_id', userId);
+      if (sortField) params.set('sort', sortField);
+      if (sortOrder) params.set('order', sortOrder);
       const url = `${base}/api/admin/sessions?${params.toString()}`;
       const tenantId = getTenantId();
       const r = await fetch(url, { headers: { 'X-Tenant-ID': tenantId } });
@@ -48,7 +53,81 @@ export default function SessionsPage() {
     } finally { setLoading(false); }
   };
 
-  React.useEffect(() => { search(); }, [page, size, status, channel]);
+  React.useEffect(() => { search(); }, [page, size, status, channel, sortField, sortOrder]);
+
+  const deleteSession = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this session and all its messages? This action cannot be undone.')) {
+      return;
+    }
+    
+    setDeleting(id);
+    try {
+      const tenantId = getTenantId();
+      const response = await fetch(`${base}/api/admin/sessions/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'X-Tenant-ID': tenantId }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        alert(`Failed to delete session: ${error.error || 'Unknown error'}`);
+        return;
+      }
+      
+      // Refresh the list
+      await search();
+    } catch (error) {
+      alert(`Failed to delete session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const cleanupOldSessions = async () => {
+    if (!confirm('This will mark all active sessions older than 1 hour as "ended". Continue?')) {
+      return;
+    }
+    
+    try {
+      const tenantId = getTenantId();
+      const response = await fetch(`${base}/api/admin/sessions/cleanup`, {
+        method: 'POST',
+        headers: { 
+          'X-Tenant-ID': tenantId,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ hoursOld: 1 })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        alert(`Failed to cleanup sessions: ${error.error || 'Unknown error'}`);
+        return;
+      }
+      
+      const result = await response.json();
+      alert(`Cleanup completed! ${result.endedCount} old sessions marked as ended.`);
+      
+      // Refresh the list
+      await search();
+    } catch (error) {
+      alert(`Failed to cleanup sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortIcon = (field: string) => {
+    if (sortField !== field) return '↕';
+    return sortOrder === 'asc' ? '↑' : '↓';
+  };
 
   return (
     <main className="space-y-6">
@@ -57,6 +136,12 @@ export default function SessionsPage() {
         <div className="flex items-center gap-2">
           <input value={base} onChange={e => setBase(e.target.value)} className="border rounded px-2 py-1 text-sm" style={{ width: 360 }} />
           <button onClick={search} className="h-9 px-3 rounded border">Refresh</button>
+          <button 
+            onClick={cleanupOldSessions} 
+            className="h-9 px-3 rounded border border-orange-300 text-orange-600 hover:bg-orange-50"
+          >
+            Cleanup Old Sessions
+          </button>
         </div>
       </div>
 
@@ -69,15 +154,14 @@ export default function SessionsPage() {
           <div className="flex items-center gap-2">
             <select value={status} onChange={e => { setPage(1); setStatus(e.target.value); }} className="border rounded px-2 py-1 text-sm">
               <option value="">All statuses</option>
-              <option value="active">active</option>
-              <option value="ended">ended</option>
-              <option value="error">error</option>
+              <option value="active">Active (Ongoing)</option>
+              <option value="ended">Ended (Completed)</option>
             </select>
             <select value={channel} onChange={e => { setPage(1); setChannel(e.target.value); }} className="border rounded px-2 py-1 text-sm">
               <option value="">All channels</option>
-              <option value="normal">normal</option>
-              <option value="realtime">realtime</option>
-              <option value="human">human</option>
+              <option value="text">Text Chat</option>
+              <option value="realtime">Voice Chat</option>
+              <option value="human">Human Agent</option>
             </select>
             <button onClick={() => { setStatus(''); setChannel(''); setUserId(''); setPage(1); }} className="h-8 px-3 rounded border">Clear</button>
           </div>
@@ -88,12 +172,78 @@ export default function SessionsPage() {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left px-3 py-2">Started</th>
-              <th className="text-left px-3 py-2">User</th>
-              <th className="text-left px-3 py-2">Channel</th>
-              <th className="text-left px-3 py-2">Status</th>
-              <th className="text-left px-3 py-2">Messages</th>
-              <th className="text-left px-3 py-2">Tokens</th>
+              <th className="text-left px-3 py-2">
+                <div className="flex items-center gap-1">
+                  Started
+                  <button 
+                    onClick={() => handleSort('started_at')}
+                    className="hover:text-blue-600 text-gray-400 text-xs ml-1 px-1 rounded leading-none flex items-center justify-center"
+                    style={{ height: '20px', width: '20px' }}
+                  >
+                    {getSortIcon('started_at')}
+                  </button>
+                </div>
+              </th>
+              <th className="text-left px-3 py-2">
+                <div className="flex items-center gap-1">
+                  User
+                  <button 
+                    onClick={() => handleSort('user_id')}
+                    className="hover:text-blue-600 text-gray-400 text-xs ml-1 px-1 rounded leading-none flex items-center justify-center"
+                    style={{ height: '20px', width: '20px' }}
+                  >
+                    {getSortIcon('user_id')}
+                  </button>
+                </div>
+              </th>
+              <th className="text-left px-3 py-2">
+                <div className="flex items-center gap-1">
+                  Channel
+                  <button 
+                    onClick={() => handleSort('channel')}
+                    className="hover:text-blue-600 text-gray-400 text-xs ml-1 px-1 rounded leading-none flex items-center justify-center"
+                    style={{ height: '20px', width: '20px' }}
+                  >
+                    {getSortIcon('channel')}
+                  </button>
+                </div>
+              </th>
+              <th className="text-left px-3 py-2">
+                <div className="flex items-center gap-1">
+                  Status
+                  <button 
+                    onClick={() => handleSort('status')}
+                    className="hover:text-blue-600 text-gray-400 text-xs ml-1 px-1 rounded leading-none flex items-center justify-center"
+                    style={{ height: '20px', width: '20px' }}
+                  >
+                    {getSortIcon('status')}
+                  </button>
+                </div>
+              </th>
+              <th className="text-left px-3 py-2">
+                <div className="flex items-center gap-1">
+                  Messages
+                  <button 
+                    onClick={() => handleSort('message_count')}
+                    className="hover:text-blue-600 text-gray-400 text-xs ml-1 px-1 rounded leading-none flex items-center justify-center"
+                    style={{ height: '20px', width: '20px' }}
+                  >
+                    {getSortIcon('message_count')}
+                  </button>
+                </div>
+              </th>
+              <th className="text-left px-3 py-2">
+                <div className="flex items-center gap-1">
+                  Tokens
+                  <button 
+                    onClick={() => handleSort('total_tokens')}
+                    className="hover:text-blue-600 text-gray-400 text-xs ml-1 px-1 rounded leading-none flex items-center justify-center"
+                    style={{ height: '20px', width: '20px' }}
+                  >
+                    {getSortIcon('total_tokens')}
+                  </button>
+                </div>
+              </th>
               <th className="text-left px-3 py-2">Actions</th>
             </tr>
           </thead>
@@ -109,10 +259,19 @@ export default function SessionsPage() {
                 <td className="px-3 py-2">{i.message_count}</td>
                 <td className="px-3 py-2">{i.total_tokens}</td>
                 <td className="px-3 py-2">
-                  <button
-                    onClick={() => router.push(`/admin/sessions/${encodeURIComponent(i.id)}`)}
-                    className="h-8 px-3 rounded border hover:bg-[color:var(--surface-hover)]"
-                  >View</button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => router.push(`/admin/sessions/${encodeURIComponent(i.id)}`)}
+                      className="h-8 px-3 rounded border hover:bg-[color:var(--surface-hover)]"
+                    >View</button>
+                    <button
+                      onClick={() => deleteSession(i.id)}
+                      disabled={deleting === i.id}
+                      className="h-8 px-3 rounded border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deleting === i.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

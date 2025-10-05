@@ -13,6 +13,19 @@ import type { ErrorResponse } from './types/error';
 import { buildIntentsRouter } from './routes/admin/intents';
 import { getTenantIdFromReq } from './config/tenant';
 import { tenantSettingsRateLimiter } from './middleware/rateLimiter';
+import { sanitizeErrorMiddleware } from './middleware/errorSanitizer';
+import { auditLoggerMiddleware } from './middleware/auditLogger';
+import { responseSanitizerMiddleware } from './middleware/responseSanitizer';
+import { securityMetricsMiddleware } from './middleware/securityMetrics';
+// Phase 5 - Advanced Security
+import { securityHeadersMiddleware } from './middleware/securityHeaders';
+import { fileUploadRouter } from './routes/admin/fileUpload';
+// Phase 7 - Architecture & Infrastructure Security
+import { crossAppSecurityMiddleware } from './middleware/crossAppSecurity';
+import { infrastructureSecurityMiddleware } from './middleware/infrastructureSecurity';
+import { tenantSecurityMiddleware, enforceTenantIsolation } from './middleware/tenantSecurity';
+import { apiGatewaySecurityMiddleware } from './middleware/apiGatewaySecurity';
+import { systemRateLimiterMiddleware } from './middleware/systemRateLimiter';
 
 export async function createApp() {
   const app = express();
@@ -24,18 +37,53 @@ export async function createApp() {
     crossOriginResourcePolicy: false,
     contentSecurityPolicy: false,
   }));
-  app.use(cors({
-    origin: true,
-    methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type','X-Tenant-ID','Accept','Authorization','Cache-Control','Pragma'],
-  }));
-  app.options('*', cors({
-    origin: true,
-    methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-    allowedHeaders: ['Content-Type','X-Tenant-ID','Accept','Authorization','Cache-Control','Pragma'],
-  }));
+
+  // Phase 5 - Advanced Security Middleware
+  app.use(securityHeadersMiddleware); // Step 5.1 - Basic security headers (complements Phase 7)
+  
+  // Phase 7 - Architecture & Infrastructure Security Middleware
+  app.use(infrastructureSecurityMiddleware); // Step 7.2 - Application-specific security headers
+  app.use(crossAppSecurityMiddleware); // Step 7.1 - Cross-application security
+  app.use(apiGatewaySecurityMiddleware); // Step 7.4 - API gateway security
+  app.use(tenantSecurityMiddleware); // Step 7.3 - Multi-tenant security
+  app.use(enforceTenantIsolation); // Step 7.3 - Tenant isolation enforcement
+  
+  // Enhanced CORS configuration with origin restrictions
+  const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+    : ['http://localhost:3000', 'http://localhost:3100', 'http://localhost:3200'];
+
+  const corsOptions = {
+    origin: (origin: string | undefined, callback: Function) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      console.warn(`CORS blocked request from origin: ${origin}`);
+      return callback(new Error('Not allowed by CORS'), false);
+    },
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'X-Tenant-ID', 'X-User-ID', 'Accept', 'Authorization', 'Cache-Control', 'Pragma'],
+    credentials: true,
+  };
+
+  app.use(cors(corsOptions));
+  app.options('*', cors(corsOptions));
+  app.use(systemRateLimiterMiddleware); // Step 7.5 - System-wide rate limiting
   app.use(express.json({ limit: '50mb' }));
   app.use(morgan('dev'));
+
+  // Add audit logging middleware
+  app.use(auditLoggerMiddleware);
+
+  // Add response sanitizer middleware
+  app.use(responseSanitizerMiddleware);
+
+  // Add security monitoring middleware (lightweight)
+  app.use(securityMetricsMiddleware);
 
   // Assign a request id for cross-referencing logs
   app.use((req, res, next) => {
@@ -323,10 +371,61 @@ export async function createApp() {
   app.use('/api/admin/users', buildUsersRouter(getPostgresPool()));
   app.use('/api/admin/settings', buildSettingsRouter(getPostgresPool()));
   app.use('/api/admin/error-logs', buildErrorLogsRouter(getPostgresPool()));
+  try {
+    const { buildAgentsAdminRouter } = await import('./routes/admin/agents');
+    app.use('/api/admin', buildAgentsAdminRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount agents admin routes:', error);
+  }
+  try {
+    const { buildAgentsMasterAdminRouter } = await import('./routes/admin/agentsMaster');
+    app.use('/api/admin', buildAgentsMasterAdminRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount agents master admin routes:', error);
+  }
+  try {
+    const { buildAgentsTestAdminRouter } = await import('./routes/admin/agentsTest');
+    app.use('/api/admin', buildAgentsTestAdminRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount agents test routes:', error);
+  }
+  try {
+    const { buildSecurityRouter } = await import('./routes/admin/security');
+    app.use('/api/admin/security', buildSecurityRouter());
+  } catch (error) {
+    console.error('Failed to mount security routes:', error);
+  }
+  try {
+    const { buildComplianceRouter } = await import('./routes/admin/compliance');
+    app.use('/api/admin/compliance', buildComplianceRouter());
+  } catch (error) {
+    console.error('Failed to mount compliance routes:', error);
+  }
+  try {
+    const { buildSystemSecurityRouter } = await import('./routes/admin/systemSecurity');
+    app.use('/api/admin/system-security', buildSystemSecurityRouter());
+  } catch (error) {
+    console.error('Failed to mount system security routes:', error);
+  }
+  try {
+    const { buildToolTestAdminRouter } = await import('./routes/admin/toolTest');
+    app.use('/api/admin', buildToolTestAdminRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount tool test admin routes:', error);
+  }
+  try {
+    const { buildNavigationPagesRouter } = await import('./routes/admin/navigation-pages');
+    app.use('/api/admin/navigation-pages', buildNavigationPagesRouter(getPostgresPool()));
+  } catch (error) {
+    console.error('Failed to mount navigation pages admin routes:', error);
+  }
   const { buildAuthRouter } = await import('./routes/admin/auth');
   app.use('/api/admin/auth', buildAuthRouter(getPostgresPool()));
   const { buildDashboardRouter } = await import('./routes/admin/dashboard');
   app.use('/api/admin/dashboard', buildDashboardRouter(getPostgresPool()));
+  
+  // Phase 5 - File Upload Security
+  app.use('/api/admin/file-upload', fileUploadRouter);
   
   // Cache management routes
   try {
@@ -376,6 +475,30 @@ export async function createApp() {
     console.error('Failed to load public retrieve routes:', error);
   }
 
+  // Public prompts endpoints
+  try {
+    const { buildPublicPromptsRouter } = await import('./routes/public/prompts');
+    app.use('/api', buildPublicPromptsRouter());
+  } catch (error) {
+    console.error('Failed to load public prompts routes:', error);
+  }
+
+  // Public sessions endpoints
+  try {
+    const { buildPublicSessionsRouter } = await import('./routes/public/sessions');
+    app.use('/api', buildPublicSessionsRouter());
+  } catch (error) {
+    console.error('Failed to load public sessions routes:', error);
+  }
+
+  // Public agents endpoints (for frontend-safe data)
+  try {
+    const { buildPublicAgentsRouter } = await import('./routes/public/agents');
+    app.use('/api', buildPublicAgentsRouter());
+  } catch (error) {
+    console.error('Failed to load public agents routes:', error);
+  }
+
   // Public API docs
   try {
     const { buildDocsRouter } = await import('./routes/public/docs.js');
@@ -384,7 +507,55 @@ export async function createApp() {
     console.error('Failed to load api docs routes:', error);
   }
 
-  // Error handler
+  // Public messages endpoints (logging)
+  try {
+    const { buildPublicMessagesRouter } = await import('./routes/public/messages');
+    app.use('/api', buildPublicMessagesRouter());
+  } catch (error) {
+    console.error('Failed to load public messages routes:', error);
+  }
+
+  // Public chat endpoints (completions)
+  try {
+    const { buildPublicChatRouter } = await import('./routes/public/chat');
+    app.use('/api', buildPublicChatRouter());
+  } catch (error) {
+    console.error('Failed to load public chat routes:', error);
+  }
+
+  // Public contexts endpoints (import)
+  try {
+    const { buildPublicContextsRouter } = await import('./routes/public/contexts');
+    app.use('/api', buildPublicContextsRouter());
+  } catch (error) {
+    console.error('Failed to load public contexts routes:', error);
+  }
+
+  // Public LINE endpoints
+  try {
+    const { buildPublicLineRouter } = await import('./routes/public/line');
+    app.use('/api', buildPublicLineRouter());
+  } catch (error) {
+    console.error('Failed to load public line routes:', error);
+  }
+
+  // Public staff endpoints
+  try {
+    const { buildPublicStaffRouter } = await import('./routes/public/staff');
+    app.use('/api', buildPublicStaffRouter());
+  } catch (error) {
+    console.error('Failed to load public staff routes:', error);
+  }
+
+  // Public travel endpoints
+  try {
+    const { buildPublicTravelRouter } = await import('./routes/public/travel');
+    app.use('/api', buildPublicTravelRouter());
+  } catch (error) {
+    console.error('Failed to load public travel routes:', error);
+  }
+
+  // Enhanced error handler with sanitization
   app.use(async (err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     // Log full error details for debugging
     // eslint-disable-next-line no-console
@@ -437,13 +608,21 @@ export async function createApp() {
         timestamp: new Date().toISOString()
       });
     }
+    
+    // Sanitize error message for client response
+    let message = err?.message || 'Internal server error';
+    const sensitivePatterns = [/password/gi, /secret/gi, /token/gi, /key/gi, /auth/gi, /credential/gi];
+    sensitivePatterns.forEach(pattern => {
+      message = message.replace(pattern, '[REDACTED]');
+    });
+    
     const error: ErrorResponse = {
       error_code: isZod ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
-      message: isZod ? 'Invalid request' : 'Unexpected error',
+      message: isZod ? 'Invalid request' : message,
       details: isZod ? (err as any).flatten() : undefined,
       escalation_required: !isZod,
       timestamp: new Date().toISOString(),
-      request_id: 'req_' + Math.random().toString(36).slice(2),
+      request_id: (req as any).request_id || 'req_' + Math.random().toString(36).slice(2),
     };
     res.status(status).json(error);
   });

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './config/security/env'; // Validate environment on startup
 import http from 'node:http'
 import { createApp } from './app.js';
 import * as db from './adapters/db/postgresClient';
@@ -7,7 +8,7 @@ import * as storage from './adapters/storage/minioClient';
 import { ensureAiUsageIndex } from './adapters/search/aiUsageLogService';
 // requests index now stored in Postgres; no index ensure needed
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3100;
 
 async function init() {
   try {
