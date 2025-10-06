@@ -61,7 +61,7 @@ async function loadAllAgentSets(): Promise<Record<string, any[]>> {
   return map;
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3100';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 const API = `${BACKEND_URL}/api/admin`;
 const PUBLIC_API = `${BACKEND_URL}/api`;
 

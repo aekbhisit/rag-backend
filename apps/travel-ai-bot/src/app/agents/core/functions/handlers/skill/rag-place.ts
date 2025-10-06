@@ -40,7 +40,7 @@ export const ragPlaceSearchHandler = async (args: RagPlaceArgs) => {
     // Use direct backend URL for chat handlers
     const baseUrl = (typeof process !== 'undefined'
       ? ((process as any)?.env?.NEXT_PUBLIC_BACKEND_URL || (process as any)?.env?.BACKEND_URL)
-      : '') || 'http://localhost:3100';
+      : '') || 'http://localhost:3001';
     const defaultUrl = `${baseUrl}`.replace(/\/$/, '') + `/api/rag/place`;
     const url = (args?.endpointUrl && args.endpointUrl.startsWith('http'))
       ? args.endpointUrl

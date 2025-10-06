@@ -23,7 +23,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * - POST: /api/contexts/import
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3100';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 
 export async function POST(req: NextRequest) {
   try {

@@ -5,7 +5,7 @@
  */
 
 async function updatePlaceGuideAgent(): Promise<void> {
-  const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3100';
+  const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
   const API = `${BASE}/api/admin`;
 
   const agentInstructions = `

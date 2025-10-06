@@ -285,7 +285,7 @@ Domain: chat.haahii.com (Frontend) → rag.haahii.com (Backend)
 
 ## Environment Variables
 - NEXT_PUBLIC_BACKEND_URL: Backend API URL (default: http://localhost:3001)
-- RAG_BASE_URL: RAG service base URL (default: http://localhost:3100)
+- RAG_BASE_URL: RAG service base URL (default: http://localhost:3001)
 - RAG_TENANT_ID: Default tenant ID for RAG services
 - TENANT_ID: Public tenant ID for contexts
 - OPENAI_API_KEY: OpenAI API key for realtime sessions

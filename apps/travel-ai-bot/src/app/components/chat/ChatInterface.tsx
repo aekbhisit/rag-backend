@@ -666,7 +666,7 @@ export default function ChatInterface({
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
                 
                 console.log('[CMP] ▶ follow-up for destination agent', { agent: nextAgent.name, tools: (nextTools || []).map((t: any) => t?.function?.name).filter(Boolean) });
-                const follow = await fetch('/api/chat/agent-completions', {
+                const follow = await fetch('/services/chat/agent-completions', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     model: tenantAiConfig?.model || 'gpt-4o',
@@ -739,7 +739,7 @@ export default function ChatInterface({
                       ];
                       
                       console.log('[CMP] ▶ follow-up after tools', { agent: nextAgent.name });
-                      const follow2 = await fetch('/api/chat/agent-completions', {
+                      const follow2 = await fetch('/services/chat/agent-completions', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           model: tenantAiConfig?.model || 'gpt-4o',
@@ -933,7 +933,7 @@ export default function ChatInterface({
             convo.push(...toolOutputs);
             lastToolOutputs = toolOutputs;
 
-            const follow = await fetch('/api/chat/agent-completions', {
+            const follow = await fetch('/services/chat/agent-completions', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 model: tenantAiConfig?.model || 'gpt-4o',
@@ -988,7 +988,7 @@ export default function ChatInterface({
               if (nextAgent) {
                 const nextInstructions = nextAgent.prompt || nextAgent.instructions || '';
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
-                const follow = await fetch('/api/chat/agent-completions', {
+                const follow = await fetch('/services/chat/agent-completions', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     model: tenantAiConfig?.model || 'gpt-4o',
@@ -1065,7 +1065,7 @@ export default function ChatInterface({
               if (nextAgent) {
                 const nextInstructions = nextAgent.prompt || nextAgent.instructions || '';
                 const nextTools = Array.isArray(nextAgent.tools) ? nextAgent.tools : [];
-                const follow = await fetch('/api/chat/agent-completions', {
+                const follow = await fetch('/services/chat/agent-completions', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     model: tenantAiConfig?.model || 'gpt-4o',

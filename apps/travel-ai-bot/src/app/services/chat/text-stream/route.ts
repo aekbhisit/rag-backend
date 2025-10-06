@@ -51,7 +51,7 @@ const getOpenAI = async () => {
   const aiConfig = await getAiConfig();
   return new OpenAI({ apiKey: aiConfig.apiKey });
 };
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3100';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 
 async function fetchJson(url: string) {
   const r = await fetch(url, { cache: 'no-store' });

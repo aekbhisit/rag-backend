@@ -44,7 +44,7 @@ const getOpenAI = async () => {
   return new OpenAI({ apiKey: aiConfig.apiKey });
 };
 const DEFAULT_MODEL = process.env.TEXT_MODEL || 'gpt-4o';
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3100';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 const TENANT_ID = process.env.TENANT_ID || '00000000-0000-0000-0000-000000000000';
 
 // Rate limit configuration: 10 requests per minute for agent chat

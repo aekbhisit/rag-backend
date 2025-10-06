@@ -8,7 +8,7 @@ export const ragSearchHandler = async (args: any) => {
   try {
     const baseUrl = (typeof process !== 'undefined'
       ? ((process as any)?.env?.NEXT_PUBLIC_BACKEND_URL || (process as any)?.env?.BACKEND_URL)
-      : '') || 'http://localhost:3100';
+      : '') || 'http://localhost:3001';
     const defaultUrl = `${baseUrl}`.replace(/\/$/, '') + `/api/rag/summary`;
     const url = (endpointUrl && String(endpointUrl).startsWith('http'))
       ? endpointUrl

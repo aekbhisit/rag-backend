@@ -3,7 +3,7 @@
  * This replaces environment variable usage with database-stored API keys
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3100';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 const TENANT_ID = process.env.TENANT_ID || 'acc44cdb-8da5-4226-9569-1233a39f564f';
 
 export interface AiConfig {

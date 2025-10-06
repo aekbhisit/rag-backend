@@ -12,7 +12,7 @@ async function testPlaceGuideTool(): Promise<void> {
   // Test 1: Check if placeGuide agent has tools
   console.log('\n📋 Test 1: Check placeGuide Agent Tools');
   try {
-    const response = await fetch('http://localhost:3100/api/admin/agents/placeGuide/tools');
+    const response = await fetch('http://localhost:3001/api/admin/agents/placeGuide/tools');
     const tools = await response.json();
     
     console.log('✅ placeGuide tools retrieved successfully');
@@ -40,7 +40,7 @@ async function testPlaceGuideTool(): Promise<void> {
       maxResults: 3
     };
 
-    const response = await fetch('http://localhost:3100/api/admin/tool-test/execute', {
+    const response = await fetch('http://localhost:3001/api/admin/tool-test/execute', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -83,7 +83,7 @@ async function testPlaceGuideTool(): Promise<void> {
   // Test 3: Test agent chat completion with placeGuide
   console.log('\n📋 Test 3: Test placeGuide Agent Chat Completion');
   try {
-    const chatResponse = await fetch('http://localhost:3200/api/chat/agent-completions', {
+    const chatResponse = await fetch('http://localhost:3200/services/chat/agent-completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
