@@ -59,7 +59,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-      - /app/node_modules:noexec,nosuid,size=500m
     ulimits:
       nproc: 100
       nofile:
@@ -119,7 +118,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-      - /app/node_modules:noexec,nosuid,size=500m
     ulimits:
       nproc: 50
       nofile:
@@ -181,7 +179,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-      - /app/node_modules:noexec,nosuid,size=500m
     ulimits:
       nproc: 50
       nofile:
@@ -224,7 +221,6 @@ services:
       - ./data/postgres:/var/lib/postgresql/data
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
       - ./data/backups:/backups
-      - ../../infra/db/security-setup.sql:/docker-entrypoint-initdb.d/security-setup.sql:ro
     # REMOVED: ports: - "5432:5432"  # No external database exposure for security
     networks:
       - internal-db-network
@@ -241,7 +237,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-      - /var/lib/postgresql/data:noexec,nosuid,size=10g
+      - /var/run/postgresql:noexec,nosuid,size=100m
     ulimits:
       nproc: 100
       nofile:
@@ -285,7 +281,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-      - /data:noexec,nosuid,size=1g
     ulimits:
       nproc: 50
       nofile:
@@ -338,7 +333,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
-      - /data:noexec,nosuid,size=5g
     ulimits:
       nproc: 50
       nofile:
