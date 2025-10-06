@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Disable standalone output for now - use regular Next.js server
+  // output: 'standalone',
+  
   // Disable React Strict Mode to prevent double mounting in development
   // This improves session generation performance by preventing multiple WebRTC connections
   reactStrictMode: false,
