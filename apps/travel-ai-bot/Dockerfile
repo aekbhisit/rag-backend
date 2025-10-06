@@ -38,8 +38,8 @@ COPY apps/travel-ai-bot/next-env.d.ts ./apps/travel-ai-bot/
 COPY apps/travel-ai-bot/eslint.config.mjs ./apps/travel-ai-bot/
 COPY tsconfig.base.json ./
 
-# Build shared package first, then travel-ai-bot with dummy API key
-RUN pnpm run build:shared && OPENAI_API_KEY=dummy-key-for-build pnpm run build:travel
+# Build shared package first, then travel-ai-bot
+RUN pnpm run build:shared && pnpm run build:travel
 
 # Production stage
 FROM node:20-alpine AS production

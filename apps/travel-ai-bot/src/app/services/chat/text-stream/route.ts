@@ -531,7 +531,7 @@ export async function GET(req: NextRequest) {
                   console.log(`[SSE:text-stream] 🔧 executing server tool: ${toolName}`, argsStr);
                   try {
                     const args = JSON.parse(argsStr);
-                    const resp = await fetch(`${baseUrl}/services/chat/agent-completions`, {
+                    const resp = await fetch(`${baseUrl}/api/chat/agent-completions`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -755,7 +755,7 @@ export async function GET(req: NextRequest) {
                     const baseUrl = `${scheme}://${host}`;
                     console.log('[SSE:text-stream] ▶ follow-up: executing tools via agent-completions', { agentName: transferTarget, toolCalls: seenToolCalls.map(t => t.name) });
                     send('debug', { type: 'agent_completions_start', phase: 'followup', agent: transferTarget, toolCalls: seenToolCalls.map(t => t.name) });
-                    const resp2 = await fetch(`${baseUrl}/services/chat/agent-completions`, {
+                    const resp2 = await fetch(`${baseUrl}/api/chat/agent-completions`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -815,7 +815,7 @@ export async function GET(req: NextRequest) {
               const host = req.headers.get('host');
               const baseUrl = `${scheme}://${host}`;
               console.log('[SSE:text-stream] ▶ fallback to agent-completions', { agentName: agentName || resolvedKey, tools: (tools || []).length, sawToolCalls: seenToolCallsInitial.map(t => t.name) });
-              const resp = await fetch(`${baseUrl}/services/chat/agent-completions`, {
+              const resp = await fetch(`${baseUrl}/api/chat/agent-completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
