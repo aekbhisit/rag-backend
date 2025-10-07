@@ -13,6 +13,11 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
+# Set build environment variables
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 # Copy package files from root and workspace
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
@@ -44,8 +49,7 @@ RUN chown -R nodejs:nodejs /app
 # Build shared package first, then travel-ai-bot
 RUN echo "Building shared package..." && pnpm run build:shared
 RUN echo "Checking travel-ai-bot directory..." && ls -la apps/travel-ai-bot/
-RUN echo "Checking thaiResortGuide data directory..." && ls -la apps/travel-ai-bot/src/app/agents/thaiResortGuide/data/
-RUN echo "Building travel-ai-bot..." && NODE_OPTIONS="--max-old-space-size=4096" pnpm run build:travel
+RUN echo "Building travel-ai-bot..." && pnpm run build:travel
 
 # Production stage
 FROM node:20-alpine AS production
@@ -61,6 +65,10 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Set working directory
 WORKDIR /app
+
+# Set production environment variables
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Copy package files from root and workspace
 COPY package*.json ./

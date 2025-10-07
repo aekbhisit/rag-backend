@@ -19,7 +19,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     // Handle Node.js specific modules
     if (!isServer) {
       config.resolve.fallback = {
@@ -62,6 +62,32 @@ const nextConfig = {
         'node:zlib': false
       };
     }
+    
+    // Add better error handling for webpack
+    config.stats = {
+      errorDetails: true,
+      children: true
+    };
+    
+    // Optimize for production builds
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            default: false,
+            vendors: false,
+            vendor: {
+              name: 'vendor',
+              chunks: 'all',
+              test: /node_modules/
+            }
+          }
+        }
+      };
+    }
+    
     return config;
   },
   
