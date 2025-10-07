@@ -38,8 +38,12 @@ COPY apps/travel-ai-bot/next-env.d.ts ./apps/travel-ai-bot/
 COPY apps/travel-ai-bot/eslint.config.mjs ./apps/travel-ai-bot/
 COPY tsconfig.base.json ./
 
+# Set proper permissions
+RUN chown -R nodejs:nodejs /app
+
 # Build shared package first, then travel-ai-bot
-RUN pnpm run build:shared && pnpm run build:travel
+RUN echo "Building shared package..." && pnpm run build:shared
+RUN echo "Building travel-ai-bot..." && pnpm run build:travel
 
 # Production stage
 FROM node:20-alpine AS production
