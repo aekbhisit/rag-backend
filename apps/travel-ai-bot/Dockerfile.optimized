@@ -43,8 +43,7 @@ COPY apps/travel-ai-bot/next-env.d.ts ./apps/travel-ai-bot/
 COPY apps/travel-ai-bot/eslint.config.mjs ./apps/travel-ai-bot/
 COPY tsconfig.base.json ./
 
-# Explicitly copy the data directory to ensure it's included
-COPY apps/travel-ai-bot/src/app/agents/thaiResortGuide/data ./apps/travel-ai-bot/src/app/agents/thaiResortGuide/data
+# Note: thaiResortGuide agent removed - using database agents only
 
 # Set proper permissions
 RUN chown -R nodejs:nodejs /app

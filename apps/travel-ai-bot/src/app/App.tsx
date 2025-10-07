@@ -23,7 +23,7 @@ import { useAgentSelection } from "./hooks/useAgentSelection";
 import { useSessionOperations } from "./hooks/useSessionOperations";
 import { useRecordingEffect } from "./hooks/useRecordingEffect";
 import { useSessionEffects } from "./hooks/useSessionEffects";
-import { useThaiResortFunctionHandler } from "./agents/thaiResortGuide";
+// Removed hardcoded agent import - using database agents instead
 import { SessionRegistryProvider } from "./contexts/SessionRegistryContext";
 
 // Create an inner AppContent component that uses the context
@@ -173,10 +173,10 @@ function AppContent() {
     previousLanguageRef.current = language;
   }, [language, webRTCConnection.sessionStatus, webRTCConnection.connectToRealtime, webRTCConnection.disconnectFromRealtime]);
 
-  // Thai resort function handler
-  const { handleThaiResortFunction } = useThaiResortFunctionHandler({
-    sendClientEvent: webRTCConnection.sendClientEvent,
-  });
+  // Function handlers are now managed by database agents
+  const handleThaiResortFunction = () => {
+    console.log('[App] Function calls are now handled by database agents');
+  };
 
   // Simple identifyUser function - will only log for now
   const identifyUser = (userId: string) => {

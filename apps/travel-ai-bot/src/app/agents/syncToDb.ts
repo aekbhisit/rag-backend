@@ -19,7 +19,7 @@ async function loadAllAgentSets(): Promise<Record<string, any[]>> {
       const codeAgentMap: Record<string, string> = {
         'default': './default',
         'welcomeagent': './default', // welcomeAgent is in default folder
-        'thairesortguide': './thaiResortGuide',
+        // 'thairesortguide': './thaiResortGuide', // Removed - using database agents only
         'customerserviceretail': './customerServiceRetail',
         'frontdeskauthentication': './frontDeskAuthentication',
         'placeguide': './placeGuide',

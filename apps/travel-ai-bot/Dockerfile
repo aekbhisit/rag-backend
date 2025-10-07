@@ -38,8 +38,7 @@ COPY apps/travel-ai-bot/next-env.d.ts ./apps/travel-ai-bot/
 COPY apps/travel-ai-bot/eslint.config.mjs ./apps/travel-ai-bot/
 COPY tsconfig.base.json ./
 
-# Explicitly copy the data directory to ensure it's included
-COPY apps/travel-ai-bot/src/app/agents/thaiResortGuide/data ./apps/travel-ai-bot/src/app/agents/thaiResortGuide/data
+# Note: thaiResortGuide agent removed - using database agents only
 
 # Set proper permissions
 RUN chown -R nodejs:nodejs /app
@@ -47,7 +46,6 @@ RUN chown -R nodejs:nodejs /app
 # Build shared package first, then travel-ai-bot
 RUN echo "Building shared package..." && pnpm run build:shared
 RUN echo "Checking travel-ai-bot directory..." && ls -la apps/travel-ai-bot/
-RUN echo "Checking thaiResortGuide data directory..." && ls -la apps/travel-ai-bot/src/app/agents/thaiResortGuide/data/
 RUN echo "Building travel-ai-bot..." && NODE_OPTIONS="--max-old-space-size=4096" pnpm run build:travel
 
 # Production stage
