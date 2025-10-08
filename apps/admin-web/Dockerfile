@@ -37,9 +37,8 @@ COPY apps/admin-web/utils ./apps/admin-web/utils
 COPY apps/admin-web/public ./apps/admin-web/public
 COPY apps/admin-web/next.config.mjs ./apps/admin-web/
 COPY apps/admin-web/tsconfig.json ./apps/admin-web/
-COPY apps/admin-web/next-env.d.ts ./apps/admin-web/ 2>/dev/null || true
-COPY apps/admin-web/tailwind.config.js ./apps/admin-web/ 2>/dev/null || true
-COPY apps/admin-web/postcss.config.js ./apps/admin-web/ 2>/dev/null || true
+COPY apps/admin-web/tailwind.config.js ./apps/admin-web/
+COPY apps/admin-web/postcss.config.js ./apps/admin-web/
 COPY tsconfig.base.json ./
 
 # Build shared package first, then admin-web

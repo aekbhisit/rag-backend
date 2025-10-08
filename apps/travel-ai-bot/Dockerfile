@@ -31,11 +31,9 @@ COPY packages/shared/tsconfig.json ./packages/shared/
 COPY apps/travel-ai-bot/src ./apps/travel-ai-bot/src
 COPY apps/travel-ai-bot/public ./apps/travel-ai-bot/public
 COPY apps/travel-ai-bot/next.config.js ./apps/travel-ai-bot/
-COPY apps/travel-ai-bot/tailwind.config.ts ./apps/travel-ai-bot/ 2>/dev/null || true
-COPY apps/travel-ai-bot/postcss.config.mjs ./apps/travel-ai-bot/ 2>/dev/null || true
+COPY apps/travel-ai-bot/tailwind.config.ts ./apps/travel-ai-bot/
+COPY apps/travel-ai-bot/postcss.config.mjs ./apps/travel-ai-bot/
 COPY apps/travel-ai-bot/tsconfig.json ./apps/travel-ai-bot/
-COPY apps/travel-ai-bot/next-env.d.ts ./apps/travel-ai-bot/ 2>/dev/null || true
-COPY apps/travel-ai-bot/eslint.config.mjs ./apps/travel-ai-bot/ 2>/dev/null || true
 COPY tsconfig.base.json ./
 
 # Note: thaiResortGuide agent removed - using database agents only
