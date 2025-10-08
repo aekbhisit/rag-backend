@@ -132,6 +132,10 @@ services:
       - "9001:9001"  # Console
     volumes:
       - minio_data:/data
+    ulimits:
+      nofile:
+        soft: 4096  # MinIO requires 4096+
+        hard: 8192
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
