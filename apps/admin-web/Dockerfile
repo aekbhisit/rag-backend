@@ -1,9 +1,9 @@
-# Multi-stage build for RAG Admin Web
-FROM node:20-alpine AS base
+# Single-stage build for RAG Admin Web (Production Ready)
+FROM node:20-alpine
 
 # Install pnpm and build dependencies
 RUN npm install -g pnpm@10.14.0 && \
-    apk add --no-cache python3 make g++ && \
+    apk add --no-cache dumb-init python3 make g++ && \
     apk cache clean
 
 # Create non-root user
@@ -13,16 +13,16 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files from root and workspace
+# Copy package files and workspace manifest for dependency installation
 COPY package*.json ./
 COPY pnpm-lock.yaml ./
 COPY pnpm-workspace.yaml ./
 
-# Copy package.json files for workspace packages
+# Copy package.json files preserving directory structure
 COPY packages/shared/package*.json ./packages/shared/
 COPY apps/admin-web/package*.json ./apps/admin-web/
 
-# Install all dependencies
+# Install all dependencies (including dev dependencies for building)
 RUN pnpm install --no-frozen-lockfile
 
 # Copy source code
@@ -37,46 +37,22 @@ COPY apps/admin-web/utils ./apps/admin-web/utils
 COPY apps/admin-web/public ./apps/admin-web/public
 COPY apps/admin-web/next.config.mjs ./apps/admin-web/
 COPY apps/admin-web/tsconfig.json ./apps/admin-web/
-COPY apps/admin-web/next-env.d.ts ./apps/admin-web/
-COPY apps/admin-web/tailwind.config.js ./apps/admin-web/
-COPY apps/admin-web/postcss.config.js ./apps/admin-web/
+COPY apps/admin-web/next-env.d.ts ./apps/admin-web/ 2>/dev/null || true
+COPY apps/admin-web/tailwind.config.js ./apps/admin-web/ 2>/dev/null || true
+COPY apps/admin-web/postcss.config.js ./apps/admin-web/ 2>/dev/null || true
 COPY tsconfig.base.json ./
 
 # Build shared package first, then admin-web
 RUN pnpm run build:shared && pnpm run build:admin
 
-# Production stage
-FROM node:20-alpine AS production
-
-# Install pnpm and runtime dependencies
-RUN npm install -g pnpm@10.14.0 && \
-    apk add --no-cache dumb-init && \
-    apk cache clean
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files from root and workspace
-COPY package*.json ./
-COPY pnpm-lock.yaml ./
-COPY pnpm-workspace.yaml ./
-
-# Copy package.json files for workspace packages
-COPY packages/shared/package*.json ./packages/shared/
-COPY apps/admin-web/package*.json ./apps/admin-web/
-
-# Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile
-
-# Copy built artifacts from base stage
-COPY --from=base /app/packages/shared/dist ./packages/shared/dist
-COPY --from=base /app/apps/admin-web/.next ./apps/admin-web/.next
-COPY --from=base /app/apps/admin-web/public ./apps/admin-web/public
-COPY --from=base /app/apps/admin-web/next.config.mjs ./apps/admin-web/
+# Clean up: remove source files and dev dependencies, keep only built artifacts and prod deps
+# Note: Keep all production dependencies - don't reinstall to avoid missing modules
+RUN rm -rf packages/shared/src *.tsbuildinfo && \
+    rm -rf packages/*/tsconfig.json apps/*/tsconfig.json tsconfig.base.json && \
+    rm -rf node_modules/@types && \
+    rm -rf node_modules/typescript && \
+    rm -rf node_modules/rimraf && \
+    rm -rf node_modules/concurrently
 
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app
@@ -89,7 +65,7 @@ EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+  CMD node -e "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Start the application
-CMD ["dumb-init", "node", "apps/admin-web/.next/standalone/server.js"]
+# Start the application using pnpm (standard Next.js start)
+CMD ["dumb-init", "sh", "-c", "cd apps/admin-web && pnpm run start"]

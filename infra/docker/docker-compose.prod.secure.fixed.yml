@@ -270,7 +270,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: rag-redis
-    user: "999:999"  # redis user
+    user: "999:999"  # IMPORTANT: Must match host redis UID:GID, check with 'id redis' on host
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
