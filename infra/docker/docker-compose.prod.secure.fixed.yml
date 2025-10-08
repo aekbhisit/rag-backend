@@ -56,9 +56,10 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    read_only: true
+    # read_only: true  # Disabled to prevent permission issues
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+      # Note: Removed /app/node_modules tmpfs mount - it was overwriting the built node_modules
     ulimits:
       nproc: 100
       nofile:
@@ -115,9 +116,10 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    read_only: true
+    # read_only: true  # Disabled to prevent permission issues
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+      # Note: Removed /app/node_modules tmpfs mount - it was overwriting the built node_modules
     ulimits:
       nproc: 50
       nofile:
@@ -176,9 +178,10 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    read_only: true
+    # read_only: true  # Disabled to prevent permission issues
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+      # Note: Removed /app/node_modules tmpfs mount - it was overwriting the built node_modules
     ulimits:
       nproc: 50
       nofile:
@@ -210,7 +213,7 @@ services:
       context: ./postgres
       dockerfile: Dockerfile.postgis
     container_name: rag-postgres
-    user: "996:988"  # Match host postgres user UID:GID
+    user: "999:999"  # Run as postgres user, not root
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -234,9 +237,10 @@ services:
       - FOWNER
       - SETGID
       - SETUID
-    read_only: true
+    # read_only: true  # Disabled to prevent permission issues
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+      # Note: Removed /app/node_modules tmpfs mount - it was overwriting the built node_modules
       - /var/run/postgresql:noexec,nosuid,size=100m
     ulimits:
       nproc: 100
@@ -266,7 +270,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: rag-redis
-    user: "995:987"  # Match host redis user UID:GID
+    user: "999:999"  # redis user
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
@@ -278,9 +282,10 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    read_only: true
+    # read_only: true  # Disabled to prevent permission issues
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+      # Note: Removed /app/node_modules tmpfs mount - it was overwriting the built node_modules
     ulimits:
       nproc: 50
       nofile:
@@ -330,9 +335,10 @@ services:
     cap_add:
       - CHOWN
       - FOWNER
-    read_only: true
+    # read_only: true  # Disabled to prevent permission issues
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+      # Note: Removed /app/node_modules tmpfs mount - it was overwriting the built node_modules
     ulimits:
       nproc: 50
       nofile:
@@ -359,25 +365,20 @@ services:
 
   # Log Rotation Service (Essential Security)
   logrotate:
-    image: alpine:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.logrotate
     container_name: rag-logrotate
-    user: "1000:1000"
     restart: unless-stopped
-    command: >
-      sh -c "
-        apk add --no-cache logrotate &&
-        echo '0 2 * * * /usr/sbin/logrotate /etc/logrotate.conf' | crontab - &&
-        crond -f
-      "
     volumes:
       - ./data/logs:/var/log/app:rw
       - ./scripts/logrotate.conf:/etc/logrotate.conf:ro
     networks:
       - management-network
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+    # security_opt:
+    #   - no-new-privileges:true
+    # cap_drop:
+    #   - ALL
     deploy:
       resources:
         limits:

@@ -35,13 +35,13 @@ COPY tsconfig.base.json ./
 RUN pnpm run build:shared && pnpm run build:backend
 
 # Clean up: remove source files and dev dependencies, keep only built artifacts and prod deps
+# Note: Keep all production dependencies - don't reinstall to avoid missing modules
 RUN rm -rf apps/backend/src packages/shared/src *.tsbuildinfo && \
     rm -rf apps/*/tsconfig.json packages/*/tsconfig.json tsconfig.base.json && \
     rm -rf node_modules/@types && \
     rm -rf node_modules/typescript && \
     rm -rf node_modules/rimraf && \
     rm -rf node_modules/concurrently && \
-    pnpm install --prod --frozen-lockfile && \
     ln -sf .pnpm/pg@8.16.3/node_modules/pg node_modules/pg && \
     ln -sf .pnpm/express@4.21.2/node_modules/express node_modules/express && \
     ln -sf .pnpm/cors@2.8.5/node_modules/cors node_modules/cors && \

@@ -60,22 +60,16 @@ COPY packages/shared/package*.json ./packages/shared/
 COPY apps/backend/package*.json ./apps/backend/
 
 # Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --prod --no-frozen-lockfile
 
 # Copy built artifacts from base stage
 COPY --from=base /app/packages/shared/dist ./packages/shared/dist
 COPY --from=base /app/apps/backend/dist ./apps/backend/dist
+COPY --from=base /app/packages/shared/package.json ./packages/shared/package.json
 
-# Create symlinks for critical dependencies
-RUN ln -sf .pnpm/pg@8.16.3/node_modules/pg node_modules/pg && \
-    ln -sf .pnpm/express@4.21.2/node_modules/express node_modules/express && \
-    ln -sf .pnpm/cors@2.8.5/node_modules/cors node_modules/cors && \
-    ln -sf .pnpm/bcryptjs@2.4.3/node_modules/bcryptjs node_modules/bcryptjs && \
-    ln -sf .pnpm/helmet@7.2.0/node_modules/helmet node_modules/helmet && \
-    ln -sf .pnpm/jsonwebtoken@9.0.2/node_modules/jsonwebtoken node_modules/jsonwebtoken && \
-    ln -sf .pnpm/morgan@1.10.1/node_modules/morgan node_modules/morgan && \
-    ln -sf .pnpm/redis@4.7.1/node_modules/redis node_modules/redis && \
-    ln -sf .pnpm/zod@3.25.76/node_modules/zod node_modules/zod
+# Install dependencies in workspace packages
+RUN cd packages/shared && pnpm install --prod --no-frozen-lockfile && cd ../.. && \
+    cd apps/backend && pnpm install --prod --no-frozen-lockfile && cd ../..
 
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app
