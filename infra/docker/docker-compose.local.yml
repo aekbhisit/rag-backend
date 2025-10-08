@@ -1,0 +1,145 @@
+# Full Stack - For Local Testing
+# Use this to test the complete application stack locally before deploying to production
+
+services:
+  # Backend API
+  rag-backend:
+    build:
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
+    container_name: rag-backend-local
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/rag_assistant
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+      MINIO_BUCKET: rag-storage
+      JWT_SECRET: local_test_secret_change_in_production
+      TENANT_ID: 00000000-0000-0000-0000-000000000001
+      TENANT_NAME: Local Test
+      TENANT_CODE: LOCAL
+      TENANT_SLUG: local
+      TENANT_CONTACT_EMAIL: test@local.dev
+      ADMIN_EMAIL: admin@local.dev
+      ADMIN_PASSWORD: admin123
+      ADMIN_NAME: Local Admin
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Web UI
+  admin-web:
+    build:
+      context: ../..
+      dockerfile: apps/admin-web/Dockerfile
+    container_name: rag-admin-web-local
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3001
+      NEXT_PUBLIC_API_URL: /api
+      TENANT_ID: 00000000-0000-0000-0000-000000000001
+      NEXT_TELEMETRY_DISABLED: 1
+    ports:
+      - "3000:3000"
+    depends_on:
+      rag-backend:
+        condition: service_healthy
+
+  # Travel AI Bot
+  travel-ai-bot:
+    build:
+      context: ../..
+      dockerfile: apps/travel-ai-bot/Dockerfile
+    container_name: rag-travel-ai-bot-local
+    environment:
+      NODE_ENV: production
+      PORT: 3200
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3001
+      RAG_BASE_URL: http://rag-backend:3001
+      NEXT_PUBLIC_API_URL: /api
+      TENANT_ID: 00000000-0000-0000-0000-000000000001
+      NEXT_TELEMETRY_DISABLED: 1
+    ports:
+      - "3200:3200"
+    depends_on:
+      rag-backend:
+        condition: service_healthy
+
+  # PostgreSQL Database with PostGIS + pgvector
+  postgres:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    container_name: rag-postgres-local
+    environment:
+      POSTGRES_DB: rag_assistant
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rag_assistant"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis-local
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: rag-minio-local
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+

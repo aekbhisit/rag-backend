@@ -1,237 +1,215 @@
-# RAG Assistant Production Docker Setup
+# Docker Configuration
 
-This directory contains the production-ready Docker configuration for the RAG Assistant application.
+## Overview
+This directory contains Docker configurations for the RAG Backend system.
 
-## 🚀 Quick Start
+---
 
-### 1. Initial Setup
+## Files Structure
 
-```bash
-# Copy environment template
-cp env.example .env
+### Main Docker Compose Files
 
-# Edit .env file with your production values
-nano .env
-
-# Run initial setup
-./deploy.sh setup
-```
-
-### 2. Start Production Stack
+#### 1. `docker-compose.production.yml` 
+**Use for**: Production deployment  
+**Description**: Complete production setup with security, resource limits, and health checks
 
 ```bash
-./deploy.sh start
+# Build all services
+docker compose -f docker-compose.production.yml build --no-cache
+
+# Start all services
+docker compose -f docker-compose.production.yml up -d
+
+# Check status
+docker compose -f docker-compose.production.yml ps
 ```
 
-### 3. Check Status
+#### 2. `docker-compose.dev.yml`
+**Use for**: Local development  
+**Description**: Simplified setup for local development
 
 ```bash
-./deploy.sh status
+# Start for development
+docker compose -f docker-compose.dev.yml up -d
 ```
 
-## 📁 Directory Structure
+---
 
+### Dockerfiles
+
+#### Application Dockerfiles (in apps/):
+- `../../apps/backend/Dockerfile` - Backend API
+- `../../apps/admin-web/Dockerfile` - Admin Web UI
+- `../../apps/travel-ai-bot/Dockerfile` - Travel AI Bot UI
+
+#### Infrastructure Dockerfiles (in infra/docker/):
+- `Dockerfile` - Main backend build (used by docker-compose)
+- `Dockerfile.dev` - Development version with hot reload
+- `postgres/Dockerfile` - PostgreSQL with PostGIS + pgvector
+- `postgres/Dockerfile.custom` - Alternative postgres build (if needed)
+
+---
+
+## Quick Start
+
+### Production Deployment:
+```bash
+cd /home/rag-backend/infra/docker
+
+# Set up permissions first (IMPORTANT!)
+sudo chown -R 999:999 ./data/postgres
+sudo chmod -R 700 ./data/postgres
+sudo chown -R 999:999 ./data/redis
+sudo chmod -R 755 ./data/redis
+
+# Build and start
+docker compose -f docker-compose.production.yml build --no-cache
+docker compose -f docker-compose.production.yml up -d
+
+# Verify
+docker ps
+docker logs rag-backend --tail 50
+curl http://localhost:3001/health
 ```
-infra/docker/
-├── docker-compose.prod.yml    # Production compose file
-├── Dockerfile                 # Main application Dockerfile
-├── env.example               # Environment variables template
-├── deploy.sh                 # Deployment management script
-├── scripts/
-│   ├── backup.sh            # Automated backup script
-│   └── manual-backup.sh     # Manual backup script
-├── nginx/
-│   ├── nginx.conf          # Main Nginx configuration
-│   └── conf.d/
-│       └── default.conf    # Server configuration
-├── postgres/                # PostgreSQL configuration
-└── data/                    # Persistent data (created automatically)
-    ├── postgres/           # Database data
-    ├── redis/              # Redis data
-    ├── minio/              # Object storage data
-    ├── logs/               # Application logs
-    ├── uploads/            # File uploads
-    ├── temp/               # Temporary files
-    ├── backups/            # Backup files
-    └── ssl/                # SSL certificates
+
+### Local Development:
+```bash
+cd /path/to/rag-backend/infra/docker
+
+# Start services
+docker compose -f docker-compose.dev.yml up -d
+
+# View logs
+docker compose -f docker-compose.dev.yml logs -f
 ```
 
-## 🔧 Configuration
+---
 
-### Environment Variables
+## Services
 
-Copy `env.example` to `.env` and configure:
+### Production Services:
+1. **rag-backend** - Port 3001 - Backend API
+2. **rag-admin-web** - Port 3000 - Admin UI (internal)
+3. **rag-travel-ai-bot** - Port 3200 - AI Chat UI
+4. **rag-postgres** - Port 5432 (internal) - PostgreSQL + PostGIS + pgvector
+5. **rag-redis** - Port 6379 (internal) - Redis cache
+6. **rag-minio** - Port 9000 - MinIO object storage
 
-- **Database**: PostgreSQL credentials and settings
-- **Redis**: Cache password
-- **MinIO**: Object storage credentials
-- **JWT**: Secret key for authentication
-- **AI Providers**: API keys for OpenAI, Anthropic, Google
-- **Backup**: Retention period and settings
+### Data Persistence:
+All data stored in `./data/`:
+- `./data/postgres/` - PostgreSQL data
+- `./data/redis/` - Redis persistence
+- `./data/minio/` - MinIO object storage
+- `./data/logs/` - Application logs
+- `./data/uploads/` - File uploads
+- `./data/backups/` - Database backups
 
-### SSL Certificates
+---
 
-For production, replace the self-signed certificates in `data/ssl/` with your actual SSL certificates.
+## Environment Variables
 
-## 🗄️ Backup System
-
-### Automated Backups
-
-The system runs daily backups at 2:00 AM using cron:
-
-- Database backups (PostgreSQL)
-- Volume backups (application data)
-- Automatic cleanup based on retention policy
-
-### Manual Backups
+Copy `.env.example` to `.env.prod` and configure:
 
 ```bash
-# Full backup (database + volumes)
-./deploy.sh backup
+# Database
+POSTGRES_DB=rag_backend
+POSTGRES_USER=rag_user
+POSTGRES_PASSWORD=<secure_password>
 
-# Database only
-./scripts/manual-backup.sh db
+# Redis
+REDIS_PASSWORD=<secure_password>
 
-# Volumes only
-./scripts/manual-backup.sh volumes
+# MinIO
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=<secure_password>
 
-# Custom retention period
-./scripts/manual-backup.sh full 30
+# JWT
+JWT_SECRET=<secure_random_string>
+
+# Tenant & Admin (Bootstrap)
+TENANT_ID=<uuid>
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=<secure_password>
 ```
 
-### Restore from Backup
+---
 
+## Common Commands
+
+### View Status:
 ```bash
-# List available backups
-./scripts/manual-backup.sh restore
-
-# Follow the restore instructions displayed
+docker compose -f docker-compose.production.yml ps
+docker compose -f docker-compose.production.yml logs -f
 ```
 
-## 📊 Monitoring & Logs
-
-### Service Status
-
+### Restart Service:
 ```bash
-./deploy.sh status
+docker compose -f docker-compose.production.yml restart <service-name>
 ```
 
-### View Logs
-
+### Rebuild Service:
 ```bash
-# All services
-./deploy.sh logs
-
-# Specific service
-./deploy.sh logs nginx
-./deploy.sh logs rag-backend
-./deploy.sh logs postgres
+docker compose -f docker-compose.production.yml build --no-cache <service-name>
+docker compose -f docker-compose.production.yml up -d <service-name>
 ```
 
-### Health Checks
-
-- **Application**: `/health` endpoint
-- **Database**: PostgreSQL connection check
-- **Redis**: Connection and ping test
-- **MinIO**: HTTP health check
-
-## 🔄 Maintenance
-
-### Update Stack
-
+### Stop All:
 ```bash
-./deploy.sh update
+docker compose -f docker-compose.production.yml down
 ```
 
-### Restart Services
-
+### Clean Up:
 ```bash
-./deploy.sh restart
+docker compose -f docker-compose.production.yml down -v  # Remove volumes too
+docker system prune -a  # Clean unused images
 ```
 
-### Cleanup
+---
 
+## Troubleshooting
+
+### Check logs:
 ```bash
-# Clean old logs and temp files
-./deploy.sh clean
+docker logs <container-name> --tail 100
 ```
 
-## 🛡️ Security Features
-
-- **Non-root containers**: All services run as non-root users
-- **Network isolation**: Services communicate via internal network
-- **Rate limiting**: API endpoints protected against abuse
-- **Security headers**: XSS, CSRF, and other security headers
-- **SSL/TLS**: HTTPS with modern cipher suites
-- **Health checks**: Automatic service health monitoring
-
-## 🌐 Network Configuration
-
-- **Internal Network**: `172.20.0.0/16`
-- **External Ports**: 80 (HTTP), 443 (HTTPS)
-- **Service Ports**: 3000 (App), 5432 (DB), 6379 (Redis), 9000 (MinIO)
-
-## 📈 Scaling Considerations
-
-### Horizontal Scaling
-
-To scale the application:
-
-```yaml
-# In docker-compose.prod.yml
-rag-backend:
-  deploy:
-    replicas: 3
-```
-
-### Load Balancer
-
-For production, consider using a load balancer (HAProxy, Traefik) in front of Nginx.
-
-### Database Scaling
-
-For high availability, consider:
-- PostgreSQL read replicas
-- Redis cluster
-- MinIO distributed mode
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-1. **Port conflicts**: Check if ports 80, 443, 3000 are available
-2. **Permission errors**: Ensure proper ownership of data directories
-3. **SSL errors**: Verify SSL certificate paths and permissions
-4. **Database connection**: Check PostgreSQL container health
-
-### Debug Mode
-
+### Check resource usage:
 ```bash
-# Run with debug output
-docker-compose -f docker-compose.prod.yml up --verbose
+docker stats --no-stream
 ```
 
-### Reset Everything
-
+### Check permissions:
 ```bash
-# Stop and remove everything
-./deploy.sh stop
-docker system prune -a -f
-rm -rf data/
-./deploy.sh setup
+ls -la ./data/postgres/
+ls -la ./data/redis/
 ```
 
-## 📚 Additional Resources
+### Recreate container:
+```bash
+docker compose -f docker-compose.production.yml stop <service>
+docker compose -f docker-compose.production.yml rm -f <service>
+docker compose -f docker-compose.production.yml up -d <service>
+```
 
-- [Docker Compose Documentation](https://docs.docker.com/compose/)
-- [Nginx Configuration](https://nginx.org/en/docs/)
-- [PostgreSQL Docker](https://hub.docker.com/_/postgres)
-- [Redis Docker](https://hub.docker.com/_/redis)
-- [MinIO Docker](https://hub.docker.com/r/minio/minio)
+---
 
-## 🤝 Support
+## Documentation
 
-For issues and questions:
-1. Check the logs: `./deploy.sh logs`
-2. Verify configuration: `./deploy.sh status`
-3. Check service health: `docker-compose -f docker-compose.prod.yml ps`
+Complete guides available in `/docs/`:
+- `PRODUCTION_READY_DEPLOYMENT.md` - Full deployment guide
+- `DEPLOYMENT_QUICK_REFERENCE.md` - Quick commands
+- `KNOWN_ISSUES_AND_FIXES.md` - Troubleshooting
+- `deployment-permissions-guide.md` - Permission setup
+- `PRODUCTION_RESOURCE_OPTIMIZATION.md` - Resource tuning
+
+---
+
+## Support
+
+For issues, see:
+1. Check container logs
+2. Review `docs/KNOWN_ISSUES_AND_FIXES.md`
+3. Verify permissions on data directories
+4. Check environment variables
+
+**All services are production-ready and tested!** ✅
