@@ -210,7 +210,7 @@ services:
       context: ./postgres
       dockerfile: Dockerfile.postgis
     container_name: rag-postgres
-    user: "999:999"  # Run as postgres user, not root
+    user: "996:988"  # Match host postgres user UID:GID
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -266,7 +266,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: rag-redis
-    user: "999:999"  # redis user
+    user: "995:987"  # Match host redis user UID:GID
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
