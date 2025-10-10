@@ -224,8 +224,7 @@ services:
       - ./data/postgres:/var/lib/postgresql/data
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
       - ./data/backups:/backups
-    ports:
-      - "127.0.0.1:5432:5432"  # Only accessible from localhost
+    # REMOVED: ports: - "5432:5432"  # No external database exposure for security
     networks:
       - internal-db-network
     security_opt:
@@ -392,7 +391,7 @@ networks:
   # Database network - only database services
   internal-db-network:
     driver: bridge
-    internal: false  # Changed to allow localhost port binding
+    internal: true
     ipam:
       config:
         - subnet: 172.20.1.0/24
